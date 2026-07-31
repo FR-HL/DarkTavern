@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { logger } from './logger.js';
-import { settings } from './settings.js';
+import { settings, saveSettings } from './settings.js';
 import { getCanScan } from './overlay.js';
 import * as backend from './backend.js';
 
@@ -87,7 +87,7 @@ export function wire (overlay) {
   ipcMain.handle ('chinese:remove-mapping', (e, d) => backend.removeMapping (d.chinese));
 
   ipcMain.handle ('auth:status', () => ({ linked: !!settings.general.api_key }));
-  ipcMain.handle ('auth:logout', () => { settings.general.api_key = ''; return { success: true }; });
+  ipcMain.handle ('auth:logout', () => { settings.general.api_key = ''; saveSettings (); return { success: true }; });
 }
 
 async function queryPrice (tooltipText) {

@@ -19,7 +19,7 @@ export function startService (pythonPath) {
 
   let modelsDir = app.isPackaged
     ? join (app.getAppPath (), '..', '..', 'native', 'models')
-    : join (RESOURCES, 'models');
+    : join (ROOT, 'models');
 
   let ocrExe = join (chineseDir, 'ocr-service', 'ocr-service.exe');
   let serverScript = join (chineseDir, 'ocr-service', 'server.py');

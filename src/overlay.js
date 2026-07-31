@@ -40,19 +40,18 @@ async function poll () {
 
   const { bounds, monitor } = data;
 
-  overlay.webContents.send ('game:bounds', {
-    ...bounds,
-    x: bounds.x - monitor.x,
-    y: bounds.y - monitor.y,
-    scale: monitor.scale || 1.0,
-  });
-
   const moved = !prevBounds ||
     bounds.x !== prevBounds.x || bounds.y !== prevBounds.y ||
     bounds.width !== prevBounds.width || bounds.height !== prevBounds.height;
 
   if (moved) {
     overlay.setBounds ({ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height });
+    overlay.webContents.send ('game:bounds', {
+      ...bounds,
+      x: bounds.x - monitor.x,
+      y: bounds.y - monitor.y,
+      scale: monitor.scale || 1.0,
+    });
     prevBounds = bounds;
   }
 
@@ -64,8 +63,6 @@ async function poll () {
     overlay.moveTop ();
     shown = true;
     logger.info ('Game window found - overlay shown');
-  } else {
-    overlay.setAlwaysOnTop (true, 'screen-saver');
   }
 
   if (!canScan) {

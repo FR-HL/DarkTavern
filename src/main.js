@@ -11,6 +11,7 @@ const { app, BrowserWindow, ipcMain } = electron;
 
 let debugging = false;
 let homeWindow = null;
+let tray = null;
 let pendingPane = null;
 let previousScanAccelerator = null;
 const RESERVED_KEYS = ['F5', 'F6', 'F7', 'F8'];
@@ -47,7 +48,7 @@ app.on ('before-quit', () => {
 app.on ('ready', async () => {
   backend.startService (settings.general.python_path);
 
-  let tray = new Tray (join (ROOT, 'assets/images/Icon-81x89.png'));
+  tray = new Tray (join (ROOT, 'assets/images/Icon-81x89.png'));
   tray.setToolTip ('DarkTavern');
   tray.setContextMenu (Menu.buildFromTemplate ([
     { label: `DarkTavern v${app.getVersion ()}`, enabled: false },
