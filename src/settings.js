@@ -72,11 +72,4 @@ function saveSettings () {
   }
 }
 
-function updateFromServer (serverSettings) {
-  if (!serverSettings) return;
-  if (serverSettings.general) Object.assign (settings.general, serverSettings.general);
-  if (serverSettings.hotkeys) Object.assign (settings.hotkeys, serverSettings.hotkeys);
-  saveSettings ();
-}
-
-export { settings, settingsPath, saveSettings, updateFromServer };
+export { settings, settingsPath, saveSettings };
