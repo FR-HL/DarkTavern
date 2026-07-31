@@ -40,6 +40,7 @@ process.on ('exit', () => { logger.info ('Process exiting'); });
 app.commandLine.appendSwitch ('high-dpi-support', 1);
 app.commandLine.appendSwitch ('force-device-scale-factor', 1);
 app.commandLine.appendSwitch ('disable-crash-reporter');
+app.commandLine.appendSwitch ('proxy-bypass-list', '127.0.0.1;localhost;<local>');
 
 if (settings.general.launch_on_startup) {
   app.setLoginItemSettings ({
@@ -75,6 +76,7 @@ app.on ('ready', async () => {
   let menu = Menu.buildFromTemplate ([
     { label: `DarkTavern v${app.getVersion ()}`, type: 'normal', enabled: false },
     { type: 'separator' },
+    { label: '主页', click: () => { openHomeWindow (); } },
     { label: `Scan Key: ${settings.hotkeys.run_price_check}`, type: 'normal', enabled: false },
     { label: 'Key Binding (F5)', click: () => { openSettingsWindow ('keybind'); } },
     { label: 'Mapping Editor (F6)', click: () => { openSettingsWindow ('mapping'); } },
@@ -199,6 +201,15 @@ app.on ('ready', async () => {
 
     return { success: true };
   });
+
+  // The home page can ask the main process to open the settings / mapping windows
+  frontend.on ('open-settings', () => { openSettingsWindow ('settings'); });
+  frontend.on ('open-mapping', () => { openSettingsWindow ('mapping'); });
+
+  // No full main page yet: open the home window as the entry point on startup.
+  // The Python OCR service keeps loading in the background; the home page polls
+  // /health itself and lights up its status runes in real time when ready.
+  openHomeWindow ();
 });
 
 // Track previously registered scan key so we can unregister it
@@ -335,5 +346,49 @@ function openSettingsWindow (tab) {
 
   settingsWindow.on ('closed', () => {
     settingsWindow = null;
+  });
+}
+
+// Home window - the application entry point (real main page, OCR loads in background)
+let homeWindow = null;
+
+function openHomeWindow () {
+  if (homeWindow) {
+    if (homeWindow.isMinimized ()) homeWindow.restore ();
+    homeWindow.show ();
+    homeWindow.focus ();
+    return;
+  }
+
+  let homePath = join (ROOT, 'home.html');
+
+  homeWindow = new BrowserWindow ({
+    width: 960,
+    height: 660,
+    show: false,
+    title: 'DarkTavern',
+    minimizable: true,
+    maximizable: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      sandbox: false,
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
+
+  homeWindow.webContents.on ('did-fail-load', (e, code, desc, url) => {
+    logger.error (`[home] did-fail-load ${code} ${desc} ${url}`);
+  });
+
+  homeWindow.loadFile (homePath);
+
+  homeWindow.once ('ready-to-show', () => {
+    homeWindow.show ();
+    homeWindow.focus ();
+  });
+
+  homeWindow.on ('closed', () => {
+    homeWindow = null;
   });
 }
