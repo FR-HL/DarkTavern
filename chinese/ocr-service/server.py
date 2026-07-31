@@ -27,6 +27,12 @@ Endpoints:
   POST /mapping/remove - Remove custom mapping
   GET  /mapping/list   - List all mappings
   GET  /health         - Health check
+
+NOTE on sync vs async:
+  Every route below is a plain `def` (NOT `async def`) on purpose. OCR / capture /
+  detection are CPU-bound blocking work with no awaitable gap, so FastAPI runs them
+  in its threadpool. Writing them as `async def` would pin the single event loop and
+  freeze the whole service (even /health) while a scan runs.
 """
 
 import json
@@ -35,7 +41,9 @@ import os
 import sys
 import time
 
-from flask import Flask, jsonify, request
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 # Add parent dir to path for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -75,12 +83,27 @@ logger = logging.getLogger("grimvault-chinese")
 
 # --- Application ---
 
-app = Flask(__name__)
+app = FastAPI(title="DarkTavern OCR Service", version="1.0.0")
 
 # Global instances (initialized on startup)
 detector = None
 ocr = None
 translator = None
+
+
+# --- Request bodies ---
+
+class TranslateReq(BaseModel):
+    text: str
+
+
+class MappingAddReq(BaseModel):
+    chinese: str
+    english: str
+
+
+class MappingRemoveReq(BaseModel):
+    chinese: str
 
 
 def initialize():
@@ -139,19 +162,19 @@ def initialize():
     logger.info("Initialization complete!")
 
 
-@app.route("/health", methods=["GET"])
+@app.get("/health")
 def health():
     """Health check endpoint."""
-    return jsonify({
+    return {
         "status": "ok",
         "version": "1.0.0",
         "model_loaded": detector is not None,
         "ocr_loaded": ocr is not None,
         "mappings": len(translator.get_all_mappings()) if translator else 0,
-    })
+    }
 
 
-@app.route("/scan", methods=["POST"])
+@app.post("/scan")
 def scan():
     """
     Full scan pipeline - mirrors GrimVault's getTooltip() flow:
@@ -170,7 +193,7 @@ def scan():
     screenshot, bounds = capture_game_window()
 
     if screenshot is None:
-        return jsonify({"error": "Game window not found"}), 404
+        return JSONResponse({"error": "Game window not found"}, status_code=404)
 
     capture_time = time.time()
 
@@ -178,7 +201,7 @@ def scan():
     tooltips = detector.find_tooltips(screenshot)
 
     if not tooltips:
-        return jsonify({"tooltip": None}), 200
+        return {"tooltip": None}
 
     detect_time = time.time()
 
@@ -284,7 +307,7 @@ def scan():
         reverse_attributes = {v: k for k, v in translator.attributes.items()}
         reverse_keywords = {v: k for k, v in translator.keywords.items()}
 
-        return jsonify({
+        return {
             "tooltip": {
                 "text": english_text,
                 "original_text": chinese_text,
@@ -299,70 +322,55 @@ def scan():
                 "height": th,
                 "unmapped_terms": unmapped,
             }
-        })
+        }
 
-    return jsonify({"tooltip": None}), 200
+    return {"tooltip": None}
 
 
-@app.route("/translate", methods=["POST"])
-def translate():
+@app.post("/translate")
+def translate(req: TranslateReq):
     """Translate Chinese text to English."""
-    data = request.get_json()
-
-    if not data or "text" not in data:
-        return jsonify({"error": "Missing 'text' field"}), 400
-
-    chinese_text = data["text"]
+    chinese_text = req.text
     english_text = translator.translate_text(chinese_text)
     unmapped = translator.get_unmapped_terms(chinese_text)
 
-    return jsonify({
+    return {
         "original": chinese_text,
         "translated": english_text,
         "unmapped_terms": unmapped,
-    })
+    }
 
 
-@app.route("/mapping/add", methods=["POST"])
-def add_mapping():
+@app.post("/mapping/add")
+def add_mapping(req: MappingAddReq):
     """Add a custom Chinese → English mapping."""
-    data = request.get_json()
+    translator.add_custom_mapping(req.chinese, req.english)
 
-    if not data or "chinese" not in data or "english" not in data:
-        return jsonify({"error": "Missing 'chinese' or 'english' field"}), 400
-
-    translator.add_custom_mapping(data["chinese"], data["english"])
-
-    return jsonify({
+    return {
         "status": "ok",
-        "chinese": data["chinese"],
-        "english": data["english"],
-    })
+        "chinese": req.chinese,
+        "english": req.english,
+    }
 
 
-@app.route("/mapping/remove", methods=["POST"])
-def remove_mapping():
+@app.post("/mapping/remove")
+def remove_mapping(req: MappingRemoveReq):
     """Remove a custom mapping."""
-    data = request.get_json()
+    translator.remove_custom_mapping(req.chinese)
 
-    if not data or "chinese" not in data:
-        return jsonify({"error": "Missing 'chinese' field"}), 400
-
-    translator.remove_custom_mapping(data["chinese"])
-
-    return jsonify({"status": "ok"})
+    return {"status": "ok"}
 
 
-@app.route("/mapping/list", methods=["GET"])
+@app.get("/mapping/list")
 def list_mappings():
     """List all mappings (built-in + custom)."""
-    return jsonify({
+    return {
         "items": translator.items,
         "attributes": translator.attributes,
         "keywords": translator.keywords,
         "custom": translator.custom,
         "total": len(translator.get_all_mappings()),
-    })
+    }
 
 
 def _get_dpi_scale(hwnd):
@@ -377,7 +385,7 @@ def _get_dpi_scale(hwnd):
     return 1.0
 
 
-@app.route("/window", methods=["GET"])
+@app.get("/window")
 def window_info():
     """
     Return game window bounds / monitor / visibility so the Electron shell
@@ -389,12 +397,12 @@ def window_info():
 
     hwnd = find_game_window()
     if not hwnd:
-        return jsonify({"found": False})
+        return {"found": False}
 
     bounds = get_window_rect(hwnd)
     monitor = get_monitor_info(hwnd)
     if not bounds or not monitor:
-        return jsonify({"found": False})
+        return {"found": False}
 
     try:
         focused = (win32gui.GetForegroundWindow() == hwnd)
@@ -404,24 +412,22 @@ def window_info():
     monitor = dict(monitor)
     monitor["scale"] = _get_dpi_scale(hwnd)
 
-    return jsonify({
+    return {
         "found": True,
         "visible": True,
         "focused": focused,
         "bounds": bounds,
         "monitor": monitor,
-    })
+    }
 
 
 if __name__ == "__main__":
+    import uvicorn
+
     initialize()
 
     logger.info(f"Starting Chinese OCR service on port {PORT}")
     logger.info(f"Health check: http://localhost:{PORT}/health")
+    logger.info(f"API docs:     http://localhost:{PORT}/docs")
 
-    app.run(
-        host="127.0.0.1",
-        port=PORT,
-        debug=False,
-        threaded=True,
-    )
+    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="info")

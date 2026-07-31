@@ -58,7 +58,7 @@ ocr_env\Scripts\python -m pip install -r requirements.txt
 #    ocr_env\Scripts\python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-> **为什么必须是 `ocr_env` 这个名字？** Electron 启动时**自动优先**调用 `ocr_env\Scripts\python.exe` 来跑后端（见 `src/chinese/index.js`）。这样无论你 shell 里激活着哪个 venv，DarkTavern 都用自己的环境，**不会**因为缺 `flask` 等包而卡住。所以**不需要手动激活** ocr_env，建好即可。
+> **为什么必须是 `ocr_env` 这个名字？** Electron 启动时**自动优先**调用 `ocr_env\Scripts\python.exe` 来跑后端（见 `src/chinese/index.js`）。这样无论你 shell 里激活着哪个 venv，DarkTavern 都用自己的环境，**不会**因为缺 `fastapi` 等包而卡住。所以**不需要手动激活** ocr_env，建好即可。
 
 > **模型文件** `models/tooltip.onnx` 已随仓库提供，无需另行下载。
 
@@ -112,7 +112,7 @@ DarkTavern/
 | 截图 | mss |
 | 提示框检测 | YOLO DNN（tooltip.onnx，OpenCV dnn） |
 | 中文 OCR | RapidOCR + ONNX Runtime（PP-OCRv4） |
-| 后端服务 | Python + Flask（本地 HTTP） |
+| 后端服务 | Python + FastAPI（本地 HTTP） |
 | 查价 API | DarkerDB |
 
 ## 从源码打包（可选）
