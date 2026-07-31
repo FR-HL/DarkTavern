@@ -1,0 +1,50 @@
+appId: com.darkerdb.grimvault.cn
+productName: GrimVault Chinese Edition
+directories:
+  output: dist
+  buildResources: resources
+asar: true
+asarUnpack:
+  - "**/*.node"
+  - "**/node_modules/**/*.node"
+  - "**/node_modules/koffi/**/*"
+files:
+  - assets/**/*
+  - node_modules/**/*
+  - package.json
+  - settings.ini
+  - src/**/*
+  - ui/**/*
+  - chinese/**/*
+win:
+  icon: assets/images/icon.ico
+  target:
+    - nsis
+  requestedExecutionLevel: requireAdministrator
+  extraFiles:
+    # Pre-built native module and DLLs in SAME directory (required for LoadLibrary)
+    - from: prebuild/dlls/
+      to: native/
+      filter:
+        - "*.dll"
+    - from: prebuild/
+      to: native/
+      filter:
+        - "*.node"
+    # Models
+    - from: prebuild/models/
+      to: native/models/
+    # Chinese OCR service - PyInstaller bundled exe (no Python needed)
+    - from: chinese/ocr-service/dist/ocr-service/
+      to: resources/chinese/ocr-service/
+    # Chinese mapping files
+    - from: chinese/mapping/
+      to: resources/chinese/mapping/
+    # Mapping editor
+    - from: chinese/mapping-editor.html
+      to: resources/chinese/mapping-editor.html
+nsis:
+  oneClick: false
+  perMachine: true
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
