@@ -12,29 +12,22 @@ if (!existsSync (logPath)) {
   mkdirSync (logPath, { recursive: true });
 }
 
-const transport = new winston.transports.DailyRotateFile ({ 
-  filename: join (logPath, '%DATE%.log'),
-  datePattern: 'YYYY-MM-DD',
-  maxSize: '2m',
-  maxFiles: 5,
-  zippedArchive: false,
-  createSymlink: true
-});
-
-// In safe mode, use debug level logging regardless of debug state
-const safeMode = process.env.GRIMVAULT_SAFE_MODE === '1';
-
 const logger = winston.createLogger ({
-  // Use debug level in safe mode to capture more detailed logs
-  level: isDebug () || safeMode ? 'debug' : 'info',
+  level: isDebug () ? 'debug' : 'info',
   format: winston.format.combine (
     winston.format.timestamp (),
-    winston.format.printf (({ level, message, timestamp, ... meta }) => {
-      return `${timestamp} [${level}] ${message} ${Object.keys (meta).length ? JSON.stringify (meta, null, 2) : ''}`
+    winston.format.printf (({ level, message, timestamp, ...meta }) => {
+      return `${timestamp} [${level}] ${message} ${Object.keys (meta).length ? JSON.stringify (meta, null, 2) : ''}`;
     })
   ),
   transports: [
-    transport
+    new winston.transports.DailyRotateFile ({
+      filename: join (logPath, '%DATE%.log'),
+      datePattern: 'YYYY-MM-DD',
+      maxSize: '2m',
+      maxFiles: 5,
+      zippedArchive: false,
+    })
   ]
 });
 
@@ -44,24 +37,11 @@ if (isDebug ()) {
       winston.format.timestamp (),
       winston.format.colorize ({ all: false, level: true }),
       winston.format.printf (({ level, message, timestamp, ...meta }) => {
-        const grayColor = '\x1b[90m'; // ANSI escape code for gray
-        const resetColor = '\x1b[0m';  // ANSI escape code to reset color
-        const metaString = Object.keys(meta).length 
-          ? `${grayColor}${JSON.stringify(meta, null, 2)}${resetColor}` 
-          : '';
-        
-          return `${timestamp} [${level}] ${message} ${metaString}`;
+        const metaStr = Object.keys (meta).length ? `\x1b[90m${JSON.stringify (meta, null, 2)}\x1b[0m` : '';
+        return `${timestamp} [${level}] ${message} ${metaStr}`;
       })
     )
   }));
 }
 
-// transport.on ('rotate', async (oldFile, newFile) => {
-//   if (isDebug ()) {
-//     return;
-//   }
-
-//   uploadLog (oldFile);
-// });
-
-export { logger, transport, logPath };
+export { logger, logPath };

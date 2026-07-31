@@ -1,7 +1,3 @@
-/**
- * Settings manager - loads and parses settings.ini configuration
- */
-
 import electron from 'electron';
 const { app } = electron;
 
@@ -33,7 +29,6 @@ let defaults = parse (template);
 
 settings = merge (defaults, settings);
 
-settings.general.telemetry = toBool (settings.general.telemetry);
 settings.general.launch_on_startup = toBool (settings.general.launch_on_startup);
 settings.general.alignment = toEnum (settings.general.alignment, [ 'attached', 'top-left', 'top-right', 'bottom-left', 'bottom-right' ]);
 settings.general.components = toList (settings.general.components, [ 'header', 'primary', 'secondary', 'details', 'quests', 'pricing' ]);

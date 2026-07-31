@@ -15,8 +15,6 @@
     "@popperjs/core": "^2.11.8",
     "cross-env": "^7.0.3",
     "deepmerge": "^4.3.1",
-    "electron-log": "^5.2.4",
-    "electron-updater": "^6.3.9",
     "ini": "^5.0.0",
     "koffi": "^2.15.6",
     "vue": "^3.2.13",
