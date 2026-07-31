@@ -19,7 +19,6 @@ import * as chinese from './chinese/index.js';
 const { app, BrowserWindow } = electron;
 
 let debugging = false;
-let settingsWindow = null;
 let overlayRef = null;
 const RESERVED_KEYS = ['F5', 'F6', 'F7', 'F8'];
 
@@ -78,8 +77,8 @@ app.on ('ready', async () => {
     { type: 'separator' },
     { label: '主页', click: () => { openHomeWindow (); } },
     { label: `Scan Key: ${settings.hotkeys.run_price_check}`, type: 'normal', enabled: false },
-    { label: 'Key Binding (F5)', click: () => { openSettingsWindow ('keybind'); } },
-    { label: 'Mapping Editor (F6)', click: () => { openSettingsWindow ('mapping'); } },
+    { label: '设置 (F5)', click: () => { openSettingsWindow ('settings'); } },
+    { label: '词条编辑 (F6)', click: () => { openSettingsWindow ('mapping'); } },
     { type: 'separator' },
     { label: 'Logs', click: () => { shell.openPath (logPath); } },
     { label: 'Settings File', click: () => { shell.openPath (settingsPath); } },
@@ -170,11 +169,15 @@ app.on ('ready', async () => {
       api_key: settings.general.api_key || '',
       scan_key: settings.hotkeys.run_price_check || 'XButton1',
       default_mode: settings.general.default_mode || 'manual',
+      alignment: settings.general.alignment || 'attached',
+      scale: settings.general.scale || 1.0,
+      launch_on_startup: !!settings.general.launch_on_startup,
     };
   });
 
   frontend.handle ('settings:save', (event, data) => {
     let needReregister = false;
+    let needSend = false;
 
     if (data.api_key !== undefined) {
       settings.general.api_key = data.api_key;
@@ -187,12 +190,34 @@ app.on ('ready', async () => {
 
     if (data.default_mode !== undefined) {
       settings.general.default_mode = data.default_mode;
-      // Update overlay mode in real-time
-      overlay.webContents.send ('settings', settings);
+      needSend = true;
+    }
+
+    if (data.alignment !== undefined) {
+      settings.general.alignment = data.alignment;
+      needSend = true;
+    }
+
+    if (data.scale !== undefined) {
+      settings.general.scale = parseFloat (data.scale);
+      needSend = true;
+    }
+
+    if (data.launch_on_startup !== undefined) {
+      settings.general.launch_on_startup = !!data.launch_on_startup;
+      app.setLoginItemSettings ({
+        openAtLogin: settings.general.launch_on_startup,
+        path: process.execPath,
+        args: ['--processStart', `${basename (process.execPath)}`, '--process-start-args', '--hidden']
+      });
     }
 
     saveSettings ();
     logger.info (`Settings saved: ${JSON.stringify (data)}`);
+
+    if (needSend) {
+      overlay.webContents.send ('settings', settings);
+    }
 
     // Re-register scan hotkey if changed
     if (needReregister) {
@@ -202,13 +227,9 @@ app.on ('ready', async () => {
     return { success: true };
   });
 
-  // The home page can ask the main process to open the settings / mapping windows
-  frontend.on ('open-settings', () => { openSettingsWindow ('settings'); });
-  frontend.on ('open-mapping', () => { openSettingsWindow ('mapping'); });
-
-  // No full main page yet: open the home window as the entry point on startup.
-  // The Python OCR service keeps loading in the background; the home page polls
-  // /health itself and lights up its status runes in real time when ready.
+  // Single-window app: the home window hosts overview + settings + mapping panes
+  // behind its sidebar. The Python OCR service keeps loading in the background;
+  // the home page polls /health and lights up its status in real time.
   openHomeWindow ();
 });
 
@@ -306,47 +327,25 @@ async function registerScanHotkey (overlay, reservedKeys) {
   previousScanAccelerator = accelerator;
 }
 
-// Open settings window with specific tab
+// Navigate the single-window app to a pane (overview / general / scan / mapping).
+// Used by the tray menu and the F5 / F6 global shortcuts; the home window hosts
+// every pane behind its sidebar, so there is no separate settings window anymore.
+let pendingPane = null;
+
 function openSettingsWindow (tab) {
-  if (settingsWindow) {
-    if (settingsWindow.isMinimized ()) settingsWindow.restore ();
-    settingsWindow.setAlwaysOnTop (true, 'screen-saver');
-    settingsWindow.show ();
-    settingsWindow.focus ();
+  const paneMap = { settings: 'general', keybind: 'scan', general: 'general', scan: 'scan', mapping: 'mapping', overview: 'overview' };
+  const pane = paneMap [tab] || 'general';
+
+  if (!homeWindow) {
+    pendingPane = pane;
+    openHomeWindow ();
     return;
   }
 
-  let editorPath = app.isPackaged
-    ? join (ROOT, '..', 'chinese', 'mapping-editor.html')
-    : join (ROOT, 'chinese', 'mapping-editor.html');
-
-  settingsWindow = new BrowserWindow ({
-    width: 750,
-    height: 600,
-    show: false,
-    title: 'DarkTavern - 设置',
-    minimizable: false,
-    maximizable: false,
-    autoHideMenuBar: true,
-    webPreferences: {
-      sandbox: false,
-      nodeIntegration: true,
-      contextIsolation: false,
-    },
-  });
-
-  settingsWindow.loadFile (editorPath, { hash: tab || 'settings' });
-
-  // Force to top after content loads (screen-saver = highest priority, same as overlay)
-  settingsWindow.once ('ready-to-show', () => {
-    settingsWindow.setAlwaysOnTop (true, 'screen-saver');
-    settingsWindow.show ();
-    settingsWindow.focus ();
-  });
-
-  settingsWindow.on ('closed', () => {
-    settingsWindow = null;
-  });
+  if (homeWindow.isMinimized ()) homeWindow.restore ();
+  homeWindow.show ();
+  homeWindow.focus ();
+  homeWindow.webContents.send ('navigate', pane);
 }
 
 // Home window - the application entry point (real main page, OCR loads in background)
@@ -363,12 +362,12 @@ function openHomeWindow () {
   let homePath = join (ROOT, 'home.html');
 
   homeWindow = new BrowserWindow ({
-    width: 960,
-    height: 660,
+    width: 1120,
+    height: 740,
+    minWidth: 980,
+    minHeight: 660,
     show: false,
     title: 'DarkTavern',
-    minimizable: true,
-    maximizable: false,
     autoHideMenuBar: true,
     webPreferences: {
       sandbox: false,
@@ -377,8 +376,17 @@ function openHomeWindow () {
     },
   });
 
+  homeWindow.webContents.on ('console-message', (e, level, message) => {
+    logger.debug (`[home console] ${message}`);
+  });
   homeWindow.webContents.on ('did-fail-load', (e, code, desc, url) => {
     logger.error (`[home] did-fail-load ${code} ${desc} ${url}`);
+  });
+  homeWindow.webContents.on ('did-finish-load', () => {
+    if (pendingPane) {
+      homeWindow.webContents.send ('navigate', pendingPane);
+      pendingPane = null;
+    }
   });
 
   homeWindow.loadFile (homePath);

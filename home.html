@@ -9,380 +9,400 @@
     src: url('assets/fonts/SaintKDG_Medium.ttf') format('truetype');
     font-display: swap;
   }
-
   :root {
-    --bg0: #0c0a14;
-    --bg1: #100b1a;
-    --stone: #1a1530;
-    --stone2: #221b3a;
-    --stone3: #2a2147;
-    --gold: #ffd400;
-    --gold-dim: #b8902a;
-    --ember: #ff7a18;
-    --teal: #90d9de;
-    --text: #ece5d2;
-    --muted: #8a8270;
-    --line: rgba(255, 212, 0, 0.14);
-    --line-soft: rgba(255, 255, 255, 0.05);
-    --display: 'SaintKDG', 'Georgia', 'Songti SC', serif;
-    --body: 'Microsoft YaHei', 'Segoe UI', sans-serif;
+    --bg-0: #0a0810; --bg-1: #100c1a; --bg-2: #15101f;
+    --ink: #ece7da; --ink-dim: #b6ae9d; --ink-faint: #6f685c;
+    --gold: #ffc83d; --gold-hi: #ffe39a; --gold-deep: #a9801f;
+    --teal: #7fd8de; --teal-deep: #2f8a90; --danger: #d06a66;
+    --line: rgba(255,255,255,0.07); --line-soft: rgba(255,255,255,0.035); --line-gold: rgba(255,200,61,0.20);
+    --glass: rgba(26,22,38,0.5); --glass-2: rgba(255,255,255,0.022); --field: rgba(0,0,0,0.28);
+    --shadow: 0 18px 48px rgba(0,0,0,0.5);
+    --r-card: 16px; --r-ctl: 11px; --r-pill: 999px;
+    --display: 'SaintKDG','Georgia','Songti SC',serif;
+    --body: -apple-system,BlinkMacSystemFont,'Segoe UI Variable','Segoe UI','Microsoft YaHei',system-ui,sans-serif;
+    --ease: cubic-bezier(.2,.7,.2,1);
+    --side-w: 212px;
   }
-
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
   html, body {
-    height: 100%;
-    font-family: var(--body);
-    color: var(--text);
-    overflow: hidden;
+    height: 100%; font-family: var(--body); color: var(--ink); overflow: hidden;
+    -webkit-font-smoothing: antialiased;
     background:
-      radial-gradient(125% 80% at 50% -12%, rgba(255, 122, 24, 0.12), transparent 58%),
-      radial-gradient(90% 70% at 88% 118%, rgba(144, 217, 222, 0.06), transparent 60%),
-      radial-gradient(120% 120% at 50% 130%, rgba(0, 0, 0, 0.65), transparent 70%),
-      linear-gradient(180deg, var(--bg0) 0%, var(--bg1) 55%, #08060e 100%);
+      radial-gradient(115% 70% at 18% -14%, rgba(255,200,61,0.13), transparent 52%),
+      radial-gradient(90% 70% at 96% 112%, rgba(127,216,222,0.07), transparent 60%),
+      radial-gradient(130% 120% at 60% 132%, rgba(0,0,0,0.7), transparent 72%),
+      linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 62%, #060409 100%);
   }
-
-  /* faint stone-grain texture, pure CSS */
   body::before {
-    content: '';
-    position: fixed; inset: 0;
+    content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background-image:
-      repeating-linear-gradient(115deg, rgba(255,255,255,0.012) 0 2px, transparent 2px 7px),
-      repeating-linear-gradient(25deg, rgba(0,0,0,0.10) 0 3px, transparent 3px 9px);
-    pointer-events: none;
-    mix-blend-mode: overlay;
-    opacity: 0.5;
+      repeating-linear-gradient(118deg, rgba(255,255,255,0.013) 0 2px, transparent 2px 8px),
+      repeating-linear-gradient(22deg, rgba(0,0,0,0.11) 0 3px, transparent 3px 10px);
+    mix-blend-mode: overlay; opacity: .5;
   }
+  body::after { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(120% 95% at 55% 42%, transparent 56%, rgba(0,0,0,0.5) 100%); }
 
-  /* drifting tavern fog */
-  .fog {
-    position: fixed;
-    border-radius: 50%;
-    filter: blur(46px);
-    pointer-events: none;
-    z-index: 0;
-  }
-  .fog1 {
-    width: 520px; height: 360px; left: -120px; top: 30%;
-    background: radial-gradient(circle, rgba(255,122,24,0.10), transparent 70%);
-    animation: drift1 34s ease-in-out infinite alternate;
-  }
-  .fog2 {
-    width: 600px; height: 420px; right: -160px; bottom: -80px;
-    background: radial-gradient(circle, rgba(144,217,222,0.07), transparent 70%);
-    animation: drift2 42s ease-in-out infinite alternate;
-  }
-  @keyframes drift1 { from { transform: translate(0,0) scale(1); } to { transform: translate(60px,-40px) scale(1.12); } }
-  @keyframes drift2 { from { transform: translate(0,0) scale(1.05); } to { transform: translate(-50px,30px) scale(0.95); } }
+  .fog { position: fixed; border-radius: 50%; filter: blur(56px); pointer-events: none; z-index: 0; }
+  .fog-ember { width: 440px; height: 300px; left: 4%; top: -6%; background: radial-gradient(circle, rgba(255,170,40,0.16), transparent 70%); animation: breathe 7s var(--ease) infinite; }
+  .fog-a { width: 520px; height: 380px; left: 24%; top: 40%; background: radial-gradient(circle, rgba(255,150,40,0.08), transparent 70%); animation: drift1 38s var(--ease) infinite alternate; }
+  .fog-b { width: 600px; height: 440px; right: -160px; bottom: -90px; background: radial-gradient(circle, rgba(127,216,222,0.07), transparent 70%); animation: drift2 46s var(--ease) infinite alternate; }
+  @keyframes breathe { 0%,100% { opacity:.55; transform:scale(1); } 50% { opacity:1; transform:scale(1.08); } }
+  @keyframes drift1 { from { transform: translate(0,0) scale(1); } to { transform: translate(50px,-34px) scale(1.12); } }
+  @keyframes drift2 { from { transform: translate(0,0) scale(1.05); } to { transform: translate(-44px,26px) scale(.95); } }
 
-  .shell {
-    position: relative; z-index: 1;
-    height: 100%;
-    display: flex; flex-direction: column;
-    padding: 22px 26px 16px;
-  }
+  .app { position: relative; z-index: 1; height: 100%; display: grid; grid-template-columns: var(--side-w) 1fr; }
 
-  /* ===== brand bar ===== */
-  .brandbar {
-    display: flex; align-items: center; gap: 16px;
-    animation: fadeDown 0.5s ease both;
+  /* ===== sidebar ===== */
+  .side {
+    position: relative; display: flex; flex-direction: column; padding: 18px 12px 14px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.34), rgba(0,0,0,0.2));
+    border-right: 1px solid var(--line);
   }
-  .crest {
-    width: 52px; height: 52px; flex: none;
-    display: grid; place-items: center;
-    border-radius: 50%;
-    border: 2px solid var(--gold);
-    background: radial-gradient(circle at 35% 30%, #3a2c08, #15100a 75%);
-    color: var(--gold);
-    font-family: var(--display);
-    font-size: 1.25rem; font-weight: 700;
-    letter-spacing: 0.04em;
-    text-shadow: 0 0 10px rgba(255,212,0,0.6);
-    box-shadow: 0 0 14px rgba(255,212,0,0.30), inset 0 0 12px rgba(255,212,0,0.18);
-    animation: breathe 3.4s ease-in-out infinite;
+  .side::before { content: ''; position: absolute; top: 0; left: 14px; right: 14px; height: 1px; background: linear-gradient(90deg, transparent, var(--line-gold), transparent); }
+  .side-brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 20px; }
+  .side-sig {
+    width: 38px; height: 38px; flex: none; display: grid; place-items: center; border-radius: 11px;
+    border: 1.5px solid var(--line-gold); background: radial-gradient(circle at 34% 28%, #3a2c08, #140f08 78%);
+    color: var(--gold); font-family: var(--display); font-size: .95rem; letter-spacing: .02em;
+    text-shadow: 0 0 9px rgba(255,200,61,0.5); box-shadow: inset 0 1px 0 rgba(255,227,154,0.22);
+    animation: breathe 4.5s var(--ease) infinite;
   }
-  @keyframes breathe {
-    0%,100% { box-shadow: 0 0 12px rgba(255,212,0,0.28), inset 0 0 10px rgba(255,212,0,0.15); }
-    50%     { box-shadow: 0 0 24px rgba(255,212,0,0.55), inset 0 0 16px rgba(255,212,0,0.28); }
-  }
-  .brand-text h1 {
-    font-family: var(--display);
-    font-size: 2.5rem; line-height: 1;
-    letter-spacing: 0.02em;
-    color: var(--text);
-    text-shadow: 0 2px 0 rgba(0,0,0,0.5), 0 0 26px rgba(255,212,0,0.22);
-  }
-  .tagline {
-    margin-top: 6px;
-    font-size: 0.78rem; letter-spacing: 0.32em;
-    color: var(--gold-dim);
-    text-transform: uppercase;
-  }
-  .brand-meta {
-    margin-left: auto;
-    font-size: 0.72rem; letter-spacing: 0.14em;
-    color: var(--muted);
-    border: 1px solid var(--line);
-    padding: 5px 12px; border-radius: 20px;
-    background: rgba(255,212,0,0.03);
-  }
+  .side-brand .nm { font-family: var(--display); font-size: 1.18rem; color: var(--ink); line-height: 1; letter-spacing: .01em; }
+  .side-brand .ey { margin-top: 4px; font-size: .56rem; letter-spacing: .26em; text-transform: uppercase; color: var(--ink-faint); }
 
-  /* ===== main grid ===== */
-  .grid {
-    flex: 1;
-    display: grid;
-    grid-template-columns: 1.05fr 1fr;
-    gap: 18px;
-    margin-top: 20px;
-    min-height: 0;
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-label { padding: 14px 12px 6px; font-size: .6rem; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-faint); }
+  .nav-item {
+    position: relative; display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 10px;
+    cursor: pointer; color: var(--ink-dim); font-size: .88rem; font-weight: 500;
+    transition: background .2s var(--ease), color .2s var(--ease), transform .2s var(--ease);
   }
+  .nav-item svg { width: 17px; height: 17px; flex: none; color: var(--ink-faint); transition: color .2s var(--ease); }
+  .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--ink); transform: translateX(2px); }
+  .nav-item:hover svg { color: var(--ink-dim); }
+  .nav-item.active { color: var(--gold); background: rgba(255,200,61,0.08); }
+  .nav-item.active svg { color: var(--gold); }
+  .nav-item.active::before { content: ''; position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px; border-radius: 3px; background: var(--gold); box-shadow: 0 0 9px rgba(255,200,61,0.65); }
 
-  .panel {
-    position: relative;
-    background: linear-gradient(160deg, var(--stone) 0%, #14102a 100%);
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    padding: 18px 20px;
-    box-shadow: 0 14px 40px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.03);
-    overflow: hidden;
-  }
-  .panel::before {
-    content: '';
-    position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px;
-    background: linear-gradient(180deg, transparent, var(--gold), transparent);
-    border-radius: 3px;
-  }
+  .side-foot { margin-top: auto; padding: 14px 12px 4px; border-top: 1px solid var(--line-soft); font-size: .68rem; color: var(--ink-faint); line-height: 1.85; }
+  .side-foot .shield { display: inline-flex; align-items: center; gap: 6px; color: var(--teal-deep); margin-bottom: 6px; }
+  .side-foot .shield svg { width: 12px; height: 12px; }
+  .side-foot a { color: var(--teal-deep); text-decoration: none; transition: color .15s var(--ease); }
+  .side-foot a:hover { color: var(--gold); }
+  .side-foot .grp { color: var(--teal-deep); cursor: pointer; transition: color .15s var(--ease); }
+  .side-foot .grp:hover { color: var(--gold); }
 
-  .panel-title {
-    display: flex; align-items: center; gap: 9px;
-    font-family: var(--display);
-    font-size: 1.02rem; letter-spacing: 0.12em;
-    color: var(--gold);
-    padding-bottom: 12px; margin-bottom: 6px;
-    border-bottom: 1px solid var(--line);
-  }
-  .live-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--gold);
-    box-shadow: 0 0 8px var(--gold);
-    animation: blink 1.6s ease-in-out infinite;
-  }
-  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+  /* ===== content ===== */
+  .content { position: relative; overflow-y: auto; padding: 26px 32px 30px; }
+  .content::-webkit-scrollbar { width: 10px; }
+  .content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 9px; border: 3px solid transparent; background-clip: padding-box; }
+  .content::-webkit-scrollbar-thumb:hover { background: rgba(255,200,61,0.28); background-clip: padding-box; border: 3px solid transparent; }
 
-  .status-panel { animation: fadeUp 0.6s ease 0.08s both; }
-  .feat-panel   { animation: fadeUp 0.6s ease 0.16s both; }
+  .pane { display: none; animation: fadeIn .4s var(--ease) both; }
+  .pane.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-  /* ===== status rows ===== */
-  .stat {
-    display: flex; align-items: center; gap: 14px;
-    padding: 13px 2px;
-    border-bottom: 1px solid var(--line-soft);
-  }
-  .stat:last-child { border-bottom: none; }
-  .stat-rune {
-    width: 15px; height: 15px; flex: none;
-    border-radius: 50%;
-    background: #3a3550;
-    position: relative;
-    transition: background 0.5s ease, box-shadow 0.5s ease;
-  }
-  .stat-rune[data-state="pending"] { animation: pulseGray 1.5s ease-in-out infinite; }
-  .stat-rune[data-state="ok"] {
-    background: radial-gradient(circle at 35% 30%, #ffe26b, var(--gold) 70%);
-    box-shadow: 0 0 11px rgba(255,212,0,0.7);
-    animation: none;
-  }
-  .stat-rune[data-state="ok"]::after {
-    content: '\2713';
-    position: absolute; inset: 0;
-    display: grid; place-items: center;
-    font-size: 0.62rem; font-weight: 700; color: #1a1206;
-  }
-  @keyframes pulseGray { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
-  .stat-label {
-    font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase;
-    color: var(--muted);
-  }
-  .stat-value {
-    margin-top: 3px;
-    font-size: 0.96rem; color: var(--muted);
-    transition: color 0.4s ease;
-  }
+  /* ===== overview ===== */
+  .ov-head { margin-bottom: 22px; animation: fadeDown .5s var(--ease) both; }
+  .ov-ey { display: inline-flex; align-items: center; gap: 8px; font-size: .68rem; letter-spacing: .2em; text-transform: uppercase; color: var(--gold); font-weight: 600; }
+  .ov-ey .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); animation: blink 1.6s var(--ease) infinite; }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+  .ov-headline { margin-top: 9px; font-size: 2rem; font-weight: 700; letter-spacing: -.015em; color: var(--ink); line-height: 1.1; text-shadow: 0 2px 0 rgba(0,0,0,0.45); transition: color .4s var(--ease); }
+  .ov-sub { margin-top: 7px; font-size: .86rem; color: var(--ink-faint); transition: color .4s var(--ease); }
 
-  /* ===== feature placeholders ===== */
-  .feat-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
-    margin-top: 14px;
+  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 16px; }
+  .metric {
+    position: relative; padding: 16px 18px; border-radius: var(--r-card);
+    background: var(--glass); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2);
+    border: 1px solid var(--line); box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden; transition: transform .3s var(--ease), border-color .3s var(--ease), box-shadow .3s var(--ease);
   }
-  .feat {
-    position: relative;
-    text-align: left;
-    padding: 16px 16px 18px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: linear-gradient(150deg, var(--stone2), #181230);
-    color: var(--text);
-    cursor: pointer;
-    font-family: var(--body);
-    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
-    overflow: hidden;
-  }
-  .feat:nth-child(1) { animation: fadeUp 0.5s ease 0.26s both; }
-  .feat:nth-child(2) { animation: fadeUp 0.5s ease 0.32s both; }
-  .feat:nth-child(3) { animation: fadeUp 0.5s ease 0.38s both; }
-  .feat:nth-child(4) { animation: fadeUp 0.5s ease 0.44s both; }
-  .feat:hover {
-    transform: translateY(-4px);
-    border-color: var(--gold-dim);
-    box-shadow: 0 12px 28px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,212,0,0.25);
-  }
-  .feat:active { transform: translateY(-2px); }
-  .feat-title { display: block; font-size: 1.02rem; font-weight: 700; letter-spacing: 0.02em; }
-  .feat-sub { display: block; margin-top: 5px; font-size: 0.74rem; color: var(--muted); }
-  .soon-tag {
-    position: absolute; top: 10px; right: 12px;
-    font-size: 0.58rem; letter-spacing: 0.18em; font-weight: 700;
-    color: var(--gold-dim);
-    border: 1px solid var(--line); border-radius: 4px;
-    padding: 2px 6px;
-  }
+  .metric::before { content: ''; position: absolute; left: 14px; right: 14px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--line-gold), transparent); }
+  .metric:hover { transform: translateY(-3px); border-color: var(--line-gold); box-shadow: 0 22px 50px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06); }
+  .metric-k { font-size: .64rem; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-faint); }
+  .metric-v { margin-top: 10px; font-size: 1.9rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+  .metric-v.gold { color: var(--gold); text-shadow: 0 0 18px rgba(255,200,61,0.25); }
+  .metric-v.teal { color: var(--teal); }
+  .metric-v.ink { color: var(--ink); font-size: 1.3rem; }
+  .metric-v .ok-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 7px var(--teal); }
+  .metric-v .ok-dot.bad { background: var(--danger); box-shadow: 0 0 7px var(--danger); }
 
-  /* ===== action bar ===== */
-  .actionbar {
-    display: flex; align-items: center; gap: 12px;
-    margin-top: 16px; padding-top: 14px;
-    border-top: 1px solid var(--line);
-    animation: fadeUp 0.6s ease 0.3s both;
-  }
-  .btn {
-    font-family: var(--body);
-    font-size: 0.86rem; font-weight: 700; letter-spacing: 0.04em;
-    padding: 9px 20px; border-radius: 7px;
-    border: 1px solid var(--gold);
-    background: linear-gradient(180deg, var(--gold), #e0b400);
-    color: #1a1206; cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-  }
-  .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(255,212,0,0.3); filter: brightness(1.06); }
-  .btn:active { transform: translateY(0); }
-  .btn.ghost {
-    background: transparent; color: var(--gold);
-    border-color: var(--line);
-  }
-  .btn.ghost:hover { background: rgba(255,212,0,0.08); border-color: var(--gold-dim); box-shadow: none; }
-  .credit {
-    margin-left: auto;
-    font-size: 0.72rem; color: var(--muted);
-  }
-  .credit .grp {
-    color: var(--teal); cursor: pointer;
-    border-bottom: 1px dashed transparent;
-    transition: color 0.15s ease, border-color 0.15s ease;
-  }
-  .credit .grp:hover { color: var(--gold); border-color: var(--gold-dim); }
+  .ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
-  /* ===== toast ===== */
-  .toast {
-    position: fixed; top: 50%; left: 50%;
-    transform: translate(-50%, -50%) scale(0.9);
-    background: rgba(8,6,14,0.92);
-    border: 1px solid var(--line);
-    color: var(--gold);
-    padding: 14px 34px; border-radius: 10px;
-    font-size: 0.95rem; font-weight: 700; letter-spacing: 0.05em;
-    z-index: 9999; opacity: 0; pointer-events: none;
-    box-shadow: 0 0 30px rgba(255,212,0,0.2);
-    transition: opacity 0.2s ease, transform 0.2s ease;
+  .card {
+    position: relative; display: flex; flex-direction: column; border-radius: var(--r-card);
+    background: var(--glass); -webkit-backdrop-filter: blur(18px) saturate(1.25); backdrop-filter: blur(18px) saturate(1.25);
+    border: 1px solid var(--line); box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden; transition: transform .35s var(--ease), border-color .35s var(--ease), box-shadow .35s var(--ease);
   }
-  .toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  .card::before { content: ''; position: absolute; left: 16px; right: 16px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--line-gold), transparent); }
+  .card:hover { transform: translateY(-2px); border-color: var(--line-gold); box-shadow: 0 24px 56px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06); }
+  .card-pad { padding: 18px 20px; position: relative; z-index: 1; display: flex; flex-direction: column; flex: 1; }
+  .card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+  .card-title { font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; font-weight: 600; color: var(--gold); }
 
-  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+  .rune-row { display: flex; align-items: center; gap: 14px; padding: 13px 8px; border-bottom: 1px solid var(--line-soft); border-radius: 8px; transition: background .25s var(--ease), transform .25s var(--ease); }
+  .rune-row:last-of-type { border-bottom: none; }
+  .rune-row:hover { background: rgba(255,255,255,0.025); transform: translateX(2px); }
+  .rune { width: 16px; height: 16px; flex: none; border-radius: 50%; background: #34304a; position: relative; transition: background .5s var(--ease), box-shadow .5s var(--ease); }
+  .rune[data-state="pending"] { animation: pulseGray 1.5s var(--ease) infinite; }
+  .rune[data-state="ok"] { background: radial-gradient(circle at 35% 30%, var(--gold-hi), var(--gold) 72%); box-shadow: 0 0 12px rgba(255,200,61,0.7); animation: none; }
+  .rune[data-state="ok"]::after { content: '\2713'; position: absolute; inset: 0; display: grid; place-items: center; font-size: .6rem; font-weight: 700; color: #1a1206; animation: pop .4s var(--ease) both; }
+  @keyframes pulseGray { 0%,100% { opacity:.4; } 50% { opacity:1; } }
+  @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
+  .rune-k { font-size: .66rem; letter-spacing: .13em; text-transform: uppercase; color: var(--ink-faint); }
+  .rune-v { margin-top: 3px; font-size: .92rem; color: var(--ink-faint); transition: color .4s var(--ease); }
+  .rune-foot { margin-top: auto; padding-top: 14px; display: flex; align-items: center; gap: 8px; font-size: .68rem; color: var(--ink-faint); }
+  .rune-foot .shield { width: 13px; height: 13px; flex: none; color: var(--teal-deep); }
+
+  .steps { display: flex; flex-direction: column; gap: 4px; margin-top: 2px; }
+  .step { display: flex; align-items: center; gap: 14px; padding: 11px 8px; border-radius: 10px; transition: background .25s var(--ease), transform .25s var(--ease); }
+  .step:hover { background: rgba(255,255,255,0.025); transform: translateX(2px); }
+  .step-n { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; border: 1.5px solid var(--line-gold); font-family: var(--display); font-size: .92rem; color: var(--gold); background: rgba(255,200,61,0.05); transition: box-shadow .25s var(--ease); }
+  .step:hover .step-n { box-shadow: 0 0 12px rgba(255,200,61,0.3); }
+  .step-t { font-size: .92rem; color: var(--ink-dim); }
+  .step-t b { color: var(--ink); font-weight: 600; }
+  .kbd { display: inline-block; padding: 2px 9px; border-radius: 6px; border: 1px solid var(--line-gold); background: rgba(0,0,0,0.3); box-shadow: 0 1px 0 rgba(255,227,154,0.12), inset 0 1px 0 rgba(255,255,255,0.04); font-family: var(--body); font-size: .8rem; font-weight: 600; color: var(--gold-hi); font-variant-numeric: tabular-nums; }
+
+  /* ===== settings panes ===== */
+  .pane-title { font-size: 1.4rem; font-weight: 600; color: var(--ink); letter-spacing: -.01em; }
+  .pane-desc { margin-top: 5px; font-size: .82rem; color: var(--ink-faint); margin-bottom: 20px; }
+  .group { background: var(--glass-2); border: 1px solid var(--line); border-radius: var(--r-card); padding: 18px 20px; margin-bottom: 14px; }
+  .group-h { font-size: .72rem; letter-spacing: .15em; text-transform: uppercase; font-weight: 600; color: var(--gold); margin-bottom: 14px; }
+  .row { display: flex; align-items: center; gap: 14px; min-height: 34px; }
+  .row + .row { margin-top: 12px; }
+  .row > label { min-width: 92px; font-size: .84rem; color: var(--ink-dim); }
+  .row .grow { flex: 1; }
+  .hint { font-size: .72rem; color: var(--ink-faint); line-height: 1.5; }
+
+  input[type="text"], input[type="password"], select { width: 100%; padding: 9px 12px; background: var(--field); border: 1px solid var(--line); border-radius: var(--r-ctl); color: var(--ink); font-size: .85rem; font-family: var(--body); transition: border-color .2s var(--ease), box-shadow .2s var(--ease); }
+  input::placeholder { color: var(--ink-faint); }
+  input:focus, select:focus { outline: none; border-color: var(--gold-deep); box-shadow: 0 0 0 3px rgba(255,200,61,0.12); }
+  select { appearance: none; -webkit-appearance: none; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b6ae9d' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+  .inline-field { max-width: 320px; }
+
+  .btn { font-family: var(--body); font-size: .82rem; font-weight: 600; padding: 8px 18px; border-radius: 9px; cursor: pointer; border: 1px solid transparent; transition: transform .15s var(--ease), box-shadow .2s var(--ease), filter .2s var(--ease), background .2s var(--ease), border-color .2s var(--ease); }
+  .btn:active { transform: scale(.97); }
+  .btn.primary { color: #1a1206; border-color: var(--gold-deep); background: linear-gradient(180deg, var(--gold-hi), var(--gold) 55%, #e0ad22); box-shadow: 0 4px 14px rgba(255,200,61,0.2), inset 0 1px 0 rgba(255,255,255,0.4); }
+  .btn.primary:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow: 0 8px 20px rgba(255,200,61,0.3); }
+  .btn.ghost { background: var(--field); color: var(--ink-dim); border-color: var(--line); }
+  .btn.ghost:hover { color: var(--ink); border-color: var(--line-gold); background: rgba(255,255,255,0.04); }
+  .btn.danger { background: rgba(208,106,102,0.12); color: var(--danger); border-color: rgba(208,106,102,0.3); }
+  .btn.danger:hover { background: rgba(208,106,102,0.2); }
+  .btn.sm { padding: 4px 11px; font-size: .74rem; }
+
+  .keybind-btn { padding: 8px 16px; border-radius: 9px; cursor: pointer; min-width: 200px; text-align: center; background: var(--field); border: 1.5px solid var(--line); color: var(--ink-dim); font-size: .82rem; font-family: var(--body); transition: border-color .2s var(--ease), color .2s var(--ease); }
+  .keybind-btn.listening { border-color: var(--gold); color: var(--gold); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity:.55; } }
+
+  .switch { position: relative; width: 42px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .track { position: absolute; inset: 0; border-radius: var(--r-pill); background: rgba(255,255,255,0.12); transition: background .25s var(--ease); cursor: pointer; }
+  .track::before { content: ''; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.4); transition: transform .25s var(--ease); }
+  .switch input:checked + .track { background: linear-gradient(180deg, var(--gold-hi), var(--gold)); }
+  .switch input:checked + .track::before { transform: translateX(18px); }
+
+  .range-wrap { display: flex; align-items: center; gap: 14px; max-width: 320px; }
+  input[type="range"] { -webkit-appearance: none; appearance: none; flex: 1; height: 4px; border-radius: 4px; background: rgba(255,255,255,0.12); outline: none; }
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--gold); cursor: pointer; box-shadow: 0 0 10px rgba(255,200,61,0.5); border: 2px solid #1a1206; }
+  input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--gold); cursor: pointer; border: 2px solid #1a1206; }
+  .range-val { font-size: .85rem; font-weight: 600; color: var(--gold-hi); min-width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .ocr-line { display: flex; align-items: center; gap: 9px; font-size: .88rem; }
+  .ocr-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); }
+  .ocr-dot.ok { background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+  .ocr-dot.bad { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  .add-form { display: flex; gap: 8px; margin-bottom: 14px; }
+  .add-form input { flex: 1; }
+  .search { margin-bottom: 12px; }
+  .tab-bar { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tab { padding: 6px 14px; background: var(--field); border: 1px solid var(--line); border-radius: var(--r-pill); cursor: pointer; color: var(--ink-dim); font-size: .8rem; transition: all .2s var(--ease); }
+  .tab:hover { color: var(--ink); border-color: var(--line-gold); }
+  .tab.active { background: rgba(255,200,61,0.1); color: var(--gold); border-color: var(--gold-deep); }
+  .tab .count { color: var(--ink-faint); font-size: .72rem; margin-left: 3px; }
+  .tab.active .count { color: var(--gold-deep); }
+  .table-wrap { border: 1px solid var(--line); border-radius: var(--r-ctl); overflow: hidden; }
+  .table-scroll { max-height: 360px; overflow-y: auto; }
+  .table-scroll::-webkit-scrollbar { width: 8px; }
+  .table-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+  thead th { text-align: left; padding: 10px 12px; background: rgba(0,0,0,0.25); color: var(--ink-faint); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; position: sticky; top: 0; }
+  tbody td { padding: 8px 12px; border-top: 1px solid var(--line-soft); }
+  tbody tr { transition: background .15s var(--ease); }
+  tbody tr:hover { background: rgba(255,255,255,0.025); }
+  td .cn { color: var(--ink); } td .en { color: var(--ink-dim); } td .src { color: var(--ink-faint); font-size: .72rem; }
+  .edit-input { padding: 4px 8px; background: var(--field); border: 1px solid var(--gold-deep); border-radius: 6px; color: var(--ink); font-size: .82rem; width: 100%; }
+  .empty { text-align: center; color: var(--ink-faint); padding: 28px; font-size: .84rem; }
+
+  .status { margin: 10px 0; padding: 9px 12px; border-radius: 9px; font-size: .8rem; display: none; }
+  .status.success { display: block; background: rgba(127,216,222,0.1); color: var(--teal); border: 1px solid rgba(127,216,222,0.25); }
+  .status.error { display: block; background: rgba(208,106,102,0.1); color: var(--danger); border: 1px solid rgba(208,106,102,0.25); }
+
+  .toast { position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(.9); background: rgba(8,6,14,0.92); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--line-gold); color: var(--gold); padding: 13px 32px; border-radius: 12px; font-size: .92rem; font-weight: 600; z-index: 9999; opacity: 0; pointer-events: none; box-shadow: 0 0 34px rgba(255,200,61,0.18); transition: opacity .2s var(--ease), transform .2s var(--ease); }
+  .toast.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+
   @keyframes fadeDown { from { opacity: 0; transform: translateY(-12px); } to { opacity: 1; transform: translateY(0); } }
+  .metric:nth-child(1) { animation: fadeIn .5s var(--ease) .06s both; }
+  .metric:nth-child(2) { animation: fadeIn .5s var(--ease) .12s both; }
+  .metric:nth-child(3) { animation: fadeIn .5s var(--ease) .18s both; }
+  .ov-grid .card:nth-child(1) { animation: fadeIn .55s var(--ease) .16s both; }
+  .ov-grid .card:nth-child(2) { animation: fadeIn .55s var(--ease) .24s both; }
+  .rune-row:nth-child(1) { animation: fadeIn .45s var(--ease) .22s both; }
+  .rune-row:nth-child(2) { animation: fadeIn .45s var(--ease) .28s both; }
+  .rune-row:nth-child(3) { animation: fadeIn .45s var(--ease) .34s both; }
+  .rune-row:nth-child(4) { animation: fadeIn .45s var(--ease) .40s both; }
+  .step:nth-child(1) { animation: fadeIn .45s var(--ease) .30s both; }
+  .step:nth-child(2) { animation: fadeIn .45s var(--ease) .36s both; }
+  .step:nth-child(3) { animation: fadeIn .45s var(--ease) .42s both; }
+
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 </style>
 </head>
 <body>
-  <div class="fog fog1"></div>
-  <div class="fog fog2"></div>
+  <div class="fog fog-ember"></div>
+  <div class="fog fog-a"></div>
+  <div class="fog fog-b"></div>
 
-  <div class="shell">
-    <header class="brandbar">
-      <div class="crest">DT</div>
-      <div class="brand-text">
-        <h1>DarkTavern</h1>
-        <div class="tagline">地牢酒馆 · 悬停即知价</div>
+  <div class="app">
+    <aside class="side">
+      <div class="side-brand">
+        <div class="side-sig">DT</div>
+        <div><div class="nm">DarkTavern</div><div class="ey">Dark and Darker</div></div>
       </div>
-      <div class="brand-meta">v1.0 · 中文查价</div>
-    </header>
+      <nav class="nav">
+        <div class="nav-label">导航</div>
+        <div class="nav-item active" data-pane="overview" onclick="showPane('overview')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          概览
+        </div>
+        <div class="nav-item" data-pane="general" onclick="showPane('general')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.2" fill="currentColor" stroke="none"/><circle cx="15" cy="16" r="2.2" fill="currentColor" stroke="none"/></svg>
+          常规
+        </div>
+        <div class="nav-item" data-pane="scan" onclick="showPane('scan')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+          扫描
+        </div>
+        <div class="nav-item" data-pane="mapping" onclick="showPane('mapping')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.1" fill="currentColor" stroke="none"/></svg>
+          词条
+        </div>
+      </nav>
+      <div class="side-foot">
+        <div class="shield"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>仅读屏 · 不注入</div>
+        交流群 <span class="grp" onclick="copyGroup()">376490002</span><br>
+        <a href="#" onclick="require('electron').shell.openExternal('https://github.com/FR-HL/DarkTavern'); return false;">开源 · GitHub</a>
+      </div>
+    </aside>
 
-    <main class="grid">
-      <section class="panel status-panel">
-        <h2 class="panel-title">酒馆情报 <span class="live-dot"></span></h2>
-
-        <div class="stat" id="stat-ocr">
-          <div class="stat-rune" data-state="pending"></div>
-          <div class="stat-body">
-            <div class="stat-label">OCR 侍者</div>
-            <div class="stat-value" id="ocr-value">正在唤醒…</div>
-          </div>
+    <div class="content">
+      <!-- ===== 概览 ===== -->
+      <div class="pane active" data-pane="overview">
+        <div class="ov-head">
+          <div class="ov-ey"><span class="live-dot"></span>酒馆情报</div>
+          <div class="ov-headline" id="ov-headline">侍者正在备酒</div>
+          <div class="ov-sub" id="ov-sub">OCR 引擎唤醒中，请稍候片刻…</div>
         </div>
 
-        <div class="stat" id="stat-game">
-          <div class="stat-rune" data-state="pending"></div>
-          <div class="stat-body">
-            <div class="stat-label">游戏窗口</div>
-            <div class="stat-value" id="game-value">等待游戏启动…</div>
-          </div>
+        <div class="metric-grid">
+          <div class="metric"><div class="metric-k">翻译词条</div><div class="metric-v gold" id="m-mappings">0</div></div>
+          <div class="metric"><div class="metric-k">本次会话</div><div class="metric-v teal" id="m-uptime">00:00</div></div>
+          <div class="metric"><div class="metric-k">服务版本</div><div class="metric-v ink"><span id="m-ver-dot" class="ok-dot bad"></span><span id="m-version">—</span></div></div>
         </div>
 
-        <div class="stat" id="stat-key">
-          <div class="stat-rune" data-state="ok"></div>
-          <div class="stat-body">
-            <div class="stat-label">扫描热键</div>
-            <div class="stat-value" id="key-value">XButton1</div>
-          </div>
+        <div class="ov-grid">
+          <section class="card">
+            <div class="card-pad">
+              <div class="card-head"><span class="card-title">实时状态</span></div>
+              <div class="rune-row" id="stat-ocr"><div class="rune" data-state="pending"></div><div><div class="rune-k">OCR 侍者</div><div class="rune-v">唤醒中…</div></div></div>
+              <div class="rune-row" id="stat-game"><div class="rune" data-state="pending"></div><div><div class="rune-k">游戏窗口</div><div class="rune-v">等待游戏…</div></div></div>
+              <div class="rune-row" id="stat-key"><div class="rune" data-state="ok"></div><div><div class="rune-k">扫描热键</div><div class="rune-v" style="color:var(--gold)">已绑定</div></div></div>
+              <div class="rune-row" id="stat-api"><div class="rune" data-state="pending"></div><div><div class="rune-k">DarkerDB API</div><div class="rune-v">检测中…</div></div></div>
+              <div class="rune-foot"><svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>不读取游戏内存</span></div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-pad">
+              <div class="card-head"><span class="card-title">三步上手</span></div>
+              <div class="steps">
+                <div class="step"><div class="step-n">1</div><div class="step-t">启动 <b>Dark and Darker</b>（中文客户端）</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t">把鼠标 <b>悬停</b> 在任意物品上</div></div>
+                <div class="step"><div class="step-n">3</div><div class="step-t">按下 <span class="kbd" id="guide-key">XButton1</span> 即刻查价</div></div>
+              </div>
+            </div>
+          </section>
         </div>
+      </div>
 
-        <div class="stat" id="stat-api">
-          <div class="stat-rune" data-state="pending"></div>
-          <div class="stat-body">
-            <div class="stat-label">DarkerDB API</div>
-            <div class="stat-value" id="api-value">检测中…</div>
-          </div>
+      <!-- ===== 常规 ===== -->
+      <div class="pane" data-pane="general">
+        <div class="pane-title">常规</div>
+        <div class="pane-desc">账号凭证与启动行为。</div>
+        <div class="group">
+          <div class="group-h">DarkerDB API Key</div>
+          <div class="row"><label>API Key</label><div class="grow" style="display:flex; gap:8px;"><input type="password" id="api-key-input" placeholder="输入你的 DarkerDB API Key"><button class="btn ghost" id="toggle-key-btn" onclick="toggleApiKeyVisibility()">显示</button></div></div>
+          <div class="row"><label></label><span class="hint">在 darkerdb.com 注册获取，填入后查价更快、数据更完整。</span></div>
+          <div class="row"><label></label><button class="btn primary" onclick="saveApiKey()">保存 API Key</button></div>
         </div>
-      </section>
-
-      <section class="panel feat-panel">
-        <h2 class="panel-title">功能</h2>
-        <div class="feat-grid">
-          <button class="feat" data-soon>
-            <span class="feat-title">我的配装</span>
-            <span class="feat-sub">保存与一键套用</span>
-            <span class="soon-tag">SOON</span>
-          </button>
-          <button class="feat" data-soon>
-            <span class="feat-title">市场捡漏</span>
-            <span class="feat-sub">实时低价提醒</span>
-            <span class="soon-tag">SOON</span>
-          </button>
-          <button class="feat" data-soon>
-            <span class="feat-title">掉落查询</span>
-            <span class="feat-sub">怪物掉率地图</span>
-            <span class="soon-tag">SOON</span>
-          </button>
-          <button class="feat" data-soon>
-            <span class="feat-title">伤害计算</span>
-            <span class="feat-sub">配装模拟推演</span>
-            <span class="soon-tag">SOON</span>
-          </button>
+        <div class="group">
+          <div class="group-h">启动</div>
+          <div class="row"><label>开机启动</label><div class="grow" style="display:flex; align-items:center; justify-content:space-between;"><span class="hint">登录系统时自动在后台运行 DarkTavern。</span><label class="switch"><input type="checkbox" id="launch-toggle" onchange="saveLaunch()"><span class="track"></span></label></div></div>
         </div>
-      </section>
-    </main>
+        <div id="settings-status" class="status"></div>
+      </div>
 
-    <footer class="actionbar">
-      <button class="btn" id="btn-settings">设置</button>
-      <button class="btn ghost" id="btn-mapping">词条编辑</button>
-      <span class="credit">by 7. &amp; 方源Official · 群 <span class="grp" id="grp">376490002</span></span>
-    </footer>
+      <!-- ===== 扫描 ===== -->
+      <div class="pane" data-pane="scan">
+        <div class="pane-title">扫描</div>
+        <div class="pane-desc">触发键、模式与悬浮窗外观。</div>
+        <div class="group">
+          <div class="group-h">扫描触发键</div>
+          <div class="row"><label>当前按键</label><span class="kbd" id="current-key">XButton1</span></div>
+          <div class="row"><label>修改按键</label><button class="keybind-btn" id="keybind-btn" onclick="startListening()">点击此处，然后按下新按键</button></div>
+          <div class="row"><label></label><span class="hint">支持键盘键（F1–F12、Ctrl 组合键等）与鼠标侧键（XButton1 / XButton2）。</span></div>
+          <div class="row"><label></label><button class="btn primary" onclick="saveKeybind()">保存按键</button></div>
+        </div>
+        <div class="group">
+          <div class="group-h">扫描模式</div>
+          <div class="row"><label>模式</label><select id="scan-mode" class="inline-field" onchange="saveMode()"><option value="manual">手动 · 按键触发</option><option value="automatic">自动 · 悬停触发</option></select></div>
+          <div class="row"><label></label><span class="hint">手动：悬停物品后按扫描键查价。自动：悬停即查。</span></div>
+        </div>
+        <div class="group">
+          <div class="group-h">悬浮窗外观</div>
+          <div class="row"><label>弹出位置</label><select id="alignment" class="inline-field" onchange="saveAlignment()"><option value="attached">贴附物品旁</option><option value="top-left">左上角</option><option value="top-right">右上角</option><option value="bottom-left">左下角</option><option value="bottom-right">右下角</option></select></div>
+          <div class="row"><label></label><span class="hint">更改后于下一次扫描生效。</span></div>
+          <div class="row"><label>缩放</label><div class="range-wrap"><input type="range" id="scale" min="0.6" max="2" step="0.1" value="1"><span class="range-val" id="scale-val">1.0×</span></div></div>
+        </div>
+        <div class="group">
+          <div class="group-h">OCR 服务</div>
+          <div class="row"><label>状态</label><span class="ocr-line"><span class="ocr-dot" id="ocr-dot"></span><span id="ocr-status" style="color:var(--ink-dim)">检查中…</span></span></div>
+          <div class="row"><label>翻译词条</label><span id="mapping-count" style="color:var(--ink-dim)">—</span></div>
+        </div>
+      </div>
+
+      <!-- ===== 词条 ===== -->
+      <div class="pane" data-pane="mapping">
+        <div class="pane-title">词条</div>
+        <div class="pane-desc">管理中文 ↔ 英文翻译映射，提升识别准确度。</div>
+        <div class="add-form">
+          <input type="text" id="cn-input" placeholder="中文（如：长剑）">
+          <input type="text" id="en-input" placeholder="英文（如：Longsword）">
+          <button class="btn primary" onclick="addMapping()">添加</button>
+        </div>
+        <div id="mapping-status" class="status"></div>
+        <input type="text" class="search" id="search" placeholder="搜索词条…" oninput="filterTable()">
+        <div class="tab-bar">
+          <div class="tab active" data-tab="custom" onclick="switchTab('custom')">自定义 <span class="count" id="count-custom"></span></div>
+          <div class="tab" data-tab="items" onclick="switchTab('items')">物品 <span class="count" id="count-items"></span></div>
+          <div class="tab" data-tab="attributes" onclick="switchTab('attributes')">属性 <span class="count" id="count-attributes"></span></div>
+          <div class="tab" data-tab="keywords" onclick="switchTab('keywords')">关键词 <span class="count" id="count-keywords"></span></div>
+        </div>
+        <div class="table-wrap"><div class="table-scroll">
+          <table><thead><tr><th>中文</th><th>英文</th><th>来源</th><th style="width:130px">操作</th></tr></thead><tbody id="table-body"></tbody></table>
+        </div></div>
+      </div>
+    </div>
   </div>
 
   <div class="toast" id="toast"></div>
@@ -391,102 +411,205 @@
     const { ipcRenderer, clipboard } = require('electron');
     const OCR = 'http://127.0.0.1:19528';
     const $ = (s) => document.querySelector(s);
+    let ocrOk = false, gameOk = false;
 
-    function toast (msg) {
-      const t = $('#toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      clearTimeout(t._t);
-      t._t = setTimeout(() => t.classList.remove('show'), 1600);
+    // ===== navigation =====
+    function showPane (name) {
+      document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.dataset.pane === name));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.pane === name));
+    }
+    ipcRenderer.on('navigate', (e, pane) => { if (pane) showPane(pane); });
+
+    // ===== toast / status =====
+    function showToast (msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 1600); }
+    function showSettingsStatus (msg, type) { const el = $('#settings-status'); el.textContent = msg; el.className = 'status ' + type; setTimeout(() => { el.className = 'status'; }, 4000); }
+    function showMappingStatus (msg, type) { const el = $('#mapping-status'); el.textContent = msg; el.className = 'status ' + type; setTimeout(() => { el.className = 'status'; }, 3000); }
+    function escapeHtml (s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function copyGroup () { clipboard.writeText('376490002'); showToast('群号已复制'); }
+
+    // ===== overview: runes =====
+    function setRune (rowId, state, vText, vColor) {
+      const row = document.getElementById(rowId); if (!row) return;
+      row.querySelector('.rune').dataset.state = state;
+      const v = row.querySelector('.rune-v'); v.textContent = vText; v.style.color = vColor;
+    }
+    function updateHeadline () {
+      const h = $('#ov-headline'), s = $('#ov-sub');
+      if (!ocrOk) { h.textContent = '侍者正在备酒'; s.textContent = 'OCR 引擎唤醒中，请稍候片刻…'; }
+      else if (!gameOk) { h.textContent = '酒馆已经开张'; s.textContent = '启动游戏、把鼠标悬停在物品上即可查价'; }
+      else { h.textContent = '万事俱备 · 悬停即知价'; s.textContent = '已检测到游戏窗口，按下 ' + ($('#guide-key').textContent) + ' 开始'; }
     }
 
-    function setOcr (state, count) {
-      $('#stat-ocr .stat-rune').dataset.state = state;
-      const val = $('#ocr-value');
-      if (state === 'ok') {
-        val.textContent = (count != null) ? ('已就绪 · ' + count + ' 词条') : '已就绪';
-        val.style.color = 'var(--gold)';
-      } else {
-        val.textContent = '正在唤醒…';
-        val.style.color = 'var(--muted)';
-      }
+    // ===== overview: metrics =====
+    let shownMappings = -1;
+    function animateNumber (el, from, to, dur) {
+      const t0 = performance.now();
+      (function step (t) { const p = Math.min(1, (t - t0) / dur); const e = 1 - Math.pow(1 - p, 3); el.textContent = Math.round(from + (to - from) * e); if (p < 1) requestAnimationFrame(step); })(t0);
     }
+    function setMappings (n) { if (n === shownMappings) return; animateNumber($('#m-mappings'), shownMappings < 0 ? 0 : shownMappings, n, 700); shownMappings = n; }
+    const t0 = Date.now();
+    (function tick () {
+      const s = Math.floor((Date.now() - t0) / 1000);
+      const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60, pad = (x) => String(x).padStart(2, '0');
+      $('#m-uptime').textContent = h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${pad(m)}:${pad(ss)}`;
+      setTimeout(tick, 1000);
+    })();
 
-    function setGame (found) {
-      $('#stat-game .stat-rune').dataset.state = found ? 'ok' : 'pending';
-      const val = $('#game-value');
-      if (found) { val.textContent = '已检测到游戏'; val.style.color = 'var(--teal)'; }
-      else { val.textContent = '等待游戏启动…'; val.style.color = 'var(--muted)'; }
-    }
-
-    // OCR health: poll fast until ready, then slow heartbeat
-    let ocrReady = false;
+    // ===== polling =====
     let healthTimer = null;
     async function pollHealth () {
       try {
-        const r = await fetch(OCR + '/health');
-        const d = await r.json();
+        const r = await fetch(OCR + '/health'); const d = await r.json();
         if (d && d.status === 'ok') {
-          setOcr('ok', d.mappings);
-          if (!ocrReady) {
-            ocrReady = true;
-            clearInterval(healthTimer);
-            healthTimer = setInterval(pollHealth, 5000);
-          }
-        } else {
-          setOcr('pending');
-        }
+          ocrOk = true;
+          setRune('stat-ocr', 'ok', '已就绪', 'var(--gold)');
+          setMappings(d.mappings || 0);
+          $('#m-version').textContent = d.version || '—'; $('#m-ver-dot').classList.remove('bad');
+          const dot = $('#ocr-dot'); if (dot) { dot.className = 'ocr-dot ok'; }
+          const st = $('#ocr-status'); if (st) { st.textContent = '运行中'; st.style.color = 'var(--teal)'; }
+          const mc = $('#mapping-count'); if (mc) mc.textContent = (d.mappings || 0) + ' 条';
+          if (!healthTimer) { clearInterval(healthTimer); healthTimer = setInterval(pollHealth, 5000); }
+          if (!mappingsLoaded) { mappingsLoaded = true; loadMappings(); }
+        } else { ocrOk = false; setRune('stat-ocr', 'pending', '唤醒中…', 'var(--ink-faint)'); }
       } catch (e) {
-        setOcr('pending');
+        ocrOk = false; setRune('stat-ocr', 'pending', '唤醒中…', 'var(--ink-faint)'); $('#m-ver-dot').classList.add('bad');
+        const dot = $('#ocr-dot'); if (dot) dot.className = 'ocr-dot bad';
+        const st = $('#ocr-status'); if (st) { st.textContent = '未运行'; st.style.color = 'var(--danger)'; }
       }
+      updateHeadline();
     }
-    pollHealth();
-    healthTimer = setInterval(pollHealth, 1200);
+    pollHealth(); healthTimer = setInterval(pollHealth, 1200);
 
-    // Game window presence
     async function pollWindow () {
       try {
-        const r = await fetch(OCR + '/window');
-        const d = await r.json();
-        setGame(!!(d && d.found));
-      } catch (e) {
-        setGame(false);
-      }
+        const r = await fetch(OCR + '/window'); const d = await r.json();
+        if (d && d.found) { gameOk = true; setRune('stat-game', 'ok', '已检测到', 'var(--teal)'); }
+        else { gameOk = false; setRune('stat-game', 'pending', '等待游戏…', 'var(--ink-faint)'); }
+      } catch (e) { gameOk = false; setRune('stat-game', 'pending', '等待游戏…', 'var(--ink-faint)'); }
+      updateHeadline();
     }
-    pollWindow();
-    setInterval(pollWindow, 2000);
+    pollWindow(); setInterval(pollWindow, 2000);
 
-    // Settings (scan key + api key state)
+    // ===== settings: load =====
     async function loadSettings () {
       try {
         const d = await ipcRenderer.invoke('settings:get');
-        $('#key-value').textContent = d.scan_key || 'XButton1';
-        const api = $('#api-value');
-        const rune = $('#stat-api .stat-rune');
-        if (d.api_key) {
-          api.textContent = '已配置';
-          api.style.color = 'var(--teal)';
-          rune.dataset.state = 'ok';
-        } else {
-          api.textContent = '未配置 · 设置中填写';
-          api.style.color = 'var(--muted)';
-          rune.dataset.state = 'pending';
-        }
-      } catch (e) {
-        console.warn('settings:get failed', e);
-      }
+        $('#api-key-input').value = d.api_key || '';
+        $('#current-key').textContent = d.scan_key || 'XButton1';
+        $('#guide-key').textContent = d.scan_key || 'XButton1';
+        $('#scan-mode').value = d.default_mode || 'manual';
+        $('#alignment').value = d.alignment || 'attached';
+        const sc = $('#scale'); sc.value = d.scale || 1.0; updateScaleVal();
+        $('#launch-toggle').checked = !!d.launch_on_startup;
+        setRune('stat-key', 'ok', '已绑定', 'var(--gold)');
+        if (d.api_key) setRune('stat-api', 'ok', '已配置', 'var(--teal)');
+        else setRune('stat-api', 'pending', '未配置', 'var(--ink-faint)');
+        updateHeadline();
+      } catch (e) { console.warn('settings:get failed', e); }
     }
     loadSettings();
 
-    $('#btn-settings').onclick = () => ipcRenderer.send('open-settings');
-    $('#btn-mapping').onclick = () => ipcRenderer.send('open-mapping');
-    document.querySelectorAll('[data-soon]').forEach((b) => {
-      b.onclick = () => toast('敬请期待 · 即将上线');
+    // ===== settings: general =====
+    async function saveApiKey () {
+      const key = $('#api-key-input').value.trim();
+      const r = await ipcRenderer.invoke('settings:save', { api_key: key });
+      if (r.success) { showToast('已保存'); if (key) setRune('stat-api', 'ok', '已配置', 'var(--teal)'); else setRune('stat-api', 'pending', '未配置', 'var(--ink-faint)'); }
+    }
+    function toggleApiKeyVisibility () {
+      const i = $('#api-key-input'), b = $('#toggle-key-btn');
+      if (i.type === 'password') { i.type = 'text'; b.textContent = '隐藏'; } else { i.type = 'password'; b.textContent = '显示'; }
+    }
+    async function saveLaunch () { const r = await ipcRenderer.invoke('settings:save', { launch_on_startup: $('#launch-toggle').checked }); if (r.success) showToast('已保存'); }
+
+    // ===== settings: scan / keybind =====
+    let isListeningForKey = false, newKeybind = null;
+    function startListening () { isListeningForKey = true; const b = $('#keybind-btn'); b.classList.add('listening'); b.textContent = '等待输入…（按 Esc 取消）'; }
+    document.addEventListener('keydown', (e) => {
+      if (!isListeningForKey) return; e.preventDefault();
+      if (e.key === 'Escape') { stopListening(); return; }
+      if (['F5', 'F6', 'F7', 'F8'].includes(e.key)) { showSettingsStatus('F5–F8 为系统保留键，请另选', 'error'); return; }
+      let key = '';
+      if (e.ctrlKey) key += 'Ctrl+'; if (e.altKey) key += 'Alt+'; if (e.shiftKey) key += 'Shift+';
+      if (e.key !== 'Control' && e.key !== 'Alt' && e.key !== 'Shift') { key += e.key.length === 1 ? e.key.toUpperCase() : e.key; newKeybind = key; $('#keybind-btn').textContent = key; stopListening(); }
     });
-    $('#grp').onclick = () => {
-      clipboard.writeText('376490002');
-      toast('群号已复制');
-    };
+    document.addEventListener('mousedown', (e) => {
+      if (!isListeningForKey) return; e.preventDefault();
+      const names = { 0: 'MouseLeft', 1: 'MouseMiddle', 2: 'MouseRight', 3: 'XButton1', 4: 'XButton2' };
+      const name = names[e.button]; if (!name) return; newKeybind = name; $('#keybind-btn').textContent = name; stopListening();
+    });
+    function stopListening () { isListeningForKey = false; const b = $('#keybind-btn'); b.classList.remove('listening'); if (!newKeybind) b.textContent = '点击此处，然后按下新按键'; }
+    async function saveKeybind () {
+      if (!newKeybind) { showSettingsStatus('请先点击按钮并按下新按键', 'error'); return; }
+      const r = await ipcRenderer.invoke('settings:save', { scan_key: newKeybind });
+      if (r.success) { $('#current-key').textContent = newKeybind; $('#guide-key').textContent = newKeybind; showToast('已保存'); updateHeadline(); }
+    }
+    async function saveMode () { const r = await ipcRenderer.invoke('settings:save', { default_mode: $('#scan-mode').value }); if (r.success) showToast('已保存'); }
+    async function saveAlignment () { const r = await ipcRenderer.invoke('settings:save', { alignment: $('#alignment').value }); if (r.success) showToast('已保存 · 下次扫描生效'); }
+    function updateScaleVal () { $('#scale-val').textContent = parseFloat($('#scale').value).toFixed(1) + '×'; }
+    let scaleTimer = null;
+    $('#scale').addEventListener('input', () => { updateScaleVal(); clearTimeout(scaleTimer); scaleTimer = setTimeout(saveScale, 200); });
+    async function saveScale () { const r = await ipcRenderer.invoke('settings:save', { scale: parseFloat($('#scale').value) }); if (r.success) showToast('已保存'); }
+
+    // ===== mapping editor =====
+    let allMappings = { items: {}, attributes: {}, keywords: {}, custom: {} };
+    let currentTab = 'custom', editingRow = null, currentEntries = [], mappingsLoaded = false;
+    async function loadMappings () {
+      try { const r = await fetch(OCR + '/mapping/list'); allMappings = await r.json(); updateCounts(); renderTable(); }
+      catch (e) { showMappingStatus('OCR 服务未运行，请先启动应用。', 'error'); }
+    }
+    function updateCounts () {
+      $('#count-custom').textContent = '(' + Object.keys(allMappings.custom || {}).length + ')';
+      $('#count-items').textContent = '(' + Object.keys(allMappings.items || {}).length + ')';
+      $('#count-attributes').textContent = '(' + Object.keys(allMappings.attributes || {}).length + ')';
+      $('#count-keywords').textContent = '(' + Object.keys(allMappings.keywords || {}).length + ')';
+    }
+    function switchTab (tab) { currentTab = tab; document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab)); editingRow = null; renderTable(); }
+    function renderTable () {
+      const data = allMappings[currentTab] || {};
+      const search = $('#search').value.toLowerCase();
+      const srcNames = { custom: '自定义', items: '物品', attributes: '属性', keywords: '关键词' };
+      currentEntries = []; let rows = '';
+      for (const [cn, en] of Object.entries(data)) {
+        if (search && !cn.toLowerCase().includes(search) && !en.toLowerCase().includes(search)) continue;
+        const idx = currentEntries.length; currentEntries.push({ cn, en });
+        if (editingRow === idx) {
+          rows += `<tr><td><input class="edit-input" id="edit-cn-${idx}" value="${escapeHtml(cn)}" onkeydown="if(event.key==='Enter')saveEdit(${idx})"></td><td><input class="edit-input" id="edit-en-${idx}" value="${escapeHtml(en)}" onkeydown="if(event.key==='Enter')saveEdit(${idx})"></td><td class="src">${srcNames[currentTab]}</td><td><button class="btn primary sm" onclick="saveEdit(${idx})">保存</button> <button class="btn ghost sm" onclick="cancelEdit()">取消</button></td></tr>`;
+        } else {
+          rows += `<tr><td class="cn">${escapeHtml(cn)}</td><td class="en">${escapeHtml(en)}</td><td class="src">${srcNames[currentTab]}</td><td><button class="btn ghost sm" onclick="startEdit(${idx})">编辑</button>${currentTab === 'custom' ? ` <button class="btn danger sm" onclick="removeMapping(${idx})">删除</button>` : ''}</td></tr>`;
+        }
+      }
+      $('#table-body').innerHTML = rows || '<tr><td colspan="4" class="empty">暂无词条</td></tr>';
+    }
+    function filterTable () { renderTable(); }
+    function startEdit (idx) { editingRow = idx; renderTable(); setTimeout(() => { const i = $('#edit-cn-' + idx); if (i) i.focus(); }, 50); }
+    function cancelEdit () { editingRow = null; renderTable(); }
+    async function saveEdit (idx) {
+      const entry = currentEntries[idx]; if (!entry) return;
+      const ci = $('#edit-cn-' + idx), ei = $('#edit-en-' + idx); if (!ci || !ei) return;
+      const nc = ci.value.trim(), ne = ei.value.trim();
+      if (!nc || !ne) { showMappingStatus('中文和英文都不能为空', 'error'); return; }
+      try {
+        if (nc !== entry.cn) await fetch(OCR + '/mapping/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chinese: entry.cn }) });
+        await fetch(OCR + '/mapping/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chinese: nc, english: ne }) });
+        showToast('已保存'); editingRow = null; await loadMappings();
+      } catch (e) { showMappingStatus('保存失败：' + e.message, 'error'); }
+    }
+    async function addMapping () {
+      const cn = $('#cn-input').value.trim(), en = $('#en-input').value.trim();
+      if (!cn || !en) { showMappingStatus('请填写中文和英文', 'error'); return; }
+      try {
+        await fetch(OCR + '/mapping/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chinese: cn, english: en }) });
+        $('#cn-input').value = ''; $('#en-input').value = '';
+        showMappingStatus('已添加：' + cn + ' → ' + en, 'success'); await loadMappings(); switchTab('custom');
+      } catch (e) { showMappingStatus('添加失败：' + e.message, 'error'); }
+    }
+    async function removeMapping (idx) {
+      const entry = currentEntries[idx]; if (!entry) return;
+      if (!confirm('确定删除 “' + entry.cn + '” 吗？')) return;
+      try { await fetch(OCR + '/mapping/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chinese: entry.cn }) }); showToast('已删除'); await loadMappings(); }
+      catch (e) { showMappingStatus('删除失败：' + e.message, 'error'); }
+    }
+    loadMappings();
   </script>
 </body>
 </html>
