@@ -25,9 +25,9 @@ export function startService (pythonPath) {
   let serverScript = join (chineseDir, 'ocr-service', 'server.py');
 
   let env = { ...process.env };
-  env.GRIMVAULT_TOOLTIP_MODEL = join (modelsDir, 'tooltip.onnx');
-  env.GRIMVAULT_MAPPING_DIR = join (chineseDir, 'mapping');
-  env.GRIMVAULT_OCR_PORT = String (OCR_PORT);
+  env.DARKTAVERN_TOOLTIP_MODEL = join (modelsDir, 'tooltip.onnx');
+  env.DARKTAVERN_MAPPING_DIR = join (chineseDir, 'mapping');
+  env.DARKTAVERN_OCR_PORT = String (OCR_PORT);
 
   let cmd, args;
 

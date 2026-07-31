@@ -1,21 +1,19 @@
 """
-GrimVault Chinese Extension - OCR Service
-==========================================
-Local HTTP server that provides Chinese OCR + translation for GrimVault.
-Uses the SAME approach as GrimVault: screen capture → DNN tooltip detection → OCR.
+DarkTavern OCR Service
+======================
+Local HTTP server providing Chinese OCR + translation for DarkTavern.
+Screen capture → DNN tooltip detection → OCR → translate.
 No DLL injection, no game process interaction - pure screen reading.
 
-Open Source Project: https://github.com/DarkerDB/GrimVault (original)
-Chinese Edition fork with RapidOCR (ONNX Runtime) for Chinese game text support.
+Forked from: https://github.com/DarkerDB/GrimVault (original)
 
 Translation Sources:
   - Official Weblate: https://localization.darkanddarker.com/languages/zh_Hans/
   - Community DB: https://dnd.nfuwow.com/
-  - DarkerDB API: https://api.darkerdb.com/v1/items (956 English item names)
-  - Game: Dark and Darker by Ironmace
+  - DarkerDB API: https://api.darkerdb.com/v1/items
 
 Tech Stack:
-  - Screen Capture: mss (same region as GrimVault's ScreenCaptureLite/WGC)
+  - Screen Capture: mss
   - Tooltip Detection: YOLO DNN (tooltip.onnx, 640x640, confidence 0.90)
   - OCR: RapidOCR + ONNX Runtime (PP-OCRv4 models, Chinese + English)
   - Translation: Keyword mapping table (Chinese → English)
@@ -27,6 +25,7 @@ Endpoints:
   POST /mapping/remove - Remove custom mapping
   GET  /mapping/list   - List all mappings
   GET  /health         - Health check
+  GET  /window         - Game window bounds + monitor info
 
 NOTE on sync vs async:
   Every route below is a plain `def` (NOT `async def`) on purpose. OCR / capture /
@@ -55,23 +54,23 @@ from translator import Translator
 
 # --- Configuration ---
 
-# Path to the same tooltip.onnx model used by GrimVault
+# Path to tooltip.onnx model
 TOOLTIP_MODEL_PATH = os.environ.get(
-    "GRIMVAULT_TOOLTIP_MODEL",
+    "DARKTAVERN_TOOLTIP_MODEL",
     os.path.join(
         os.path.dirname(__file__),
-        "..", "..", "resources", "models", "tooltip.onnx",
+        "..", "..", "models", "tooltip.onnx",
     ),
 )
 
 # Mapping files directory
 MAPPING_DIR = os.environ.get(
-    "GRIMVAULT_MAPPING_DIR",
+    "DARKTAVERN_MAPPING_DIR",
     os.path.join(os.path.dirname(__file__), "..", "mapping"),
 )
 
 # Server port
-PORT = int(os.environ.get("GRIMVAULT_OCR_PORT", "19528"))
+PORT = int(os.environ.get("DARKTAVERN_OCR_PORT", "19528"))
 
 # --- Logging ---
 
@@ -79,7 +78,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-logger = logging.getLogger("grimvault-chinese")
+logger = logging.getLogger("darktavern-ocr")
 
 # --- Application ---
 
@@ -115,16 +114,14 @@ def initialize():
     # Resolve tooltip model path
     model_path = os.path.abspath(TOOLTIP_MODEL_PATH)
 
-    # Also check GrimVault installation directory
     if not os.path.exists(model_path):
-        # Try common installation paths
         candidates = [
             os.path.join(os.path.dirname(__file__), "..", "..", "models", "tooltip.onnx"),
             os.path.expandvars(
-                r"%LOCALAPPDATA%\Programs\GrimVault\resources\models\tooltip.onnx"
+                r"%LOCALAPPDATA%\Programs\DarkTavern\resources\models\tooltip.onnx"
             ),
             os.path.expandvars(
-                r"%PROGRAMFILES%\GrimVault\GrimVault Chinese Edition\native\models\tooltip.onnx"
+                r"%PROGRAMFILES%\DarkTavern\native\models\tooltip.onnx"
             ),
         ]
         for candidate in candidates:
@@ -134,7 +131,7 @@ def initialize():
 
     if not os.path.exists(model_path):
         logger.error(f"Tooltip model not found at: {model_path}")
-        logger.error("Set GRIMVAULT_TOOLTIP_MODEL environment variable to the correct path")
+        logger.error("Set DARKTAVERN_TOOLTIP_MODEL environment variable to the correct path")
         sys.exit(1)
 
     logger.info(f"Loading tooltip detection model: {model_path}")
@@ -177,19 +174,18 @@ def health():
 @app.post("/scan")
 def scan():
     """
-    Full scan pipeline - mirrors GrimVault's getTooltip() flow:
+    Full scan pipeline:
     1. Capture game window screenshot
-    2. Detect tooltip bounding boxes (same DNN model)
-    3. OCR each tooltip region (PaddleOCR Chinese)
+    2. Detect tooltip bounding boxes (DNN model)
+    3. OCR each tooltip region (Chinese)
     4. Translate to English
     5. Return translated text + coordinates
 
-    Returns same structure as GrimVault's native getTooltip():
-    {text, x, y, width, height}
+    Returns: {text, x, y, width, height}
     """
     start_time = time.time()
 
-    # Step 1: Capture game window (same as GrimVault's Screen::Capture)
+    # Step 1: Capture game window
     screenshot, bounds = capture_game_window()
 
     if screenshot is None:
@@ -197,7 +193,7 @@ def scan():
 
     capture_time = time.time()
 
-    # Step 2: Detect tooltips (same as GrimVault's Screen::FindTooltips)
+    # Step 2: Detect tooltips
     tooltips = detector.find_tooltips(screenshot)
 
     if not tooltips:
@@ -206,7 +202,6 @@ def scan():
     detect_time = time.time()
 
     # Step 3 & 4: OCR + Translate each tooltip
-    # Same as GrimVault: iterate tooltips, skip "Item Statistics" ones
     for tooltip_box in tooltips:
         tx, ty, tw, th = tooltip_box
 
@@ -228,7 +223,7 @@ def scan():
         if not chinese_text:
             continue
 
-        # Skip GrimVault's own overlay tooltip
+        # Skip overlay's own tooltip
         skip_patterns = ["Item Statistics", "ItemStatistics", "Powered by DarkerDB",
                          "DarkerDB.com", "Market:", "Vendor:", "Density:", "Demand:"]
         if any(p in chinese_text for p in skip_patterns):

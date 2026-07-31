@@ -1,7 +1,7 @@
 """
-Screen capture module - mirrors GrimVault's ScreenCaptureLite approach.
+Screen capture module.
 Uses mss for fast screen capture + win32gui for game window detection.
-Same method as GrimVault: no DLL injection, pure screen capture.
+No DLL injection, pure screen capture.
 """
 
 import ctypes
@@ -14,12 +14,12 @@ import win32con
 import win32api
 
 
-# Game window title (same as GrimVault's FindWindowW)
+
 GAME_WINDOW_TITLE = "Dark and Darker  "
 
 
 def find_game_window():
-    """Find the game window by title, same as GrimVault's FindWindowW."""
+    """Find the game window by title."""
     hwnd = win32gui.FindWindow(None, GAME_WINDOW_TITLE)
 
     if not hwnd:
@@ -33,7 +33,7 @@ def find_game_window():
 
 
 def get_window_rect(hwnd):
-    """Get window bounds, same as GrimVault's GetWindowRect."""
+    """Get window bounds."""
     try:
         rect = win32gui.GetWindowRect(hwnd)
         return {
@@ -47,7 +47,7 @@ def get_window_rect(hwnd):
 
 
 def get_monitor_info(hwnd):
-    """Get monitor info for the window, same as GrimVault's MonitorFromWindow."""
+    """Get monitor info for the window."""
     try:
         monitor = win32api.MonitorFromWindow(hwnd, win32con.MONITOR_DEFAULTTONEAREST)
         info = win32api.GetMonitorInfo(monitor)
@@ -65,8 +65,6 @@ def get_monitor_info(hwnd):
 def capture_game_window():
     """
     Capture the game window region from screen.
-    Mirrors GrimVault's ScreenCaptureLite approach:
-    captures the monitor, then the game window region.
     Returns numpy array (BGR format) or None.
     """
     hwnd = find_game_window()
@@ -92,7 +90,7 @@ def capture_game_window():
         # Convert to numpy array (BGRA)
         img = np.array(screenshot)
 
-        # Convert BGRA to BGR (same as GrimVault's OpenCV processing)
+        # Convert BGRA to BGR
         if img.shape[2] == 4:
             img = img[:, :, :3]
 

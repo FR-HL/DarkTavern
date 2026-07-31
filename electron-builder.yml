@@ -1,4 +1,4 @@
-appId: com.darkerdb.grimvault.cn
+appId: com.darktavern.app
 productName: DarkTavern
 directories:
   output: dist

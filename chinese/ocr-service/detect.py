@@ -1,16 +1,14 @@
 """
-Tooltip detection module - uses the SAME tooltip.onnx model as GrimVault.
-Mirrors GrimVault's Screen::FindTooltips() logic exactly:
-- Same model input size (640x640)
-- Same confidence threshold (0.90)
-- Same NMS parameters
-- Same preprocessing (blobFromImage equivalent)
+Tooltip detection module using YOLO DNN (tooltip.onnx).
+- Model input size: 640x640
+- Confidence threshold: 0.90
+- NMS threshold: 0.50
 """
 
 import cv2
 import numpy as np
 
-# Same constants as GrimVault's screen.h
+
 MODEL_WIDTH = 640
 MODEL_HEIGHT = 640
 MINIMUM_OBJECT_CONFIDENCE = 0.90
@@ -21,7 +19,7 @@ MODEL_OBJECTS = ["Tooltip"]
 
 class TooltipDetector:
     def __init__(self, model_path):
-        """Load the same tooltip.onnx model used by GrimVault."""
+        """Load the tooltip.onnx detection model."""
         self.net = cv2.dnn.readNetFromONNX(model_path)
 
         try:
@@ -38,22 +36,21 @@ class TooltipDetector:
     def find_tooltips(self, screenshot):
         """
         Find tooltip bounding boxes in screenshot.
-        Mirrors GrimVault's Screen::FindTooltips() exactly.
         Returns list of (x, y, w, h) tuples or empty list.
         """
         if screenshot is None or screenshot.size == 0:
             return []
 
-        # Convert BGRA to BGR if needed (same as GrimVault)
+        # Convert BGRA to BGR if needed
         if len(screenshot.shape) == 3 and screenshot.shape[2] == 4:
             screenshot = cv2.cvtColor(screenshot, cv2.COLOR_BGRA2BGR)
 
-        # Pad to square (same as GrimVault)
+        # Pad to square
         max_dim = max(screenshot.shape[0], screenshot.shape[1])
         resized = np.zeros((max_dim, max_dim, 3), dtype=np.uint8)
         resized[: screenshot.shape[0], : screenshot.shape[1]] = screenshot
 
-        # blobFromImage - same parameters as GrimVault
+
         blob = cv2.dnn.blobFromImage(
             resized,
             1 / 255.0,
@@ -66,7 +63,7 @@ class TooltipDetector:
         self.net.setInput(blob)
         outputs = self.net.forward(self.net.getUnconnectedOutLayersNames())
 
-        # Post-processing - mirrors GrimVault's C++ code exactly
+        # Post-processing
         output = outputs[0]
         rows = output.shape[2]
         dimensions = output.shape[1]
@@ -103,7 +100,7 @@ class TooltipDetector:
         if not boxes:
             return []
 
-        # NMS - same as GrimVault
+        # NMS
         indices = cv2.dnn.NMSBoxes(
             boxes, confidences, NMS_SCORE_THRESHOLD, NMS_THRESHOLD
         )
