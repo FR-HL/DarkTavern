@@ -37,8 +37,11 @@ NOTE on sync vs async:
 import json
 import logging
 import os
+import re
 import sys
 import time
+
+import cv2
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -181,153 +184,196 @@ def health():
     }
 
 
+# ---- scan cache: skip detect / OCR when the tooltip region is unchanged ----
+
+_SCAN_CACHE = {"rect": None, "hash": None, "tooltip": None}
+_SCAN_STATS = {"hits": 0, "misses": 0}
+
+_SKIP_PATTERNS = ["Item Statistics", "ItemStatistics", "Powered by DarkerDB",
+                  "DarkerDB.com", "Market:", "Vendor:", "Density:", "Demand:"]
+
+_RARITY_MAP = {
+    "粗糙": "Poor", "劣质": "Poor",
+    "普通": "Common",
+    "非凡": "Uncommon", "优秀": "Uncommon",
+    "稀有": "Rare", "罕见": "Rare",
+    "史诗": "Epic",
+    "传说": "Legendary", "传奇": "Legendary",
+    "独特": "Unique",
+    "神器": "Artifact",
+    "命名神器": "Artifact",
+}
+
+_SKIP_PREFIXES = [
+    "栏位类别", "Slot Type", "防具类别", "护甲类别", "Armor Type",
+    "战利品状态", "Loot Status", "手持类别", "Hand Type",
+    "武器类别", "Weapon Type", "武器类型",
+    "辅助道具类别", "Utility", "杂项类别", "Misc Type",
+    "职业要求", "Class Requirement",
+    "稀有度", "Rare度", "Rarity",
+    "配饰类别", "Accessory",
+]
+
+
+def _region_hash(img):
+    """Mean-hash of a region: resize to 32x32 gray, threshold by its mean.
+    Returns the 1024-bit pattern as bytes. Binarization + the coarse resize
+    average out per-frame anti-alias jitter; compare with _hash_match so a
+    few flipped bits (animation / resampling) still count as identical."""
+    if img is None or img.size == 0:
+        return None
+    g = img
+    if g.ndim == 3 and g.shape[2] == 4:
+        g = cv2.cvtColor(g, cv2.COLOR_BGRA2GRAY)
+    elif g.ndim == 3 and g.shape[2] == 3:
+        g = cv2.cvtColor(g, cv2.COLOR_BGR2GRAY)
+    g = cv2.resize(g, (32, 32), interpolation=cv2.INTER_AREA)
+    return (g > g.mean()).tobytes()
+
+
+def _hash_match(a, b, tol=40):
+    """True if two region hashes differ in at most tol of 1024 bits."""
+    if a is None or b is None or len(a) != len(b):
+        return False
+    diff = 0
+    for x, y in zip(a, b):
+        diff += bin(x ^ y).count("1")
+        if diff > tol:
+            return False
+    return True
+
+
+def _clamp_box(screenshot, box):
+    tx, ty, tw, th = box
+    tx = max(0, tx)
+    ty = max(0, ty)
+    tw = min(tw, screenshot.shape[1] - tx)
+    th = min(th, screenshot.shape[0] - ty)
+    if tw <= 0 or th <= 0:
+        return None
+    return tx, ty, tw, th
+
+
+def _process_box(region, tx, ty, tw, th):
+    """OCR + translate one tooltip region. Returns tooltip dict or None."""
+    chinese_text = ocr.read(region)
+    if not chinese_text:
+        return None
+    if any(p in chinese_text for p in _SKIP_PATTERNS):
+        return None
+
+    english_text = translator.translate_text(chinese_text)
+    unmapped = translator.get_unmapped_terms(chinese_text)
+
+    chinese_lines = chinese_text.strip().split("\n")
+    chinese_item_name = chinese_lines[0].strip() if chinese_lines else ""
+
+    rarity = "Common"
+    for line in chinese_lines:
+        l = line.strip()
+        if "稀有度" in l or "Rare度" in l or "Rarity" in l:
+            colon_match = re.search(r'[：:]\s*(.+)', l)
+            if colon_match:
+                rarity = _RARITY_MAP.get(colon_match.group(1).strip(), rarity)
+
+    display_lines = []
+    for i, line in enumerate(chinese_lines):
+        l = line.strip()
+        if not l or i == 0:
+            continue
+        if any(l.startswith(p) or p in l for p in _SKIP_PREFIXES):
+            continue
+        if not re.search(r'[+\-]?\d', l):
+            continue
+        display_lines.append(l)
+
+    return {
+        "text": english_text,
+        "original_text": chinese_text,
+        "chinese_item_name": chinese_item_name,
+        "rarity": rarity,
+        "display_lines": display_lines,
+        "reverse_attributes": {v: k for k, v in translator.attributes.items()},
+        "reverse_keywords": {v: k for k, v in translator.keywords.items()},
+        "x": tx,
+        "y": ty,
+        "width": tw,
+        "height": th,
+        "unmapped_terms": unmapped,
+    }
+
+
 @app.post("/scan")
 def scan():
     """
-    Full scan pipeline:
-    1. Capture game window screenshot
-    2. Detect tooltip bounding boxes (DNN model)
-    3. OCR each tooltip region (Chinese)
-    4. Translate to English
-    5. Return translated text + coordinates
+    Scan pipeline with region-content caching. Coordinates are
+    screenshot-relative and stay valid while the window is not resized
+    (a resize changes the crop and therefore misses the hash).
 
-    Returns: {text, x, y, width, height}
+    1. Capture game window.
+    2. FAST path: re-crop the cached rect from the fresh frame; identical
+       pixels mean the tooltip neither moved nor changed -> return cached
+       result, skipping detect + OCR + translate.
+    3. Detect tooltips (DNN).
+    4. CONTENT reuse: a detected box whose pixels match the cache reuses the
+       cached OCR/translate at the new coordinates -> skip OCR + translate.
+    5. Otherwise run full OCR + translate and cache the result.
     """
     start_time = time.time()
 
-    # Step 1: Capture game window
     screenshot, bounds = capture_game_window()
-
     if screenshot is None:
         return JSONResponse({"error": "Game window not found"}, status_code=404)
-
     capture_time = time.time()
 
-    # Step 2: Detect tooltips
-    tooltips = detector.find_tooltips(screenshot)
+    cache = _SCAN_CACHE
 
+    if cache["rect"] is not None and cache["hash"] is not None:
+        cb = _clamp_box(screenshot, cache["rect"])
+        if cb is not None:
+            cx, cy, cw, ch = cb
+            if _hash_match(_region_hash(screenshot[cy:cy + ch, cx:cx + cw]), cache["hash"]):
+                _SCAN_STATS["hits"] += 1
+                logger.info("Scan cache FAST hit")
+                return {"tooltip": cache["tooltip"]}
+
+    tooltips = detector.find_tooltips(screenshot)
     if not tooltips:
         return {"tooltip": None}
-
     detect_time = time.time()
 
-    # Step 3 & 4: OCR + Translate each tooltip
     for tooltip_box in tooltips:
-        tx, ty, tw, th = tooltip_box
-
-        # Clamp to screenshot bounds
-        tx = max(0, tx)
-        ty = max(0, ty)
-        tw = min(tw, screenshot.shape[1] - tx)
-        th = min(th, screenshot.shape[0] - ty)
-
-        if tw <= 0 or th <= 0:
+        cb = _clamp_box(screenshot, tooltip_box)
+        if cb is None:
             continue
+        tx, ty, tw, th = cb
+        region = screenshot[ty:ty + th, tx:tx + tw]
+        rh = _region_hash(region)
 
-        # Extract tooltip region
-        region = screenshot[ty : ty + th, tx : tx + tw]
+        if _hash_match(rh, cache["hash"]) and cache["tooltip"] is not None:
+            reused = dict(cache["tooltip"])
+            reused.update(x=tx, y=ty, width=tw, height=th)
+            cache["rect"] = (tx, ty, tw, th)
+            cache["tooltip"] = reused
+            _SCAN_STATS["hits"] += 1
+            logger.info("Scan cache CONTENT hit")
+            return {"tooltip": reused}
 
-        # OCR the region
-        chinese_text = ocr.read(region)
-
-        if not chinese_text:
+        tooltip = _process_box(region, tx, ty, tw, th)
+        if tooltip is None:
             continue
-
-        # Skip overlay's own tooltip
-        skip_patterns = ["Item Statistics", "ItemStatistics", "Powered by DarkerDB",
-                         "DarkerDB.com", "Market:", "Vendor:", "Density:", "Demand:"]
-        if any(p in chinese_text for p in skip_patterns):
-            continue
-
-        # Translate Chinese → English
-        english_text = translator.translate_text(chinese_text)
-
-        # Find unmapped terms for potential manual mapping
-        unmapped = translator.get_unmapped_terms(chinese_text)
-
         ocr_time = time.time()
-
         logger.info(
             f"Scan complete in {(ocr_time - start_time)*1000:.0f}ms "
             f"(capture: {(capture_time - start_time)*1000:.0f}ms, "
             f"detect: {(detect_time - capture_time)*1000:.0f}ms, "
             f"ocr+translate: {(ocr_time - detect_time)*1000:.0f}ms)"
         )
-
-        # Extract Chinese item name and rarity
-        chinese_lines = chinese_text.strip().split("\n")
-        chinese_item_name = chinese_lines[0].strip() if chinese_lines else ""
-
-        # Detect rarity from OCR text
-        rarity = "Common"
-        rarity_map = {
-            "粗糙": "Poor", "劣质": "Poor",
-            "普通": "Common",
-            "非凡": "Uncommon", "优秀": "Uncommon",
-            "稀有": "Rare", "罕见": "Rare",
-            "史诗": "Epic",
-            "传说": "Legendary", "传奇": "Legendary",
-            "独特": "Unique",
-            "神器": "Artifact",
-            "命名神器": "Artifact",
-        }
-        for line in chinese_lines:
-            l = line.strip()
-            # Extract the value part after colon (e.g. "稀有度：史诗" → "史诗")
-            if "稀有度" in l or "Rare度" in l or "Rarity" in l:
-                import re as _re2
-                colon_match = _re2.search(r'[：:]\s*(.+)', l)
-                if colon_match:
-                    rarity_value = colon_match.group(1).strip()
-                    for cn_r, en_r in rarity_map.items():
-                        if cn_r == rarity_value:
-                            rarity = en_r
-                            break
-
-        # Filter display lines: only keep stat lines (e.g. "+3 力量", "移动速度-10")
-        # Skip metadata: slot type, armor type, loot status, hand type, class req, descriptions
-        skip_prefixes = [
-            "栏位类别", "Slot Type", "防具类别", "护甲类别", "Armor Type",
-            "战利品状态", "Loot Status", "手持类别", "Hand Type",
-            "武器类别", "Weapon Type", "武器类型",
-            "辅助道具类别", "Utility", "杂项类别", "Misc Type",
-            "职业要求", "Class Requirement",
-            "稀有度", "Rare度", "Rarity",
-            "配饰类别", "Accessory",
-        ]
-        display_lines = []
-        import re as _re
-        for i, line in enumerate(chinese_lines):
-            l = line.strip()
-            if not l or i == 0:
-                continue
-            if any(l.startswith(p) or p in l for p in skip_prefixes):
-                continue
-            # Only keep lines with numeric values (stat lines like "+3 力量", "移动速度-10")
-            if not _re.search(r'[+\-]?\d', l):
-                continue
-            display_lines.append(l)
-
-        # Build reverse attribute mapping
-        reverse_attributes = {v: k for k, v in translator.attributes.items()}
-        reverse_keywords = {v: k for k, v in translator.keywords.items()}
-
-        return {
-            "tooltip": {
-                "text": english_text,
-                "original_text": chinese_text,
-                "chinese_item_name": chinese_item_name,
-                "rarity": rarity,
-                "display_lines": display_lines,
-                "reverse_attributes": reverse_attributes,
-                "reverse_keywords": reverse_keywords,
-                "x": tx,
-                "y": ty,
-                "width": tw,
-                "height": th,
-                "unmapped_terms": unmapped,
-            }
-        }
+        cache["rect"] = (tx, ty, tw, th)
+        cache["hash"] = rh
+        cache["tooltip"] = tooltip
+        _SCAN_STATS["misses"] += 1
+        return {"tooltip": tooltip}
 
     return {"tooltip": None}
 
