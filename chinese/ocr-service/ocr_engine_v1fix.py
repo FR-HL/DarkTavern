@@ -281,9 +281,12 @@ class ChineseOCR:
         if not bands:
             return ""
 
-        # Plan every recognizer chunk across surviving bands, keeping the
-        # (line, position) order so results reassemble correctly afterwards.
-        lines_chunks = []
+        # One crop per surviving text row. NO col_chunks: feed each whole line
+        # to the recognizer. The old rec model is fixed at 320 px wide, so
+        # _preprocess will horizontally squash wide lines into 320 (letters get
+        # narrow) — this is the trade-off being tested: intact line order vs
+        # squashed glyphs.
+        line_crops = []
         band_index = 0
         for y0, y1 in bands:
             raw_line = region[y0:y1, :]
@@ -299,32 +302,15 @@ class ChineseOCR:
             line = trim_cols(raw_line)
             if line.size == 0:
                 continue
-            chunks = [line[:, x0:x1] for x0, x1 in col_chunks(line) if x1 - x0 >= 1]
-            if chunks:
-                lines_chunks.append(chunks)
+            line_crops.append(line)
 
-        if not lines_chunks:
+        if not line_crops:
             return ""
 
-        flat = []
-        index = []
-        for li, chunks in enumerate(lines_chunks):
-            for ci, c in enumerate(chunks):
-                index.append((li, ci))
-                flat.append(c)
-
-        # Recognize all chunks concurrently (single chunk skips the pool).
-        if len(flat) == 1:
-            outs = [self.read_line(flat[0])]
+        if len(line_crops) == 1:
+            outs = [self.read_line(line_crops[0])]
         else:
-            outs = list(self._pool.map(self.read_line, flat))
+            outs = list(self._pool.map(self.read_line, line_crops))
 
-        line_texts = [""] * len(lines_chunks)
-        for (li, _ci), (text, _conf) in zip(index, outs):
-            if not text:
-                continue
-            if line_texts[li]:
-                line_texts[li] += " "
-            line_texts[li] += text
-
-        return "\n".join(t for t in line_texts if t)
+        texts = [text for text, _conf in outs if text]
+        return "\n".join(texts)
