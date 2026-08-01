@@ -1,31 +1,38 @@
 import electron from 'electron';
 const { app } = electron;
 
-import { __dirname } from './config.js';
 import merge from 'deepmerge';
 import { parse, stringify } from 'ini';
 import { logger } from './logger.js';
-import { existsSync, readFileSync, copyFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const defaults = {
+  general: {
+    launch_on_startup: false,
+    alignment: 'attached',
+    components: 'header, primary, secondary, details, quests, pricing',
+    scale: '1.0',
+    default_mode: 'manual',
+    python_path: 'python',
+    api_key: '',
+  },
+  hotkeys: {
+    run_price_check: 'XButton1',
+  },
+};
+
 const settingsPath = join (app.getPath ('userData'), 'settings.ini');
-const defaultsPath = join (__dirname, '..', 'settings.ini');
 
 let settings = {};
 
 if (existsSync (settingsPath)) {
-  let raw = readFileSync (settingsPath).toString ();
   try {
-    settings = parse (raw);
+    settings = parse (readFileSync (settingsPath).toString ());
   } catch (e) {
     logger.error (`Failed to parse settings: ${settingsPath}`);
   }
-} else {
-  copyFileSync (defaultsPath, settingsPath);
 }
-
-let template = readFileSync (defaultsPath).toString ();
-let defaults = parse (template);
 
 settings = merge (defaults, settings);
 
@@ -60,11 +67,10 @@ function toList (s, values) {
 
 function saveSettings () {
   try {
-    const settingsString = stringify (settings);
-    writeFileSync (settingsPath, settingsString);
+    writeFileSync (settingsPath, stringify (settings));
   } catch (error) {
     logger.error ('Failed to save settings:', error);
   }
 }
 
-export { settings, settingsPath, saveSettings };
+export { settings, saveSettings };

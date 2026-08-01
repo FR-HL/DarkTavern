@@ -12,13 +12,11 @@
     "publish": "electron-builder --publish always"
   },
   "dependencies": {
-    "@popperjs/core": "^2.11.8",
     "cross-env": "^7.0.3",
     "deepmerge": "^4.3.1",
     "ini": "^5.0.0",
     "koffi": "^2.15.6",
     "vue": "^3.2.13",
-    "vue3-popper": "^1.5.0",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0"
   },

@@ -12,7 +12,6 @@ files:
   - assets/**/*
   - node_modules/**/*
   - package.json
-  - settings.ini
   - electron/**/*
   - dist/**/*
   - chinese/**/*

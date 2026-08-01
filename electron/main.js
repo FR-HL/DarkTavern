@@ -2,8 +2,8 @@ import electron, { globalShortcut, Menu, shell, Tray } from 'electron';
 import { basename, join } from 'node:path';
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE } from './config.js';
-import { settings, settingsPath, saveSettings } from './settings.js';
-import { startTracking, stopTracking } from './overlay.js';
+import { settings, saveSettings } from './settings.js';
+import { startTracking, stopTracking, getCanScan } from './overlay.js';
 import { wire } from './scan.js';
 import * as backend from './backend.js';
 
@@ -12,8 +12,10 @@ const { app, BrowserWindow, ipcMain } = electron;
 let debugging = false;
 let homeWindow = null;
 let tray = null;
+let trayTimer = null;
 let pendingPane = null;
 let previousScanAccelerator = null;
+let ocrStatus = false;
 const RESERVED_KEYS = ['F5', 'F6', 'F7', 'F8'];
 
 process.on ('uncaughtException', (e) => logger.error ('Uncaught Exception:', e));
@@ -41,6 +43,7 @@ app.on ('second-instance', () => {});
 
 app.on ('before-quit', () => {
   globalShortcut.unregisterAll ();
+  if (trayTimer) { clearInterval (trayTimer); trayTimer = null; }
   backend.stopService ();
   stopTracking ();
 });
@@ -50,18 +53,8 @@ app.on ('ready', async () => {
 
   tray = new Tray (join (ROOT, 'assets/images/Icon-81x89.png'));
   tray.setToolTip ('DarkTavern');
-  tray.setContextMenu (Menu.buildFromTemplate ([
-    { label: `DarkTavern v${app.getVersion ()}`, enabled: false },
-    { type: 'separator' },
-    { label: '主页', click: () => openHomeWindow () },
-    { label: '设置 (F5)', click: () => openSettingsWindow ('settings') },
-    { label: '词条编辑 (F6)', click: () => openSettingsWindow ('mapping') },
-    { type: 'separator' },
-    { label: 'Logs', click: () => shell.openPath (logPath) },
-    { label: 'Settings', click: () => shell.openPath (settingsPath) },
-    { type: 'separator' },
-    { label: 'Exit', click: () => app.quit () }
-  ]));
+  refreshTrayMenu ();
+  trayTimer = setInterval (refreshTrayMenu, 3000);
 
   let overlay = new BrowserWindow ({
     backgroundColor: '#00000000',
@@ -217,4 +210,26 @@ function openHomeWindow () {
   homeWindow.loadFile (join (ROOT, 'dist', 'home', 'index.html'));
   homeWindow.once ('ready-to-show', () => { homeWindow.show (); homeWindow.focus (); });
   homeWindow.on ('closed', () => { homeWindow = null; });
+}
+
+async function refreshTrayMenu () {
+  if (!tray) return;
+
+  try { ocrStatus = await backend.health (); } catch (e) { ocrStatus = false; }
+  const gameOk = getCanScan ();
+
+  const dot = (ok) => ok ? '●' : '○';
+
+  tray.setContextMenu (Menu.buildFromTemplate ([
+    { label: `DarkTavern v${app.getVersion ()}`, enabled: false },
+    { type: 'separator' },
+    { label: `${dot (ocrStatus)} OCR 侍者：${ocrStatus ? '已就绪' : '唤醒中…'}`, enabled: false },
+    { label: `${dot (gameOk)} 游戏窗口：${gameOk ? '已检测到' : '未检测到'}`, enabled: false },
+    { type: 'separator' },
+    { label: '主页', click: () => openHomeWindow () },
+    { type: 'separator' },
+    { label: '日志文件夹', click: () => shell.openPath (logPath) },
+    { type: 'separator' },
+    { label: '退出', click: () => app.quit () }
+  ]));
 }

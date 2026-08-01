@@ -1,3 +1,5 @@
+# OCR service dependencies (only needed for development / Python fallback)
+# The production build uses the pre-compiled ocr-service.exe
 rapidocr-onnxruntime>=1.4.0
 fastapi>=0.110.0
 uvicorn>=0.27.0
