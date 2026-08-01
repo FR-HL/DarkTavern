@@ -100,6 +100,37 @@ det 仍在，比 A 慢，但比当前快一截。改动：仅构造参数一行�
 
 `rapidocr-onnxruntime` 已在 `requirements.txt` 且已装入 `ocr_env`（Electron 启动 OCR 正用该 venv）。
 
+## 探查结果（2026-08-01，只读）
+
+- 旧 `models/paddle/ch/rec.onnx` 输入 shape = `[1, 3, 48, 320]` → **W 维固定 320**。
+  → 档1「整行不切」**物理不可能**；长行必须切到 ≤320 宽，连续中文长行无可避免切字。
+  → 旧 `dict.txt` = 18383 行（输出 vocab 18385 = 含 blank + space）。
+- RapidOCR rec（`ch_PP-OCRv4_rec_infer.onnx`）经 `resize_norm_img` 按行真实宽高比**动态算宽、不 cap** → 整行不切可行（档2 依据）。
+- 结论：档1 只能优化切点（投影谷），**无法根治**蓝字残缺；档2 才能根治。两档都跑以取得对比数据。
+
+## 实施落地（三档并存 + 开关）
+
+| 档 | 文件 | rec 模型 | det/cls | 切长行 | 开关值 |
+|---|---|---|---|---|---|
+| 1 | `ocr_engine_v1fix.py` | 旧 rec.onnx（固定320） | 无 | 投影谷切点优化 | `v1fix` |
+| 2 | `ocr_engine_hybrid.py` | RapidOCR v4 rec（动态宽） | 无 | 不切 | `hybrid` |
+| 3 | `ocr_engine_rapid.py` | RapidOCR v4 rec | **有** | 不切 | `rapid` |
+
+切换：环境变量 `DARKTAVERN_OCR_ENGINE` ∈ {v1fix, hybrid, rapid}，`server.py` 顶部读取，**默认 `v1fix`**。
+切档后**必须重启 app**（OCR 为 Electron 子进程，不重启不加载新代码）。
+档2 仅构造 RapidOCR 的 `TextRecognizer`（rec），启动不加载 det/cls，启动速度与旧引擎同级。
+
+## 实测对比（逐档由用户重启测试后填）
+
+测法：悬停带蓝字装备扫描，取**第二次起稳态** `ocr+translate: Xms`（避开首次 warmup；translate 各档相同可抵消），并看悬浮窗蓝字是否完整 + 评分是否出现。
+
+| 档 | 稳态 ocr+translate (ms) | 蓝字完整? | 评分显示? | 备注 |
+|---|---|---|---|---|
+| v1fix | _待填_ | _待填_ | _待填_ | 旧引擎改切点（默认先测） |
+| hybrid | _待填_ | _待填_ | _待填_ | 旧壳 + 动态宽 rec |
+| rapid | _待填_ | _待填_ | _待填_ | 整图 det+rec（基线，已知准/慢） |
+
 ## 9. 决策记录
 
 - 2026-08-01：确认根因为 OCR 质量（非接口/前端/key/UA），切 RapidOCR 修复蓝字识别；速度问题存档方案 A/B，**暂不实施**，先保证功能正确。
+- 2026-08-01：只读探查确认旧 rec 固定 320 宽 → 实施三档并存（v1fix/hybrid/rapid）+ env 开关，默认 v1fix 先测，逐档量化后选最优。

@@ -52,7 +52,17 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from capture import capture_game_window, find_game_window, get_window_rect, get_monitor_info
 from detect import TooltipDetector
-from ocr_engine_rapid import ChineseOCR
+# OCR engine switch (set env DARKTAVERN_OCR_ENGINE to choose; default = v1fix):
+#   v1fix  -> old per-line Paddle rec with valley-point slicing (fastest, blue lines may still corrupt)
+#   hybrid -> old numpy segmentation + RapidOCR dynamic-width rec (fast + intact blue lines)
+#   rapid  -> RapidOCR full-image det+rec (accurate, slow)
+_OCR_ENGINE = os.environ.get("DARKTAVERN_OCR_ENGINE", "v1fix").strip().lower()
+if _OCR_ENGINE == "hybrid":
+    from ocr_engine_hybrid import ChineseOCR
+elif _OCR_ENGINE == "rapid":
+    from ocr_engine_rapid import ChineseOCR
+else:
+    from ocr_engine_v1fix import ChineseOCR
 from translator import Translator
 
 # --- Configuration ---
