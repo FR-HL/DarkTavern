@@ -164,7 +164,7 @@ def initialize():
     try:
         import numpy as np
         dummy = np.zeros((48, 320, 3), dtype=np.uint8)
-        ocr.read(dummy)
+        ocr.read_line(dummy)
         logger.info("OCR warmup complete - ready for fast inference")
     except Exception as e:
         logger.warning(f"OCR warmup failed (non-critical): {e}")

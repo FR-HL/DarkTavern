@@ -8,6 +8,9 @@ dynamic reshape on this OpenCV build); feeding strategy / preprocessing /
 CTC decode are copied 1:1 from the C++ original.
 """
 
+import os
+from concurrent.futures import ThreadPoolExecutor
+
 import cv2
 import numpy as np
 import onnxruntime as ort
@@ -254,6 +257,12 @@ class ChineseOCR:
         self.input_name = self.session.get_inputs()[0].name
         with open(dict_path, encoding="utf-8") as f:
             self.dictionary = [ln.rstrip(" \r\n\t") for ln in f]
+        # Row-level parallelism: each text row is recognized concurrently.
+        # intra*workers <= cpu_count avoids oversubscription on small CPUs
+        # (4 cores -> 2 workers, 8 -> 4, 20 -> 6), so it stays safe everywhere.
+        cpu = os.cpu_count() or 4
+        self._workers = max(1, min(cpu // 2, 6))
+        self._pool = ThreadPoolExecutor(max_workers=self._workers)
 
     def read_line(self, line_img):
         if line_img is None or line_img.size == 0:
@@ -271,10 +280,11 @@ class ChineseOCR:
 
         bands = line_bands(region)
         if not bands:
-            self.read_line(region)
             return ""
 
-        parts = []
+        # Plan every recognizer chunk across surviving bands, keeping the
+        # (line, position) order so results reassemble correctly afterwards.
+        lines_chunks = []
         band_index = 0
         for y0, y1 in bands:
             raw_line = region[y0:y1, :]
@@ -290,21 +300,32 @@ class ChineseOCR:
             line = trim_cols(raw_line)
             if line.size == 0:
                 continue
+            chunks = [line[:, x0:x1] for x0, x1 in col_chunks(line) if x1 - x0 >= 1]
+            if chunks:
+                lines_chunks.append(chunks)
 
-            line_text = ""
-            for x0, x1 in col_chunks(line):
-                chunk = line[:, x0:x1]
-                if chunk.shape[1] < 1:
-                    continue
-                text, _conf = self.read_line(chunk)
-                if not text:
-                    continue
-                if line_text:
-                    line_text += " "
-                line_text += text
+        if not lines_chunks:
+            return ""
 
-            if not line_text:
+        flat = []
+        index = []
+        for li, chunks in enumerate(lines_chunks):
+            for ci, c in enumerate(chunks):
+                index.append((li, ci))
+                flat.append(c)
+
+        # Recognize all chunks concurrently (single chunk skips the pool).
+        if len(flat) == 1:
+            outs = [self.read_line(flat[0])]
+        else:
+            outs = list(self._pool.map(self.read_line, flat))
+
+        line_texts = [""] * len(lines_chunks)
+        for (li, _ci), (text, _conf) in zip(index, outs):
+            if not text:
                 continue
-            parts.append(line_text)
+            if line_texts[li]:
+                line_texts[li] += " "
+            line_texts[li] += text
 
-        return "\n".join(parts)
+        return "\n".join(t for t in line_texts if t)
