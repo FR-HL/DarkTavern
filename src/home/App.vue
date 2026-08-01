@@ -1,6 +1,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 
+import donorKk from '@assets/images/sponsors/donor_kk.webp';
+import donorYueliang from '@assets/images/sponsors/yueliang.webp';
+import donorWangjiajun from '@assets/images/sponsors/wangjiajun.webp';
+import donorYuehai from '@assets/images/sponsors/yuehai.webp';
+import donorLidand from '@assets/images/sponsors/lidang.webp';
+import donorMobao from '@assets/images/sponsors/mobao.webp';
+
 const invoke = (channel, data) => window.electron.invoke (channel, data);
 
 const TABS = [
@@ -107,6 +114,78 @@ const currentEntries = computed (() => {
   return out;
 });
 
+const donors = [
+  { name: '娱乐陪-凯凯', amount: 888, avatar: donorKk },
+  { name: '月亮汐', amount: 500, avatar: donorYueliang },
+  { name: '王加钧', amount: 300, avatar: donorWangjiajun },
+  { name: '犯罪升级', amount: 100, avatar: donorYuehai },
+  { name: '李狗蛋', amount: 100, avatar: donorLidand },
+  { name: '摸宝仙人', amount: 55, avatar: donorMobao },
+  { name: '*建', amount: 150, avatar: null }, { name: '*路', amount: 200, avatar: null },
+  { name: '*人', amount: 120, avatar: null }, { name: '朝代', amount: 116, avatar: null },
+  { name: '**迪', amount: 100, avatar: null }, { name: 'J*y', amount: 100, avatar: null },
+  { name: '*七', amount: 100, avatar: null }, { name: '*思', amount: 88, avatar: null },
+  { name: '**天', amount: 80, avatar: null }, { name: 'Anxu安叙', amount: 66, avatar: null },
+  { name: 'w*t', amount: 66, avatar: null }, { name: 'J*X', amount: 60, avatar: null },
+  { name: '*洛', amount: 56.9, avatar: null }, { name: '生活', amount: 50, avatar: null },
+  { name: '*终', amount: 50, avatar: null }, { name: '**旭', amount: 50, avatar: null },
+  { name: '*票', amount: 50, avatar: null }, { name: '1*3', amount: 41, avatar: null },
+  { name: 'D*n', amount: 30, avatar: null }, { name: '5*3', amount: 30, avatar: null },
+  { name: 'L*s', amount: 30, avatar: null }, { name: '8*t', amount: 30, avatar: null },
+  { name: '奥*n', amount: 30, avatar: null }, { name: '*灼', amount: 30, avatar: null },
+  { name: '*.', amount: 30, avatar: null }, { name: '*尘', amount: 26.66, avatar: null },
+  { name: 'R*H', amount: 25, avatar: null }, { name: '月下浊酒', amount: 20, avatar: null },
+  { name: '*酒', amount: 20, avatar: null }, { name: '*手', amount: 20, avatar: null },
+  { name: '*无', amount: 20, avatar: null }, { name: 'qwq', amount: 20, avatar: null },
+  { name: '**成', amount: 20, avatar: null },
+  { name: 'H*.', amount: 20, avatar: null }, { name: 'A*d', amount: 20, avatar: null },
+  { name: '*令包', amount: 18.8, avatar: null }, { name: '**豪', amount: 16.67, avatar: null },
+  { name: '*宇', amount: 15, avatar: null }, { name: '*阳', amount: 14, avatar: null },
+  { name: '*仲', amount: 5, avatar: null }, { name: '**翔', amount: 5, avatar: null },
+  { name: '*景', amount: 5, avatar: null }, { name: '*棒', amount: 5, avatar: null },
+  { name: '*ア', amount: 5, avatar: null }, { name: '*叶', amount: 5, avatar: null },
+  { name: 'K*7', amount: 5, avatar: null }, { name: '*果', amount: 5, avatar: null },
+  { name: '*z', amount: 5, avatar: null }, { name: 'f*r', amount: 10, avatar: null },
+  { name: '**赫', amount: 10, avatar: null }, { name: '*了', amount: 10, avatar: null },
+  { name: '*灯', amount: 10, avatar: null }, { name: '*君', amount: 10, avatar: null },
+  { name: 'S*o', amount: 10, avatar: null }, { name: '*风', amount: 10, avatar: null },
+  { name: '*彭', amount: 10, avatar: null }, { name: '***', amount: 10, avatar: null },
+  { name: '*垠', amount: 9.9, avatar: null }, { name: 'n*.', amount: 9.99, avatar: null },
+  { name: '-*|', amount: 9, avatar: null }, { name: 'U*S', amount: 6.66, avatar: null },
+  { name: '*名', amount: 6.66, avatar: null }, { name: '*舟', amount: 6, avatar: null },
+  { name: 'Shameless', amount: 5.2, avatar: null }, { name: '*棉', amount: 5.2, avatar: null },
+  { name: '**涵', amount: 3, avatar: null }, { name: '*界', amount: 3, avatar: null },
+  { name: '*同', amount: 1, avatar: null }, { name: 'S*z', amount: 1, avatar: null },
+  { name: '*号', amount: 1, avatar: null }, { name: '**硕', amount: 1, avatar: null },
+  { name: '*明', amount: 0.27, avatar: null }, { name: '*语', amount: 0.01, avatar: null },
+  { name: '*光盘', amount: 1.7, avatar: null }, { name: '*潮', amount: 0.99, avatar: null },
+];
+
+const sortedDonors = computed (() => [...donors].sort ((a, b) => b.amount - a.amount));
+
+const topDonors = computed (() => {
+  const top3 = sortedDonors.value.slice (0, 3);
+  const reordered = [null, null, null];
+  if (top3[0]) reordered[1] = top3[0];
+  if (top3[1]) reordered[0] = top3[1];
+  if (top3[2]) reordered[2] = top3[2];
+  return reordered.filter (Boolean);
+});
+
+const remainingDonors = computed (() => sortedDonors.value.slice (3));
+
+function hallRank (index) {
+  if (index === 1) return 1;
+  if (index === 0) return 2;
+  return 3;
+}
+
+function donorInitial (name) {
+  if (!name) return '?';
+  const clean = name.replace (/\*/g, '').trim ();
+  return clean.charAt (0).toUpperCase () || '?';
+}
+
 function showPane (name) { pane.value = name; }
 
 function showToast (msg) {
@@ -127,7 +206,9 @@ function showMappingStatus (msg, type) {
 }
 
 function copyGroup () { window.electron.clipboardWriteText ('376490002'); showToast ('群号已复制'); }
+function copyWechat () { window.electron.clipboardWriteText ('ZFZ13434'); showToast ('商务微信已复制'); }
 function openGithub () { window.electron.openExternal ('https://github.com/FR-HL/DarkTavern'); }
+function openLink (url) { window.electron.openExternal (url); }
 
 function setRune (key, state, text, color) { runes[key] = { state, text, color }; }
 
@@ -350,6 +431,15 @@ onBeforeUnmount (() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
           数据汉化
         </div>
+        <div class="nav-cap">更多</div>
+        <div class="nav-item" :class="{ active: pane === 'about' }" @click="showPane('about')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="0.5" fill="currentColor" stroke="none"/></svg>
+          关于酒馆
+        </div>
+        <div class="nav-item" :class="{ active: pane === 'sponsor' }" @click="showPane('sponsor')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          赞助酒馆
+        </div>
       </nav>
 
       <div class="side-foot">
@@ -547,6 +637,204 @@ onBeforeUnmount (() => {
             </tbody>
           </table>
         </div></div>
+      </div>
+
+      <!-- ============ 关于酒馆 ============ -->
+      <div class="pane" :class="{ active: pane === 'about' }">
+        <div class="page-title">关于酒馆</div>
+        <div class="page-sub">了解 DarkTavern 的身份、愿景、软件来源与致谢。</div>
+
+        <div class="keeper">
+          <div class="keeper-glow"></div>
+          <div class="keeper-top">
+            <div class="keeper-seal"><span>方</span></div>
+            <div class="keeper-idblock">
+              <div class="keeper-name">方源Official</div>
+              <div class="keeper-role">
+                <span class="keeper-badge">酒馆掌柜</span>
+                <span class="keeper-badge alt">独立开发者</span>
+              </div>
+            </div>
+            <div class="keeper-open"><span class="keeper-open-dot"></span>为爱营业中</div>
+          </div>
+          <div class="keeper-vision">
+            <p class="keeper-lead">和你一样，我也是一名热爱 <em>Dark and Darker</em> 的普通玩家——曾在漆黑的地牢裡，为一件装备到底值不值而反复纠结。于是，我决定自己动手。</p>
+            <p class="keeper-body">DarkTavern 改编自原版查价器 GrimVault 与「7.」大佬的开源中文版 GrimVault-Chinese-Edition。最初我基于中文版延续开发，后来因后续维护问题，不愿再麻烦大佬，便潜心研读源码，将软件<strong>完整重写</strong>。没有团队、没有盈利，只是一个玩家想帮玩家的小小心意——愿它让你的每一次冒险，都心中有数、满载而归。</p>
+          </div>
+          <div class="about-contacts">
+            <a class="contact-chip" href="#" @click.prevent="openLink('https://space.bilibili.com/301927878')">
+              <span class="contact-ic bili">哔</span>
+              <span class="contact-txt"><span class="contact-k">哔哩哔哩</span><span class="contact-v">方源Official</span></span>
+            </a>
+            <a class="contact-chip" href="#" @click.prevent="copyGroup">
+              <span class="contact-ic qq">群</span>
+              <span class="contact-txt"><span class="contact-k">德鲁伊的树屋酒馆</span><span class="contact-v">376490002</span></span>
+            </a>
+            <a class="contact-chip" href="#" @click.prevent="openLink('mailto:1292517294@qq.com')">
+              <span class="contact-ic mail">邮</span>
+              <span class="contact-txt"><span class="contact-k">邮箱</span><span class="contact-v">1292517294@qq.com</span></span>
+            </a>
+            <a class="contact-chip" href="#" @click.prevent="copyWechat">
+              <span class="contact-ic wechat">微</span>
+              <span class="contact-txt"><span class="contact-k">商务合作 · 微信</span><span class="contact-v">ZFZ13434</span></span>
+            </a>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">软件来源 · 致敬</div>
+          <div class="card">
+            <div class="about-block">
+              <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a> 与 <strong>「7.」</strong>大佬的开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>。最初我基于中文版本延续开发，后来因后续维护问题，不愿再麻烦大佬，便决定潜心研读源码，将软件<strong>完整重写</strong>。</p>
+              <p>遵从前辈们的开源精神，DarkTavern 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢「7.」大佬与 GrimVault 项目铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
+            </div>
+            <div class="src-links">
+              <a class="src-card" href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">
+                <span class="src-name">GrimVault</span>
+                <span class="src-desc">原版查价器 · 灵感之源</span>
+              </a>
+              <a class="src-card" href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">
+                <span class="src-name">GrimVault-Chinese-Edition</span>
+                <span class="src-desc">「7.」大佬中文版 · 传承之基</span>
+              </a>
+              <a class="src-card" href="#" @click.prevent="openGithub">
+                <span class="src-name">DarkTavern</span>
+                <span class="src-desc">本项目源码 · 开源续写</span>
+              </a>
+            </div>
+            <div class="about-thanks">感谢「7.」大佬的无私开源，感谢每一位支持与帮助过我的朋友！</div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">数据来源 · 致谢</div>
+          <div class="card">
+            <div class="about-block">
+              <p>本工具的市场数据来源于 <a href="#" @click.prevent="openLink('https://darkerdb.com/')">DarkerDB</a>，这是一个优秀的游戏数据平台。感谢 DarkerDB 提供了准确、实时的市场数据，让装备估价与市场价格分析功能得以实现。</p>
+              <p>诚挚地感谢 DarkerDB 及其作者 <strong>ander</strong> 对游戏社区的无私贡献！同时感谢所有为本站提供数据和反馈的玩家社区！</p>
+            </div>
+            <div class="src-links single">
+              <a class="src-card" href="#" @click.prevent="openLink('https://darkerdb.com/')">
+                <span class="src-name">DarkerDB</span>
+                <span class="src-desc">游戏数据平台 · 市场数据来源</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">条款与声明</div>
+          <div class="terms-grid">
+            <div class="card term-card">
+              <div class="term-head">免责声明</div>
+              <div class="term-body">
+                <p>本站所有内容仅供玩家参考，不构成任何投资建议。游戏数据可能随时变化，请以游戏内实际数据为准。</p>
+                <ul><li>尽力确保信息准确性</li><li>不保证内容永久有效</li><li>第三方链接不代表本站立场</li></ul>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">服务条款</div>
+              <div class="term-body">
+                <p>使用本站即表示您同意以下条款：</p>
+                <ul><li>禁止非法用途</li><li>禁止发布违规内容</li><li>禁止侵犯他人权益</li><li>禁止干扰网站运行</li></ul>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">隐私政策</div>
+              <div class="term-body">
+                <p>我们高度重视您的隐私：</p>
+                <ul><li>不收集任何信息</li><li>保护您的数据安全</li><li>不出售任何个人信息</li></ul>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">知识产权</div>
+              <div class="term-body">
+                <p>关于本站内容版权：</p>
+                <ul><li>游戏数据来源于社区与官方公开数据</li><li>原创内容归本站所有</li><li>引用需注明来源</li><li>欢迎社区贡献内容</li></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-note">
+          本工具与游戏 <em>Dark and Darker</em> 没有任何形式的官方联系、隶属关系、授权或认可。所有功能均免费开放，力求内容准确但无法保证百分之百精确完整。
+        </div>
+      </div>
+
+      <!-- ============ 赞助酒馆 ============ -->
+      <div class="pane" :class="{ active: pane === 'sponsor' }">
+        <div class="page-title">赞助酒馆</div>
+        <div class="page-sub">如果您觉得这个工具对您有帮助，可以考虑请我喝杯咖啡。您的认可是我持续投入和更新的最大鼓励。</div>
+
+        <!-- 赞助名人堂（暂时隐藏）
+        <div class="sponsor-hall">
+          <div class="hall-title">
+            <svg class="hall-crown" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5zm0 2h14v2H5v-2z"/></svg>
+            <h2>赞助名人堂</h2>
+            <svg class="hall-crown" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16L3 6l5.5 4L12 4l3.5 6L21 6l-2 10H5zm0 2h14v2H5v-2z"/></svg>
+          </div>
+          <div class="hall-top3">
+            <div v-for="(d, i) in topDonors" :key="'top'+i" class="hall-card" :class="'rank-' + hallRank(i)">
+              <div class="hall-avatar"><img v-if="d.avatar" :src="d.avatar" :alt="d.name"><span v-else>{{ donorInitial(d.name) }}</span></div>
+              <div class="hall-name">{{ d.name }}</div>
+              <div class="hall-amount">¥ {{ d.amount }}</div>
+            </div>
+          </div>
+          <div class="hall-list-wrap"><div class="hall-list">
+            <div v-for="(d, i) in remainingDonors" :key="'d'+i" class="hall-item">
+              <div class="hall-item-avatar"><img v-if="d.avatar" :src="d.avatar" :alt="d.name"><span v-else>{{ donorInitial(d.name) }}</span></div>
+              <span class="hall-item-name">{{ d.name }}</span>
+              <span class="hall-item-amount">¥ {{ d.amount }}</span>
+            </div>
+          </div></div>
+          <div class="hall-thanks">
+            <span class="hall-thanks-title">感谢所有支持者的鼓励！</span>
+            <span class="hall-thanks-sub">您的认可是我持续更新和优化的最大动力</span>
+          </div>
+        </div>
+        -->
+
+        <div class="sec">
+          <div class="sec-label">捐赠方式</div>
+          <div class="pay-grid">
+            <div class="card pay-card">
+              <div class="pay-label wechat">微信支付</div>
+              <div class="pay-qr"><img src="@assets/images/wechat_pay.webp" alt="微信支付二维码"></div>
+            </div>
+            <div class="card pay-card">
+              <div class="pay-label alipay">支付宝</div>
+              <div class="pay-qr"><img src="@assets/images/alipay_pay.webp" alt="支付宝二维码"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">您的支持如何帮助本站</div>
+          <div class="usage-grid">
+            <div class="card usage-card"><div class="usage-t">服务器费用</div><div class="usage-d">保持网站稳定运行</div></div>
+            <div class="card usage-card"><div class="usage-t">技术维护</div><div class="usage-d">持续优化与更新</div></div>
+            <div class="card usage-card"><div class="usage-t">内容创作</div><div class="usage-d">丰富游戏攻略与数据</div></div>
+            <div class="card usage-card"><div class="usage-t">社区运营</div><div class="usage-d">维护健康交流环境</div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">免责声明与赞助条款</div>
+          <div class="card">
+            <div class="about-block"><p>欢迎您通过自愿赞助支持本站。在您决定进行赞助之前，请仔细阅读本声明：</p></div>
+            <div class="clause-list">
+              <div class="clause"><span class="clause-n">1</span><div><div class="clause-t">赞助的性质</div><div class="clause-d">一切赞助均为自愿性无偿捐赠，不构成任何形式的商品买卖或服务提供。</div></div></div>
+              <div class="clause"><span class="clause-n">2</span><div><div class="clause-t">无偿性与回报</div><div class="clause-d">您的赞助不会换取任何形式的商品、服务、独家内容或特权。</div></div></div>
+              <div class="clause"><span class="clause-n">3</span><div><div class="clause-t">非合同关系</div><div class="clause-d">赞助不建立任何法律约束力关系，本站不对赞助者承担任何义务。</div></div></div>
+              <div class="clause"><span class="clause-n">4</span><div><div class="clause-t">退款政策</div><div class="clause-d">所有赞助为最终捐赠，恕不接受任何退款请求。</div></div></div>
+              <div class="clause warn"><span class="clause-n">5</span><div><div class="clause-t">警惕冒仿</div><div class="clause-d">任何声称是本站作者并主动联系您的均为诈骗！作者不会私下联系您、索取费用或指导操作。谨防上当！</div></div></div>
+              <div class="clause"><span class="clause-n">6</span><div><div class="clause-t">最终解释权</div><div class="clause-d">在法律允许的范围内，本网站保留对本免责声明及赞助条款的最终解释权。</div></div></div>
+            </div>
+            <div class="clause-agree">通过访问和使用本站，即表示您已阅读、理解并同意本声明的全部内容。</div>
+          </div>
+        </div>
+
+        <div class="about-note">© 2026 方源Official · 如有疑问请联系：1292517294@qq.com</div>
       </div>
     </div>
   </div>
