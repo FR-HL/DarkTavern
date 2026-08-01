@@ -740,7 +740,7 @@ function getGradeColor(grade) {
 
             <!-- Pricing section: show spinner while loading, prices when ready -->
             <div
-              class="mx-auto w-40"
+              class="whitespace-nowrap"
               v-if="props.components.includes('pricing')"
             >
               <div v-if="isLoading" class="pricing-loading">
@@ -753,28 +753,28 @@ function getGradeColor(grade) {
               </div>
               <template v-else>
                 <div
-                  class="flex items-center"
+                  class="flex items-center justify-center"
                   v-if="item.prices.market !== null"
                 >
                   <span>市场均价:</span>
                   <span class="gold ml-2">{{ item.prices.market }}</span>
                 </div>
                 <div
-                  class="flex items-center"
+                  class="flex items-center justify-center"
                   v-if="item.prices.live !== null"
                 >
                   <span>市场现价:</span>
                   <span class="gold ml-2">{{ item.prices.live }}</span>
                 </div>
                 <div
-                  class="flex items-center"
+                  class="flex items-center justify-center"
                   v-if="item.prices.vendor !== null"
                 >
                   <span>商人:</span>
                   <span class="gold ml-2">{{ item.prices.vendor }}</span>
                 </div>
                 <div
-                  class="flex items-center"
+                  class="flex items-center justify-center"
                   v-if="item.prices.density !== null"
                 >
                   <span>每格价值:</span>
