@@ -127,10 +127,11 @@ det 仍在，比 A 慢，但比当前快一截。改动：仅构造参数一行�
 | 档 | 稳态 ocr+translate (ms) | 蓝字完整? | 评分显示? | 备注 |
 |---|---|---|---|---|
 | v1fix | **197** | ❌ 蓝字全乱码（`+3活力`→`t3Vigor`、`+1灵巧`→`[t1n`、`护甲值66`→`[Peee`） | ❌ | 旧 rec 模型对蓝字能力不足，非切点问题，**不可用** |
-| hybrid | **1152**（首次含 ONNX warmup；稳态待测） | ✅ 完美（`+3 Vigor`/`+5 Additional Memory Capacity`/`+3.2% Undead Damage Reduction` 全对） | ✅ | rec warmup 已修（构造时喂 dummy batch 触发 ONNX 编译），稳态应显著回落 |
-| rapid | _待填_ | _待填_ | _待填_ | 整图 det+rec（基线，已知准/慢） |
+| hybrid | 串行 batch: 1152→2455ms；**并发逐行: 816→647→537ms**（稳态 ~500-650ms） | ✅ 完美 | ✅ | 逐行并发 rec（ThreadPoolExecutor），无 det/cls。**最优解** |
+| rapid | ~400-600ms（含 det ~140ms） | ✅ 完美 | ✅ | 整图 det+rec，det 额外开销 ~140ms，无并发优势 |
 
 ## 9. 决策记录
 
 - 2026-08-01：确认根因为 OCR 质量（非接口/前端/key/UA），切 RapidOCR 修复蓝字识别；速度问题存档方案 A/B，**暂不实施**，先保证功能正确。
 - 2026-08-01：只读探查确认旧 rec 固定 320 宽 → 实施三档并存（v1fix/hybrid/rapid）+ env 开关，默认 v1fix 先测，逐档量化后选最优。
+- 2026-08-01：实测 v1fix=197ms 但蓝字全废（旧 rec 模型能力不足，非切点问题）；hybrid 串行=1152-2455ms 太慢；hybrid 并发逐行=537-647ms 蓝字完美 → **选定 hybrid 为默认**。rapid 整图版含 det 额外 ~140ms 无优势。
