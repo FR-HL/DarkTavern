@@ -80,9 +80,6 @@ export function wire (overlay) {
 
   ipcMain.handle ('backend:health', () => backend.healthRaw ());
   ipcMain.handle ('backend:window', () => backend.getWindow ());
-  ipcMain.handle ('chinese:status', async () => {
-    return { enabled: true, available: await backend.health () };
-  });
 
   ipcMain.handle ('chinese:mappings', () => backend.getMappings ());
   ipcMain.handle ('chinese:add-mapping', (e, d) => backend.addMapping (d.chinese, d.english));

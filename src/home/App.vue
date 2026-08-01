@@ -4,12 +4,12 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 const invoke = (channel, data) => window.electron.invoke (channel, data);
 
 const TABS = [
-  { key: 'custom', label: '自定义' },
   { key: 'items', label: '物品' },
   { key: 'attributes', label: '属性' },
   { key: 'keywords', label: '关键词' },
+  { key: 'custom', label: '自定义' },
 ];
-const SRC = { custom: '自定义', items: '物品', attributes: '属性', keywords: '关键词' };
+const SRC = { items: '物品', attributes: '属性', keywords: '关键词', custom: '自定义' };
 
 const pane = ref ('overview');
 const ocrOk = ref (false);
@@ -48,14 +48,11 @@ const isListening = ref (false);
 const newKeybind = ref (null);
 
 const allMappings = reactive ({ items: {}, attributes: {}, keywords: {}, custom: {} });
-const currentTab = ref ('custom');
+const currentTab = ref ('items');
 const search = ref ('');
-const editingRow = ref (null);
-const editingCn = ref ('');
-const editingEn = ref ('');
+const mappingsLoaded = ref (false);
 const cnInput = ref ('');
 const enInput = ref ('');
-const mappingsLoaded = ref (false);
 
 let lastMappings = -1;
 let toastTimer = null;
@@ -259,28 +256,10 @@ async function loadMappings () {
   try {
     const r = await invoke ('chinese:mappings');
     Object.assign (allMappings, r);
-  } catch (e) { showMappingStatus ('OCR 服务未运行，请先启动应用。', 'error'); }
+  } catch (e) { /* OCR not ready */ }
 }
-function switchTab (tab) { currentTab.value = tab; editingRow.value = null; }
-function startEdit (idx) {
-  editingRow.value = idx;
-  editingCn.value = currentEntries.value[idx].cn;
-  editingEn.value = currentEntries.value[idx].en;
-}
-function cancelEdit () { editingRow.value = null; }
-async function saveEdit (idx) {
-  const entry = currentEntries.value[idx];
-  if (!entry) return;
-  const nc = editingCn.value.trim (), ne = editingEn.value.trim ();
-  if (!nc || !ne) { showMappingStatus ('中文和英文都不能为空', 'error'); return; }
-  try {
-    if (nc !== entry.cn) await invoke ('chinese:remove-mapping', { chinese: entry.cn });
-    await invoke ('chinese:add-mapping', { chinese: nc, english: ne });
-    showToast ('已保存');
-    editingRow.value = null;
-    await loadMappings ();
-  } catch (e) { showMappingStatus ('保存失败：' + e.message, 'error'); }
-}
+function switchTab (tab) { currentTab.value = tab; }
+
 async function addMapping () {
   const cn = cnInput.value.trim (), en = enInput.value.trim ();
   if (!cn || !en) { showMappingStatus ('请填写中文和英文', 'error'); return; }
@@ -289,13 +268,12 @@ async function addMapping () {
     cnInput.value = ''; enInput.value = '';
     showMappingStatus ('已添加：' + cn + ' → ' + en, 'success');
     await loadMappings ();
-    switchTab ('custom');
   } catch (e) { showMappingStatus ('添加失败：' + e.message, 'error'); }
 }
 async function removeMapping (idx) {
   const entry = currentEntries.value[idx];
   if (!entry) return;
-  if (!confirm ('确定删除 “' + entry.cn + '” 吗？')) return;
+  if (!confirm ('确定删除 "' + entry.cn + '" 吗？')) return;
   try {
     await invoke ('chinese:remove-mapping', { chinese: entry.cn });
     showToast ('已删除');
@@ -341,13 +319,9 @@ onBeforeUnmount (() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
           概览
         </div>
-        <div class="nav-item" :class="{ active: pane === 'general' }" @click="showPane('general')">
+        <div class="nav-item" :class="{ active: pane === 'settings' }" @click="showPane('settings')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.2" fill="currentColor" stroke="none"/><circle cx="15" cy="16" r="2.2" fill="currentColor" stroke="none"/></svg>
-          常规
-        </div>
-        <div class="nav-item" :class="{ active: pane === 'scan' }" @click="showPane('scan')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
-          扫描
+          设置
         </div>
         <div class="nav-item" :class="{ active: pane === 'mapping' }" @click="showPane('mapping')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.1" fill="currentColor" stroke="none"/></svg>
@@ -399,25 +373,15 @@ onBeforeUnmount (() => {
         </div>
       </div>
 
-      <div class="pane" :class="{ active: pane === 'general' }">
-        <div class="pane-title">常规</div>
-        <div class="pane-desc">账号凭证与启动行为。</div>
+      <div class="pane" :class="{ active: pane === 'settings' }">
+        <div class="pane-title">设置</div>
+        <div class="pane-desc">账号凭证、触发键、模式与悬浮窗外观。</div>
         <div class="group">
           <div class="group-h">DarkerDB API Key</div>
           <div class="row"><label>API Key</label><div class="grow" style="display:flex; gap:8px;"><input :type="apiKeyVisible ? 'text' : 'password'" v-model="apiKey" placeholder="输入你的 DarkerDB API Key"><button class="btn ghost" @click="toggleApiKeyVisibility">{{ apiKeyVisible ? '隐藏' : '显示' }}</button></div></div>
           <div class="row"><label></label><span class="hint">在 darkerdb.com 注册获取，填入后查价更快、数据更完整。</span></div>
           <div class="row"><label></label><button class="btn primary" @click="saveApiKey">保存 API Key</button></div>
         </div>
-        <div class="group">
-          <div class="group-h">启动</div>
-          <div class="row"><label>开机启动</label><div class="grow" style="display:flex; align-items:center; justify-content:space-between;"><span class="hint">登录系统时自动在后台运行 DarkTavern。</span><label class="switch"><input type="checkbox" v-model="launchOnStartup" @change="saveLaunch"><span class="track"></span></label></div></div>
-        </div>
-        <div class="status" :class="settingsStatus.type">{{ settingsStatus.text }}</div>
-      </div>
-
-      <div class="pane" :class="{ active: pane === 'scan' }">
-        <div class="pane-title">扫描</div>
-        <div class="pane-desc">触发键、模式与悬浮窗外观。</div>
         <div class="group">
           <div class="group-h">扫描触发键</div>
           <div class="row"><label>当前按键</label><span class="kbd">{{ scanKey }}</span></div>
@@ -437,16 +401,21 @@ onBeforeUnmount (() => {
           <div class="row"><label>缩放</label><div class="range-wrap"><input type="range" min="0.6" max="2" step="0.1" :value="scale" @input="onScaleInput"><span class="range-val">{{ scaleVal }}</span></div></div>
         </div>
         <div class="group">
+          <div class="group-h">启动</div>
+          <div class="row"><label>开机启动</label><div class="grow" style="display:flex; align-items:center; justify-content:space-between;"><span class="hint">登录系统时自动在后台运行 DarkTavern。</span><label class="switch"><input type="checkbox" v-model="launchOnStartup" @change="saveLaunch"><span class="track"></span></label></div></div>
+        </div>
+        <div class="group">
           <div class="group-h">OCR 服务</div>
           <div class="row"><label>状态</label><span class="ocr-line"><span class="ocr-dot" :class="ocrState"></span><span :style="{ color: ocrStatusColor }">{{ ocrStatusText }}</span></span></div>
           <div class="row"><label>汉化数据</label><span style="color:var(--ink-dim)">{{ mappingCount }}</span></div>
         </div>
+        <div class="status" :class="settingsStatus.type">{{ settingsStatus.text }}</div>
       </div>
 
       <div class="pane" :class="{ active: pane === 'mapping' }">
         <div class="pane-title">数据汉化</div>
-        <div class="pane-desc">管理中文 ↔ 英文翻译映射，提升识别准确度。</div>
-        <div class="add-form">
+        <div class="pane-desc">中文 ↔ 英文翻译映射数据，由 DarkerDB API 同步生成，自定义条目可手动维护。</div>
+        <div class="add-form" v-if="currentTab === 'custom'">
           <input type="text" v-model="cnInput" placeholder="中文（如：长剑）">
           <input type="text" v-model="enInput" placeholder="英文（如：Longsword）">
           <button class="btn primary" @click="addMapping">添加</button>
@@ -458,23 +427,15 @@ onBeforeUnmount (() => {
         </div>
         <div class="table-wrap"><div class="table-scroll">
           <table>
-            <thead><tr><th>中文</th><th>英文</th><th>来源</th><th style="width:130px">操作</th></tr></thead>
+            <thead><tr><th>中文</th><th>英文</th><th>来源</th><th v-if="currentTab === 'custom'" style="width:90px">操作</th></tr></thead>
             <tbody>
               <tr v-for="(entry, idx) in currentEntries" :key="idx">
-                <template v-if="editingRow === idx">
-                  <td><input class="edit-input" v-model="editingCn" autofocus @keyup.enter="saveEdit(idx)"></td>
-                  <td><input class="edit-input" v-model="editingEn" @keyup.enter="saveEdit(idx)"></td>
-                  <td class="src">{{ SRC[currentTab] }}</td>
-                  <td><button class="btn primary sm" @click="saveEdit(idx)">保存</button> <button class="btn ghost sm" @click="cancelEdit">取消</button></td>
-                </template>
-                <template v-else>
-                  <td class="cn">{{ entry.cn }}</td>
-                  <td class="en">{{ entry.en }}</td>
-                  <td class="src">{{ SRC[currentTab] }}</td>
-                  <td><button class="btn ghost sm" @click="startEdit(idx)">编辑</button><button v-if="currentTab === 'custom'" class="btn danger sm" @click="removeMapping(idx)">删除</button></td>
-                </template>
+                <td class="cn">{{ entry.cn }}</td>
+                <td class="en">{{ entry.en }}</td>
+                <td class="src">{{ SRC[currentTab] }}</td>
+                <td v-if="currentTab === 'custom'"><button class="btn danger sm" @click="removeMapping(idx)">删除</button></td>
               </tr>
-              <tr v-if="!currentEntries.length"><td colspan="4" class="empty">暂无汉化数据</td></tr>
+              <tr v-if="!currentEntries.length"><td :colspan="currentTab === 'custom' ? 4 : 3" class="empty">暂无汉化数据</td></tr>
             </tbody>
           </table>
         </div></div>

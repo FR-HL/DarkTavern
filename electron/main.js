@@ -179,8 +179,8 @@ async function registerScanHotkey (overlay) {
 }
 
 function openSettingsWindow (tab) {
-  const paneMap = { settings: 'general', mapping: 'mapping' };
-  const pane = paneMap[tab] || 'general';
+  const paneMap = { settings: 'settings', mapping: 'mapping' };
+  const pane = paneMap[tab] || 'settings';
 
   if (!homeWindow) { pendingPane = pane; openHomeWindow (); return; }
   if (homeWindow.isMinimized ()) homeWindow.restore ();
