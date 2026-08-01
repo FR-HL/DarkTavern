@@ -362,6 +362,7 @@ onMounted(() => {
     item.value.prices.market = null;
     item.value.prices.density = null;
     item.value.prices.vendor = null;
+    item.value.prices.live = null;
     item.value.demand = null;
     item.value.quality = null;
     item.value.adventurePoints = null;
@@ -472,6 +473,11 @@ onMounted(() => {
     // Done loading, show full tooltip
     isLoading.value = false;
     isTooltipActive.value = true;
+  });
+
+  electron.on("hover:live-price", (data) => {
+    if (data.scanId !== currentScanId.value) return;
+    item.value.prices.live = data.price ?? null;
   });
 
   electron.on("hover:error", async (data) => {
@@ -750,8 +756,15 @@ function getGradeColor(grade) {
                   class="flex items-center"
                   v-if="item.prices.market !== null"
                 >
-                  <span>市场:</span>
+                  <span>市场均价:</span>
                   <span class="gold ml-2">{{ item.prices.market }}</span>
+                </div>
+                <div
+                  class="flex items-center"
+                  v-if="item.prices.live !== null"
+                >
+                  <span>市场现价:</span>
+                  <span class="gold ml-2">{{ item.prices.live }}</span>
                 </div>
                 <div
                   class="flex items-center"

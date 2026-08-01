@@ -5,6 +5,9 @@ import { getCanScan, resendState } from './overlay.js';
 import * as backend from './backend.js';
 
 const DARKERDB_URL = 'https://api.darkerdb.com/v1/internal/grimvault/analyze';
+const MARKET_URL = 'https://api.darkerdb.com/v2/market';
+
+const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
 
 let scanning = false;
 let cache = { text: null, result: null, ts: 0 };
@@ -70,6 +73,7 @@ export function wire (overlay) {
 
     if (result.success) {
       send ('hover:item', { scanId, ...tooltip, ...result.data });
+      queryMarketLive (result.data, scanId, send);
     } else {
       send ('hover:error', {
         scanId, message: result.error,
@@ -117,5 +121,68 @@ async function queryPrice (tooltipText) {
     return { success: true, data: body.body };
   } catch (e) {
     return { success: false, error: e.message || '网络错误' };
+  }
+}
+
+function toCanonicalItemId (rawId) {
+  if (rawId.startsWith ('id.item.')) return rawId;
+  const snake = rawId.replace (/([a-z])([A-Z])/g, '$1_$2').toLowerCase ();
+  return `id.item.${snake}`;
+}
+
+function attrToField (displayName) {
+  return displayName.toLowerCase ().replace (/ /g, '_');
+}
+
+async function queryMarketLive (data, scanId, send) {
+  try {
+    const itemId = toCanonicalItemId (data.item?.id || data.item?.item_id || '');
+    const rarity = data.item?.rarity;
+    const secondary = data.item?.secondary || [];
+
+    if (!itemId || itemId === 'id.item.') return;
+
+    const headers = { 'User-Agent': 'DarkTavern/1.0' };
+    if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+
+    const sorted = [...secondary]
+      .filter (a => a.grade && a.value != null)
+      .sort ((a, b) => (GRADE_ORDER[a.grade] ?? 9) - (GRADE_ORDER[b.grade] ?? 9));
+
+    const gradeA = sorted.filter (a => a.grade === 'S' || a.grade === 'A');
+    const gradeB = sorted.filter (a => a.grade === 'B');
+
+    const attempts = [sorted, gradeA, gradeB, []];
+
+    for (const attrs of attempts) {
+      const params = new URLSearchParams ();
+      params.set ('item_id', itemId);
+      if (rarity) params.set ('rarity', rarity.toLowerCase ());
+      params.set ('has_sold', 'false');
+      params.set ('has_expired', 'false');
+      params.set ('has_cancelled', 'false');
+      params.set ('sort', 'price:asc');
+      params.set ('limit', '1');
+
+      for (const attr of attrs) {
+        const field = attrToField (attr.display);
+        params.set (`secondary[${field}]`, `>=${attr.value}`);
+      }
+
+      const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });
+      if (!res.ok) continue;
+
+      const body = await res.json ();
+      const listings = body.body;
+      if (Array.isArray (listings) && listings.length > 0) {
+        logger.info (`[MarketLive] price=${listings[0].price} (${attrs.length} attrs filtered)`);
+        send ('hover:live-price', { scanId, price: listings[0].price });
+        return;
+      }
+    }
+
+    logger.info (`[MarketLive] no active listings`);
+  } catch (e) {
+    logger.error (`[MarketLive] ${e.message}`);
   }
 }
