@@ -738,49 +738,27 @@ function getGradeColor(grade) {
               <div class="tooltip-separator"></div>
             </section>
 
-            <!-- Pricing section: show spinner while loading, prices when ready -->
+            <!-- Pricing section: labels always shown, each price loads individually -->
             <div
               class="whitespace-nowrap"
               v-if="props.components.includes('pricing')"
             >
-              <div v-if="isLoading" class="pricing-loading">
-                <img
-                  src="@assets/images/Loading_Img.png"
-                  alt="查询中..."
-                  class="pricing-spinner"
-                />
-                <span class="pricing-loading-text">查询价格中...</span>
+              <!-- <div class="flex items-center justify-center">
+                <span>市场均价:</span>
+                <span class="ml-2" :class="item.prices.market !== null ? 'gold' : 'price-empty'">{{ item.prices.market !== null ? item.prices.market : '暂无' }}</span>
+              </div> -->
+              <div class="flex items-center justify-center">
+                <span>市场现价:</span>
+                <span class="ml-2" :class="item.prices.live !== null ? 'gold' : 'price-empty'">{{ item.prices.live !== null ? item.prices.live : '暂无' }}</span>
               </div>
-              <template v-else>
-                <div
-                  class="flex items-center justify-center"
-                  v-if="item.prices.market !== null"
-                >
-                  <span>市场均价:</span>
-                  <span class="gold ml-2">{{ item.prices.market }}</span>
-                </div>
-                <div
-                  class="flex items-center justify-center"
-                  v-if="item.prices.live !== null"
-                >
-                  <span>市场现价:</span>
-                  <span class="gold ml-2">{{ item.prices.live }}</span>
-                </div>
-                <div
-                  class="flex items-center justify-center"
-                  v-if="item.prices.vendor !== null"
-                >
-                  <span>商人:</span>
-                  <span class="gold ml-2">{{ item.prices.vendor }}</span>
-                </div>
-                <div
-                  class="flex items-center justify-center"
-                  v-if="item.prices.density !== null"
-                >
-                  <span>每格价值:</span>
-                  <span class="gold ml-2">{{ item.prices.density }}</span>
-                </div>
-              </template>
+              <div class="flex items-center justify-center">
+                <span>商人回收:</span>
+                <span class="ml-2" :class="item.prices.vendor !== null ? 'gold' : 'price-empty'">{{ item.prices.vendor !== null ? item.prices.vendor : '暂无' }}</span>
+              </div>
+              <div class="flex items-center justify-center">
+                <span>每格价值:</span>
+                <span class="ml-2" :class="item.prices.density !== null ? 'gold' : 'price-empty'">{{ item.prices.density !== null ? item.prices.density : '暂无' }}</span>
+              </div>
             </div>
 
             <div class="tooltip-separator"></div>
@@ -851,22 +829,9 @@ function getGradeColor(grade) {
   line-height: 1.4;
 }
 
-.pricing-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.pricing-spinner {
-  width: 20px;
-  height: 20px;
-  animation: spin 1s linear infinite;
-}
-
-.pricing-loading-text {
-  font-size: 0.9rem;
+.price-empty {
+  @apply text-lg;
   color: var(--dnd-dust, #c8b89a);
+  opacity: 0.55;
 }
 </style>
