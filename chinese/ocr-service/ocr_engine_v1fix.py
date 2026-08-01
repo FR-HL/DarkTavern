@@ -203,24 +203,6 @@ def _preprocess(input_img):
     else:
         bgr = cv2.cvtColor(input_img, cv2.COLOR_GRAY2BGR)
 
-    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
-    hist = np.bincount(gray.ravel(), minlength=256)
-    pixels = gray.shape[0] * gray.shape[1]
-
-    def percentile(numer, denom):
-        target = pixels * numer // denom
-        cum = np.cumsum(hist)
-        return int(min(np.searchsorted(cum, target, side="left"), 255))
-
-    background = percentile(1, 2)
-    foreground = percentile(49, 50)
-    span = max(24, foreground - background)
-    vals = np.arange(256, dtype=np.float32)
-    normalized = np.clip((vals - background) / span, 0.0, 1.0)
-    lut = np.round(255.0 * np.sqrt(normalized)).astype(np.uint8)
-    gray = cv2.LUT(gray, lut)
-    bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-
     scale = MODEL_HEIGHT / bgr.shape[0]
     w = min(MODEL_WIDTH, max(1, int(round(bgr.shape[1] * scale))))
     resized = cv2.resize(bgr, (w, MODEL_HEIGHT), interpolation=cv2.INTER_CUBIC)
