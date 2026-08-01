@@ -8,7 +8,7 @@ const DARKERDB_URL = 'https://api.darkerdb.com/v1/internal/grimvault/analyze';
 
 let scanning = false;
 let cache = { text: null, result: null, ts: 0 };
-const CACHE_TTL = 10000;
+const CACHE_TTL = 60000;
 
 export function wire (overlay) {
   const send = (msg, data) => overlay.webContents.send (msg, data);
