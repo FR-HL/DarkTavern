@@ -138,16 +138,47 @@ body::before {
 
 .side-foot {
   margin-top: auto;
-  padding: 12px 10px 4px;
+  padding: 12px 8px 4px;
   border-top: 1px solid var(--line-soft);
-  font-size: 11.5px; line-height: 1.7; color: var(--text-3);
+  display: flex; flex-direction: column; gap: 5px;
 }
-.side-foot .safe { display: inline-flex; align-items: center; gap: 6px; color: var(--green); font-weight: 550; margin-bottom: 4px; }
-.side-foot .safe svg { width: 12px; height: 12px; }
-.side-foot a { color: var(--accent); text-decoration: none; font-weight: 500; }
-.side-foot a:hover { text-decoration: underline; }
-.side-foot .grp { color: var(--accent); cursor: pointer; font-weight: 500; font-variant-numeric: tabular-nums; }
-.side-foot .grp:hover { text-decoration: underline; }
+.foot-safe {
+  display: inline-flex; align-items: center; gap: 7px;
+  align-self: flex-start;
+  padding: 4px 11px 4px 8px;
+  border-radius: var(--r-pill);
+  background: var(--green-soft);
+  border: 1px solid rgba(31,157,85,0.22);
+  color: var(--green);
+  font-size: 11px; font-weight: 650; letter-spacing: 0.01em;
+  margin-bottom: 3px;
+}
+.foot-safe svg { width: 12px; height: 12px; }
+.foot-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 12.5px;
+  color: var(--text-2);
+  border: 1px solid transparent;
+  transition: background .16s var(--ease), color .16s var(--ease), border-color .16s var(--ease), transform .12s var(--ease);
+}
+.foot-row svg { width: 14px; height: 14px; flex: none; color: var(--text-3); transition: color .16s var(--ease); }
+.foot-row .foot-k { font-weight: 550; }
+.foot-row .foot-v {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  transition: color .16s var(--ease);
+}
+.foot-row:hover { background: rgba(0,0,0,0.045); color: var(--text); border-color: var(--line-soft); }
+.foot-row:hover svg { color: var(--accent); }
+.foot-row:hover .foot-v { color: var(--accent); }
+.foot-row:active { transform: scale(0.98); }
 
 /* ===== content ===== */
 .content {

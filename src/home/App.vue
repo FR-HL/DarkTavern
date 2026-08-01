@@ -348,9 +348,20 @@ onBeforeUnmount (() => {
       </nav>
 
       <div class="side-foot">
-        <div class="safe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>仅读屏 · 不注入</div>
-        交流群 <span class="grp" @click="copyGroup">376490002</span><br>
-        <a href="#" @click.prevent="openGithub">开源 · GitHub</a>
+        <div class="foot-safe">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>
+          <span>仅读屏 · 不注入</span>
+        </div>
+        <div class="foot-row" title="点击复制群号" @click="copyGroup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span class="foot-k">交流群</span>
+          <span class="foot-v">376490002</span>
+        </div>
+        <a class="foot-row" href="#" @click.prevent="openGithub">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
+          <span class="foot-k">开源</span>
+          <span class="foot-v">GitHub</span>
+        </a>
       </div>
     </aside>
 
@@ -486,30 +497,6 @@ onBeforeUnmount (() => {
                   <input type="range" min="0.6" max="2" step="0.1" :value="scale" @input="onScaleInput">
                   <span class="range-val">{{ scaleVal }}</span>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">系统</div>
-          <div class="card">
-            <div class="srow">
-              <div class="srow-info">
-                <div class="srow-t">开机启动</div>
-                <div class="srow-d">登录系统时自动在后台运行 DarkTavern</div>
-              </div>
-              <div class="srow-ctl">
-                <label class="switch"><input type="checkbox" v-model="launchOnStartup" @change="saveLaunch"><span class="track"></span></label>
-              </div>
-            </div>
-            <div class="srow">
-              <div class="srow-info">
-                <div class="srow-t">OCR 引擎</div>
-                <div class="srow-d">汉化数据 <b>{{ mappingCount }}</b></div>
-              </div>
-              <div class="srow-ctl">
-                <span class="ocr-pill" :class="ocrState">{{ ocrStatusText }}</span>
               </div>
             </div>
           </div>
