@@ -83,6 +83,12 @@ const sub = computed (() => {
   if (!gameOk.value) return '启动游戏、把鼠标悬停在物品上即可查价';
   return '已检测到游戏窗口，按下 ' + scanKey.value + ' 开始';
 });
+const subHtml = computed (() => {
+  const esc = (s) => String (s).replace (/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  if (!ocrOk.value) return 'OCR 引擎唤醒中，请稍候片刻…';
+  if (!gameOk.value) return '启动游戏、把鼠标悬停在物品上即可查价';
+  return '已检测到游戏窗口，按下 <span class="kbd">' + esc (scanKey.value) + '</span> 即刻查价';
+});
 const scaleVal = computed (() => scale.value.toFixed (1) + '×');
 const keybindLabel = computed (() => {
   if (isListening.value) return '等待输入…（按 Esc 取消）';
@@ -313,82 +319,95 @@ onBeforeUnmount (() => {
 </script>
 
 <template>
-  <div class="fog fog-ember"></div>
-  <div class="fog fog-a"></div>
-  <div class="fog fog-b"></div>
-
   <div class="app">
     <aside class="side">
-      <div class="side-brand">
-        <div class="side-sig">DT</div>
-        <div><div class="nm">DarkTavern</div><div class="ey">Dark and Darker</div></div>
+      <div class="brand">
+        <div class="brand-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <div>
+          <div class="brand-name">DarkTavern</div>
+          <div class="brand-sub">Dark and Darker 查价</div>
+        </div>
       </div>
+
       <nav class="nav">
-        <div class="nav-label">导航</div>
+        <div class="nav-cap">导航</div>
         <div class="nav-item" :class="{ active: pane === 'overview' }" @click="showPane('overview')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
           概览
         </div>
         <div class="nav-item" :class="{ active: pane === 'settings' }" @click="showPane('settings')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.2" fill="currentColor" stroke="none"/><circle cx="15" cy="16" r="2.2" fill="currentColor" stroke="none"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/><circle cx="9" cy="8" r="2.2" fill="currentColor" stroke="none"/><circle cx="15" cy="16" r="2.2" fill="currentColor" stroke="none"/></svg>
           设置
         </div>
         <div class="nav-item" :class="{ active: pane === 'mapping' }" @click="showPane('mapping')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.1" fill="currentColor" stroke="none"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
           数据汉化
         </div>
       </nav>
+
       <div class="side-foot">
-        <div class="shield"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>仅读屏 · 不注入</div>
+        <div class="safe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>仅读屏 · 不注入</div>
         交流群 <span class="grp" @click="copyGroup">376490002</span><br>
         <a href="#" @click.prevent="openGithub">开源 · GitHub</a>
       </div>
     </aside>
 
     <div class="content">
+      <!-- ============ 概览 ============ -->
       <div class="pane" :class="{ active: pane === 'overview' }">
-        <div class="ov-head">
-          <div class="ov-ey"><span class="live-dot"></span>酒馆情报</div>
-          <div class="ov-headline">{{ headline }}</div>
-          <div class="ov-sub">{{ sub }}</div>
-        </div>
+        <div class="page-title">概览</div>
+        <div class="page-sub">DarkTavern 运行状态一览。</div>
 
-        <div class="metric-grid">
-          <div class="metric"><div class="metric-k">汉化数据</div><div class="metric-v gold">{{ mMappings }}</div></div>
-          <div class="metric"><div class="metric-k">本次会话</div><div class="metric-v teal">{{ uptime }}</div></div>
-          <div class="metric"><div class="metric-k">服务版本</div><div class="metric-v ink"><span class="ok-dot" :class="{ bad: verDotBad }"></span><span>{{ version }}</span></div></div>
+        <div class="hero">
+          <div class="hero-ey"><span class="hero-dot" :class="{ warn: !gameOk || !ocrOk }"></span>实时状态</div>
+          <div class="hero-title">{{ headline }}</div>
+          <div class="hero-sub" v-html="subHtml"></div>
+          <div class="hero-stats">
+            <div class="hstat">
+              <div class="hstat-k">汉化数据</div>
+              <div class="hstat-v accent">{{ mMappings.toLocaleString() }}</div>
+            </div>
+            <div class="hstat">
+              <div class="hstat-k">本次会话</div>
+              <div class="hstat-v">{{ uptime }}</div>
+            </div>
+            <div class="hstat">
+              <div class="hstat-k">服务版本</div>
+              <div class="hstat-v"><span class="vdot" :class="{ bad: verDotBad }"></span>{{ version }}</div>
+            </div>
+          </div>
         </div>
 
         <div class="ov-grid">
           <section class="card">
-            <div class="card-pad">
-              <div class="card-head"><span class="card-title">实时状态</span></div>
-              <div class="rune-row"><div class="rune" :data-state="runes.ocr.state"></div><div><div class="rune-k">OCR 侍者</div><div class="rune-v" :style="{ color: runes.ocr.color }">{{ runes.ocr.text }}</div></div></div>
-              <div class="rune-row"><div class="rune" :data-state="runes.game.state"></div><div><div class="rune-k">游戏窗口</div><div class="rune-v" :style="{ color: runes.game.color }">{{ runes.game.text }}</div></div></div>
-              <div class="rune-row"><div class="rune" :data-state="runes.key.state"></div><div><div class="rune-k">扫描热键</div><div class="rune-v" :style="{ color: runes.key.color }">{{ runes.key.text }}</div></div></div>
-              <div class="rune-row"><div class="rune" :data-state="runes.api.state"></div><div><div class="rune-k">DarkerDB API</div><div class="rune-v" :style="{ color: runes.api.color }">{{ runes.api.text }}</div></div></div>
-              <div class="rune-foot"><svg class="shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span>不读取游戏内存</span></div>
-            </div>
+            <div class="card-head"><span class="card-title">运行状态</span></div>
+            <div class="stat-row"><span class="sdot" :class="runes.ocr.state"></span><span class="stat-k">OCR 引擎</span><span class="stat-v" :class="runes.ocr.state">{{ runes.ocr.text }}</span></div>
+            <div class="stat-row"><span class="sdot" :class="runes.game.state"></span><span class="stat-k">游戏窗口</span><span class="stat-v" :class="runes.game.state">{{ runes.game.text }}</span></div>
+            <div class="stat-row"><span class="sdot" :class="runes.key.state"></span><span class="stat-k">扫描热键</span><span class="stat-v" :class="runes.key.state">{{ runes.key.text }}</span></div>
+            <div class="stat-row"><span class="sdot" :class="runes.api.state"></span><span class="stat-k">DarkerDB API</span><span class="stat-v" :class="runes.api.state">{{ runes.api.text }}</span></div>
+            <div class="card-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>不读取游戏内存 · 仅屏幕识别</div>
           </section>
+
           <section class="card">
-            <div class="card-pad">
-              <div class="card-head"><span class="card-title">三步上手</span></div>
-              <div class="steps">
-                <div class="step"><div class="step-n">1</div><div class="step-t">启动 <b>Dark and Darker</b>（中文客户端）</div></div>
-                <div class="step"><div class="step-n">2</div><div class="step-t">把鼠标 <b>悬停</b> 在任意物品上</div></div>
-                <div class="step"><div class="step-n">3</div><div class="step-t">按下 <span class="kbd">{{ scanKey }}</span> 即刻查价</div></div>
-              </div>
+            <div class="card-head"><span class="card-title">三步上手</span></div>
+            <div class="steps">
+              <div class="step"><div class="step-n">1</div><div class="step-t">启动 <b>Dark and Darker</b>（中文客户端）</div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">把鼠标 <b>悬停</b> 在任意物品上</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">按下 <span class="kbd">{{ scanKey }}</span> 即刻查价</div></div>
             </div>
           </section>
         </div>
       </div>
 
+      <!-- ============ 设置 ============ -->
       <div class="pane" :class="{ active: pane === 'settings' }">
-        <div class="pane-title">设置</div>
-        <div class="pane-desc">账号凭证、扫描触发与悬浮窗外观。</div>
+        <div class="page-title">设置</div>
+        <div class="page-sub">账号凭证、扫描触发与悬浮窗外观。</div>
 
-        <div class="set-section">
-          <div class="set-head"><span class="set-rune"></span>账号凭证<span class="set-rule"></span></div>
+        <div class="sec">
+          <div class="sec-label">账号凭证</div>
           <div class="card">
             <div class="srow">
               <div class="srow-info">
@@ -397,7 +416,7 @@ onBeforeUnmount (() => {
               </div>
               <div class="srow-ctl key-ctl">
                 <div class="key-field">
-                  <svg class="field-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 2 2"/><path d="m15 8 2 2"/></svg>
+                  <svg class="field-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 2 2"/><path d="m15 8 2 2"/></svg>
                   <input :type="apiKeyVisible ? 'text' : 'password'" v-model="apiKey" placeholder="输入你的 API Key">
                   <button class="eye-btn" type="button" @click="toggleApiKeyVisibility">{{ apiKeyVisible ? '隐藏' : '显示' }}</button>
                 </div>
@@ -407,8 +426,8 @@ onBeforeUnmount (() => {
           </div>
         </div>
 
-        <div class="set-section">
-          <div class="set-head"><span class="set-rune"></span>扫描<span class="set-rule"></span></div>
+        <div class="sec">
+          <div class="sec-label">扫描</div>
           <div class="card">
             <div class="srow">
               <div class="srow-info">
@@ -440,8 +459,8 @@ onBeforeUnmount (() => {
           </div>
         </div>
 
-        <div class="set-section">
-          <div class="set-head"><span class="set-rune"></span>悬浮窗<span class="set-rule"></span></div>
+        <div class="sec">
+          <div class="sec-label">悬浮窗</div>
           <div class="card">
             <div class="srow">
               <div class="srow-info">
@@ -472,8 +491,8 @@ onBeforeUnmount (() => {
           </div>
         </div>
 
-        <div class="set-section">
-          <div class="set-head"><span class="set-rune"></span>系统<span class="set-rule"></span></div>
+        <div class="sec">
+          <div class="sec-label">系统</div>
           <div class="card">
             <div class="srow">
               <div class="srow-info">
@@ -486,7 +505,7 @@ onBeforeUnmount (() => {
             </div>
             <div class="srow">
               <div class="srow-info">
-                <div class="srow-t">OCR 侍者</div>
+                <div class="srow-t">OCR 引擎</div>
                 <div class="srow-d">汉化数据 <b>{{ mappingCount }}</b></div>
               </div>
               <div class="srow-ctl">
@@ -499,22 +518,32 @@ onBeforeUnmount (() => {
         <div class="status" :class="settingsStatus.type">{{ settingsStatus.text }}</div>
       </div>
 
+      <!-- ============ 数据汉化 ============ -->
       <div class="pane" :class="{ active: pane === 'mapping' }">
-        <div class="pane-title">数据汉化</div>
-        <div class="pane-desc">中文 ↔ 英文翻译映射数据，由 DarkerDB API 同步生成，自定义条目可手动维护。</div>
+        <div class="page-title">数据汉化</div>
+        <div class="page-sub">中文 ↔ 英文翻译映射，由 DarkerDB API 同步生成，自定义条目可手动维护。</div>
+
         <div class="add-form" v-if="currentTab === 'custom'">
           <input type="text" v-model="cnInput" placeholder="中文（如：长剑）">
           <input type="text" v-model="enInput" placeholder="英文（如：Longsword）">
           <button class="btn primary" @click="addMapping">添加</button>
         </div>
         <div class="status" :class="mappingStatus.type">{{ mappingStatus.text }}</div>
-        <input type="text" class="search" v-model="search" placeholder="搜索汉化数据…">
-        <div class="tab-bar">
-          <div v-for="t in TABS" :key="t.key" class="tab" :class="{ active: currentTab === t.key }" @click="switchTab(t.key)">{{ t.label }} <span class="count">({{ counts[t.key] }})</span></div>
+
+        <div class="map-toolbar">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="text" v-model="search" placeholder="搜索汉化数据…">
+          </div>
         </div>
+
+        <div class="tab-bar">
+          <button v-for="t in TABS" :key="t.key" class="tab" :class="{ active: currentTab === t.key }" @click="switchTab(t.key)">{{ t.label }}<span class="count">{{ counts[t.key] }}</span></button>
+        </div>
+
         <div class="table-wrap"><div class="table-scroll">
           <table>
-            <thead><tr><th>中文</th><th>英文</th><th>来源</th><th v-if="currentTab === 'custom'" style="width:90px">操作</th></tr></thead>
+            <thead><tr><th style="width:34%">中文</th><th style="width:38%">英文</th><th>来源</th><th v-if="currentTab === 'custom'" style="width:84px">操作</th></tr></thead>
             <tbody>
               <tr v-for="(entry, idx) in currentEntries" :key="idx">
                 <td class="cn">{{ entry.cn }}</td>
