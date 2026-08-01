@@ -12,7 +12,7 @@ Dark and Darker 中文实时查价工具。鼠标悬停游戏内物品、按下�
         │
         ▼
 Python 后端 (chinese/ocr-service, 本地 HTTP :19528)
-   截图(mss) → 提示框检测(YOLO DNN) → 中文OCR(RapidOCR) → 中→英翻译 → DarkerDB 查价
+   截图(mss) → 提示框检测(YOLO DNN) → 行分割+中文识别(PP-OCRv5, 行级并行) → 中→英翻译 → DarkerDB 查价
         │
         ▼
 Electron 壳：透明悬浮窗贴在游戏上，渲染原版样式 tooltip
@@ -22,7 +22,8 @@ Electron 壳：透明悬浮窗贴在游戏上，渲染原版样式 tooltip
 
 ## 功能
 
-- **中文 OCR 查价** — RapidOCR (PP-OCRv4 + ONNX Runtime) 识别游戏内中文
+- **中文 OCR 查价** — 像素行分割 + PP-OCRv5 识别（ONNX Runtime，无文本检测模型），多行并行识别
+- **重复扫描缓存** — 提示框画面未变时跳过检测与识别；查价结果缓存 60s，同物品不重复请求
 - **980+ 词条翻译** — 物品 / 属性 / 术语自动中译英
 - **实时价格** — 市场价 / 商人价 / 每格价值（经 DarkerDB API）
 - **游戏内悬浮窗** — 价格信息直接叠在游戏画面上，样式像素级还原原版
@@ -58,9 +59,9 @@ ocr_env\Scripts\python -m pip install -r requirements.txt
 #    ocr_env\Scripts\python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-> **为什么必须是 `ocr_env` 这个名字？** Electron 启动时**自动优先**调用 `ocr_env\Scripts\python.exe` 来跑后端（见 `src/chinese/index.js`）。这样无论你 shell 里激活着哪个 venv，DarkTavern 都用自己的环境，**不会**因为缺 `fastapi` 等包而卡住。所以**不需要手动激活** ocr_env，建好即可。
+> **为什么必须是 `ocr_env` 这个名字？** Electron 启动时**自动优先**调用 `ocr_env\Scripts\python.exe` 来跑后端（见 `src/backend.js`）。这样无论你 shell 里激活着哪个 venv，DarkTavern 都用自己的环境，**不会**因为缺 `fastapi` 等包而卡住。所以**不需要手动激活** ocr_env，建好即可。
 
-> **模型文件** `models/tooltip.onnx` 已随仓库提供，无需另行下载。
+> **模型文件** `models/tooltip.onnx`（提示框检测）与 `models/paddle/ch/rec.onnx` + `dict.txt`（中文识别）已随仓库提供，无需另行下载。
 
 ## 运行
 
@@ -87,16 +88,26 @@ npx electron .
 ```
 DarkTavern/
 ├── src/                    # Electron 主进程（壳：窗口 / 托盘 / 热键 / IPC）
-│   ├── main.js             # 入口，启动主页 / 设置 / 拉起 Python 后端
-│   ├── native.js           # 适配层：把原 C++ 接口转为调用 Python 后端
-│   └── chinese/index.js    # 管理 Python 后端进程生命周期
-├── chinese/ocr-service/    # Python 后端（截图 / 检测 / OCR / 翻译 / 查价 / 窗口跟踪）
-│   └── server.py           # 本地 HTTP 服务 :19528
+│   ├── main.js             # 入口：窗口 / 托盘 / 热键 / 设置 IPC
+│   ├── backend.js          # 拉起 Python 后端 + 所有 :19528 HTTP 调用
+│   ├── scan.js             # 扫描流水线：OCR → 查价 → 渲染进程
+│   ├── overlay.js          # 轮询游戏窗口，定位透明悬浮窗
+│   ├── settings.js         # 读写 settings.ini
+│   ├── logger.js           # winston 日志
+│   ├── config.js           # 路径常量
+│   └── preload.cjs         # 渲染进程 IPC 桥
+├── chinese/ocr-service/    # Python 后端（截图 / 检测 / 识别 / 翻译 / 窗口）
+│   ├── server.py           # 本地 HTTP 服务 :19528（含扫描缓存）
+│   ├── ocr_engine.py       # 行分割 + PP-OCRv5 识别（行级并行，无检测模型）
+│   ├── detect.py           # 提示框检测（YOLO DNN）
+│   ├── capture.py          # 游戏窗口截图（mss）
+│   └── translator.py       # 中→英词条翻译
 ├── chinese/mapping/        # 中→英翻译词条表
 ├── ui/overlay/             # 悬浮窗前端（Vue 3 + Tailwind，原版样式）
 ├── home.html               # 启动主页
 ├── assets/                 # 悬浮窗纹理 / 字体 / 图标
 ├── models/tooltip.onnx     # 提示框检测模型
+├── models/paddle/ch/       # 中文识别模型（rec.onnx + dict.txt）
 ├── ocr_env/                # Python 虚拟环境（git 忽略，需自建）
 ├── requirements.txt        # Python 后端依赖
 ├── 启动.bat                # 双击启动
@@ -111,7 +122,7 @@ DarkTavern/
 | 悬浮窗 UI | Vue 3 + Tailwind CSS |
 | 截图 | mss |
 | 提示框检测 | YOLO DNN（tooltip.onnx，OpenCV dnn） |
-| 中文 OCR | RapidOCR + ONNX Runtime（PP-OCRv4） |
+| 中文 OCR | 像素行分割 + ONNX Runtime（PP-OCRv5 rec，行级并行，无检测模型） |
 | 后端服务 | Python + FastAPI（本地 HTTP） |
 | 查价 API | DarkerDB |
 
@@ -126,9 +137,9 @@ npx electron-builder --win     # 打包为安装程序
 
 - [DarkerDB](https://darkerdb.com/) — 原版 GrimVault 与查价 API
 - [Songyt1110](https://github.com/Songyt1110/GrimVault-Chinese-Edition) — GrimVault 中文版（本项目直接 fork 源）
+- [DarkerDB/GrimVault](https://github.com/DarkerDB/GrimVault) — 行分割 + 单行识别算法移植来源
 - [Ironmace](https://www.ironmace.com/) — Dark and Darker
-- [RapidOCR](https://github.com/RapidAI/RapidOCR) — OCR 引擎
-- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) — PP-OCRv4 模型
+- [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) — PP-OCRv5 识别模型
 - [NFU Database](https://dnd.nfuwow.com/) — 中文物品翻译
 - [Dark and Darker Wiki](https://dnd.wiki/) — Dark and Darker Adventurer's Tavern
 
