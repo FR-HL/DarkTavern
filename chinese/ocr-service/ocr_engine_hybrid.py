@@ -17,18 +17,17 @@ import os
 
 import cv2
 import numpy as np
+from onnxruntime import InferenceSession, SessionOptions, GraphOptimizationLevel, ExecutionMode
 
 import rapidocr_onnxruntime as _rapid
 from rapidocr_onnxruntime.ch_ppocr_rec import TextRecognizer
 
-# Recognizer-only config (no det, no cls). Paths resolved from the installed
-# package so we never depend on cwd or update_model_path quirks.
 _PKG = Path(_rapid.__file__).resolve().parent
 _REC_CFG = {
     "model_path": str(_PKG / "models" / "ch_PP-OCRv4_rec_infer.onnx"),
     "rec_img_shape": [3, 48, 320],
     "rec_batch_num": 6,
-    "intra_op_num_threads": 2,
+    "intra_op_num_threads": 1,
     "inter_op_num_threads": 1,
     "use_cuda": False,
     "use_dml": False,
@@ -170,8 +169,18 @@ def trim_title_rule(line):
 class ChineseOCR:
     def __init__(self):
         self.rec = TextRecognizer(_REC_CFG)
+        opts = SessionOptions()
+        opts.intra_op_num_threads = 1
+        opts.inter_op_num_threads = 1
+        opts.graph_optimization_level = GraphOptimizationLevel.ORT_ENABLE_ALL
+        opts.execution_mode = ExecutionMode.ORT_PARALLEL
+        opts.enable_mem_pattern = False
+        self.rec.session.session = InferenceSession(
+            _REC_CFG["model_path"], sess_options=opts,
+            providers=["CPUExecutionProvider"],
+        )
         cpu = os.cpu_count() or 4
-        self._workers = max(1, min(cpu // 2, 6))
+        self._workers = max(2, cpu)
         self._pool = ThreadPoolExecutor(max_workers=self._workers)
         dummy = np.zeros((48, 200, 3), dtype=np.uint8)
         self.rec([dummy, dummy])
