@@ -67,9 +67,6 @@ let toastTimer = null;
 let settingsTimer = null;
 let mappingTimer = null;
 let scaleTimer = null;
-let healthTimer = null;
-let healthInited = false;
-let windowTimer = null;
 let uptimeTimer = null;
 const startMs = Date.now ();
 
@@ -156,7 +153,7 @@ function tick () {
   uptime.value = h > 0 ? `${h}:${pad (m)}:${pad (ss)}` : `${pad (m)}:${pad (ss)}`;
 }
 
-async function pollHealth () {
+async function fetchHealth () {
   try {
     const d = await invoke ('backend:health');
     if (d && d.status === 'ok') {
@@ -169,11 +166,6 @@ async function pollHealth () {
       ocrStatusText.value = '运行中';
       ocrStatusColor.value = 'var(--teal)';
       mappingCount.value = (d.mappings || 0) + ' 条';
-      if (!healthInited) {
-        healthInited = true;
-        clearInterval (healthTimer);
-        healthTimer = setInterval (pollHealth, 5000);
-      }
       if (!mappingsLoaded.value) { mappingsLoaded.value = true; loadMappings (); }
     } else {
       ocrOk.value = false;
@@ -189,14 +181,29 @@ async function pollHealth () {
   }
 }
 
-async function pollWindow () {
+function onOcrStatus (data) {
+  if (data.ok && !ocrOk.value) fetchHealth ();
+  else if (!data.ok) {
+    ocrOk.value = false;
+    setRune ('ocr', 'pending', '唤醒中…', 'var(--ink-faint)');
+    verDotBad.value = true;
+    ocrState.value = 'bad';
+    ocrStatusText.value = '未运行';
+    ocrStatusColor.value = 'var(--danger)';
+  }
+}
+
+function onGameStatus (data) {
+  if (data.found) { gameOk.value = true; setRune ('game', 'ok', '已检测到', 'var(--teal)'); }
+  else { gameOk.value = false; setRune ('game', 'pending', '等待游戏…', 'var(--ink-faint)'); }
+}
+
+async function fetchGameState () {
   try {
     const d = await invoke ('backend:window');
-    if (d && d.found) { gameOk.value = true; setRune ('game', 'ok', '已检测到', 'var(--teal)'); }
-    else { gameOk.value = false; setRune ('game', 'pending', '等待游戏…', 'var(--ink-faint)'); }
+    onGameStatus ({ found: !!(d && d.found) });
   } catch (e) {
-    gameOk.value = false;
-    setRune ('game', 'pending', '等待游戏…', 'var(--ink-faint)');
+    onGameStatus ({ found: false });
   }
 }
 
@@ -299,13 +306,13 @@ async function removeMapping (idx) {
 
 onMounted (() => {
   window.electron.on ('navigate', (p) => { if (p) showPane (p); });
+  window.electron.on ('ocr:status', onOcrStatus);
+  window.electron.on ('game:status', onGameStatus);
   document.addEventListener ('keydown', onKeyDown);
   document.addEventListener ('mousedown', onMouseDown);
   uptimeTimer = setInterval (tick, 1000);
-  pollHealth ();
-  healthTimer = setInterval (pollHealth, 1200);
-  pollWindow ();
-  windowTimer = setInterval (pollWindow, 2000);
+  fetchHealth ();
+  fetchGameState ();
   loadSettings ();
 });
 
@@ -313,8 +320,6 @@ onBeforeUnmount (() => {
   document.removeEventListener ('keydown', onKeyDown);
   document.removeEventListener ('mousedown', onMouseDown);
   clearInterval (uptimeTimer);
-  clearInterval (healthTimer);
-  clearInterval (windowTimer);
 });
 </script>
 

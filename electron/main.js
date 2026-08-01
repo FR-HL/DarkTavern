@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE } from './config.js';
 import { settings, saveSettings } from './settings.js';
-import { startTracking, stopTracking, getCanScan } from './overlay.js';
+import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
 import { wire } from './scan.js';
 import * as backend from './backend.js';
 
@@ -12,7 +12,7 @@ const { app, BrowserWindow, ipcMain } = electron;
 let debugging = false;
 let homeWindow = null;
 let tray = null;
-let trayTimer = null;
+let healthTimer = null;
 let pendingPane = null;
 let previousScanAccelerator = null;
 let ocrStatus = false;
@@ -43,7 +43,7 @@ app.on ('second-instance', () => {});
 
 app.on ('before-quit', () => {
   globalShortcut.unregisterAll ();
-  if (trayTimer) { clearInterval (trayTimer); trayTimer = null; }
+  if (healthTimer) { clearInterval (healthTimer); healthTimer = null; }
   backend.stopService ();
   stopTracking ();
 });
@@ -54,7 +54,12 @@ app.on ('ready', async () => {
   tray = new Tray (join (ROOT, 'assets/images/Icon-81x89.png'));
   tray.setToolTip ('DarkTavern');
   refreshTrayMenu ();
-  trayTimer = setInterval (refreshTrayMenu, 3000);
+  healthTimer = setInterval (refreshTrayMenu, 10000);
+
+  setOnStateChange ((gameOk) => {
+    refreshTrayMenu ();
+    if (homeWindow) homeWindow.webContents.send ('game:status', { found: gameOk });
+  });
 
   let overlay = new BrowserWindow ({
     backgroundColor: '#00000000',
@@ -205,6 +210,8 @@ function openHomeWindow () {
 
   homeWindow.webContents.on ('did-finish-load', () => {
     if (pendingPane) { homeWindow.webContents.send ('navigate', pendingPane); pendingPane = null; }
+    homeWindow.webContents.send ('game:status', { found: getCanScan () });
+    homeWindow.webContents.send ('ocr:status', { ok: ocrStatus });
   });
 
   homeWindow.loadFile (join (ROOT, 'dist', 'home', 'index.html'));
@@ -217,6 +224,8 @@ async function refreshTrayMenu () {
 
   try { ocrStatus = await backend.health (); } catch (e) { ocrStatus = false; }
   const gameOk = getCanScan ();
+
+  if (homeWindow) homeWindow.webContents.send ('ocr:status', { ok: ocrStatus });
 
   const dot = (ok) => ok ? '●' : '○';
 
