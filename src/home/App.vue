@@ -47,6 +47,14 @@ const toastShow = ref (false);
 const isListening = ref (false);
 const newKeybind = ref (null);
 
+const ALIGNMENTS = [
+  { key: 'attached', label: '贴附物品' },
+  { key: 'top-left', label: '左上角' },
+  { key: 'top-right', label: '右上角' },
+  { key: 'bottom-left', label: '左下角' },
+  { key: 'bottom-right', label: '右下角' },
+];
+
 const allMappings = reactive ({ items: {}, attributes: {}, keywords: {}, custom: {} });
 const currentTab = ref ('items');
 const search = ref ('');
@@ -245,6 +253,8 @@ async function saveKeybind () {
 }
 async function saveMode () { const r = await invoke ('settings:save', { default_mode: scanMode.value }); if (r.success) showToast ('已保存'); }
 async function saveAlignment () { const r = await invoke ('settings:save', { alignment: alignment.value }); if (r.success) showToast ('已保存 · 下次扫描生效'); }
+function setMode (m) { scanMode.value = m; saveMode (); }
+function setAlignment (a) { alignment.value = a; saveAlignment (); }
 function onScaleInput (e) {
   scale.value = parseFloat (e.target.value);
   clearTimeout (scaleTimer);
@@ -375,40 +385,117 @@ onBeforeUnmount (() => {
 
       <div class="pane" :class="{ active: pane === 'settings' }">
         <div class="pane-title">设置</div>
-        <div class="pane-desc">账号凭证、触发键、模式与悬浮窗外观。</div>
-        <div class="group">
-          <div class="group-h">DarkerDB API Key</div>
-          <div class="row"><label>API Key</label><div class="grow" style="display:flex; gap:8px;"><input :type="apiKeyVisible ? 'text' : 'password'" v-model="apiKey" placeholder="输入你的 DarkerDB API Key"><button class="btn ghost" @click="toggleApiKeyVisibility">{{ apiKeyVisible ? '隐藏' : '显示' }}</button></div></div>
-          <div class="row"><label></label><span class="hint">在 darkerdb.com 注册获取，填入后查价更快、数据更完整。</span></div>
-          <div class="row"><label></label><button class="btn primary" @click="saveApiKey">保存 API Key</button></div>
+        <div class="pane-desc">账号凭证、扫描触发与悬浮窗外观。</div>
+
+        <div class="set-section">
+          <div class="set-head"><span class="set-rune"></span>账号凭证<span class="set-rule"></span></div>
+          <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">DarkerDB API Key</div>
+                <div class="srow-d">在 darkerdb.com 注册获取 · 填入后查价更快、数据更完整</div>
+              </div>
+              <div class="srow-ctl key-ctl">
+                <div class="key-field">
+                  <svg class="field-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M10.85 12.15 19 4"/><path d="m18 5 2 2"/><path d="m15 8 2 2"/></svg>
+                  <input :type="apiKeyVisible ? 'text' : 'password'" v-model="apiKey" placeholder="输入你的 API Key">
+                  <button class="eye-btn" type="button" @click="toggleApiKeyVisibility">{{ apiKeyVisible ? '隐藏' : '显示' }}</button>
+                </div>
+                <button class="btn primary" @click="saveApiKey">保存</button>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="group">
-          <div class="group-h">扫描触发键</div>
-          <div class="row"><label>当前按键</label><span class="kbd">{{ scanKey }}</span></div>
-          <div class="row"><label>修改按键</label><button class="keybind-btn" :class="{ listening: isListening }" @click="startListening">{{ keybindLabel }}</button></div>
-          <div class="row"><label></label><span class="hint">支持键盘键（F1–F12、Ctrl 组合键等）与鼠标侧键（XButton1 / XButton2）。</span></div>
-          <div class="row"><label></label><button class="btn primary" @click="saveKeybind">保存按键</button></div>
+
+        <div class="set-section">
+          <div class="set-head"><span class="set-rune"></span>扫描<span class="set-rule"></span></div>
+          <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">触发键</div>
+                <div class="srow-d">支持键盘键（F1–F12、Ctrl 组合键）与鼠标侧键</div>
+              </div>
+              <div class="srow-ctl">
+                <span class="kbd">{{ scanKey }}</span>
+                <button class="keybind-btn" :class="{ listening: isListening }" @click="startListening">{{ keybindLabel }}</button>
+                <button class="btn primary" @click="saveKeybind">保存</button>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">扫描模式</div>
+                <div class="srow-d">手动需悬停后按键，自动则悬停即查</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="seg">
+                  <button class="seg-opt" :class="{ on: scanMode === 'manual' }" @click="setMode('manual')">
+                    <span class="seg-t">手动</span><span class="seg-d">按键触发</span>
+                  </button>
+                  <button class="seg-opt" :class="{ on: scanMode === 'automatic' }" @click="setMode('automatic')">
+                    <span class="seg-t">自动</span><span class="seg-d">悬停触发</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="group">
-          <div class="group-h">扫描模式</div>
-          <div class="row"><label>模式</label><select class="inline-field" v-model="scanMode" @change="saveMode"><option value="manual">手动 · 按键触发</option><option value="automatic">自动 · 悬停触发</option></select></div>
-          <div class="row"><label></label><span class="hint">手动：悬停物品后按扫描键查价。自动：悬停即查。</span></div>
+
+        <div class="set-section">
+          <div class="set-head"><span class="set-rune"></span>悬浮窗<span class="set-rule"></span></div>
+          <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">弹出位置</div>
+                <div class="srow-d">更改后于下一次扫描生效</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="align-strip">
+                  <button v-for="a in ALIGNMENTS" :key="a.key" class="align-opt" :class="{ on: alignment === a.key }" :title="a.label" @click="setAlignment(a.key)">
+                    <span class="align-mini"><span class="align-dot" :data-pos="a.key"></span></span>
+                    <span class="align-label">{{ a.label }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">缩放</div>
+                <div class="srow-d">调整悬浮窗整体大小（0.6× – 2.0×）</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="scale-ctl">
+                  <input type="range" min="0.6" max="2" step="0.1" :value="scale" @input="onScaleInput">
+                  <span class="range-val">{{ scaleVal }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="group">
-          <div class="group-h">悬浮窗外观</div>
-          <div class="row"><label>弹出位置</label><select class="inline-field" v-model="alignment" @change="saveAlignment"><option value="attached">贴附物品旁</option><option value="top-left">左上角</option><option value="top-right">右上角</option><option value="bottom-left">左下角</option><option value="bottom-right">右下角</option></select></div>
-          <div class="row"><label></label><span class="hint">更改后于下一次扫描生效。</span></div>
-          <div class="row"><label>缩放</label><div class="range-wrap"><input type="range" min="0.6" max="2" step="0.1" :value="scale" @input="onScaleInput"><span class="range-val">{{ scaleVal }}</span></div></div>
+
+        <div class="set-section">
+          <div class="set-head"><span class="set-rune"></span>系统<span class="set-rule"></span></div>
+          <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">开机启动</div>
+                <div class="srow-d">登录系统时自动在后台运行 DarkTavern</div>
+              </div>
+              <div class="srow-ctl">
+                <label class="switch"><input type="checkbox" v-model="launchOnStartup" @change="saveLaunch"><span class="track"></span></label>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">OCR 侍者</div>
+                <div class="srow-d">汉化数据 <b>{{ mappingCount }}</b></div>
+              </div>
+              <div class="srow-ctl">
+                <span class="ocr-pill" :class="ocrState">{{ ocrStatusText }}</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="group">
-          <div class="group-h">启动</div>
-          <div class="row"><label>开机启动</label><div class="grow" style="display:flex; align-items:center; justify-content:space-between;"><span class="hint">登录系统时自动在后台运行 DarkTavern。</span><label class="switch"><input type="checkbox" v-model="launchOnStartup" @change="saveLaunch"><span class="track"></span></label></div></div>
-        </div>
-        <div class="group">
-          <div class="group-h">OCR 服务</div>
-          <div class="row"><label>状态</label><span class="ocr-line"><span class="ocr-dot" :class="ocrState"></span><span :style="{ color: ocrStatusColor }">{{ ocrStatusText }}</span></span></div>
-          <div class="row"><label>汉化数据</label><span style="color:var(--ink-dim)">{{ mappingCount }}</span></div>
-        </div>
+
         <div class="status" :class="settingsStatus.type">{{ settingsStatus.text }}</div>
       </div>
 
