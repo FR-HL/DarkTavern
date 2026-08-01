@@ -135,54 +135,56 @@ function attrToField (displayName) {
 }
 
 async function queryMarketLive (data, scanId, send) {
+  let price = null;
   try {
     const itemId = toCanonicalItemId (data.item?.id || data.item?.item_id || '');
     const rarity = data.item?.rarity;
     const secondary = data.item?.secondary || [];
 
-    if (!itemId || itemId === 'id.item.') return;
+    if (itemId && itemId !== 'id.item.') {
+      const headers = { 'User-Agent': 'DarkTavern/1.0' };
+      if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
 
-    const headers = { 'User-Agent': 'DarkTavern/1.0' };
-    if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+      const sorted = [...secondary]
+        .filter (a => a.grade && a.value != null)
+        .sort ((a, b) => (GRADE_ORDER[a.grade] ?? 9) - (GRADE_ORDER[b.grade] ?? 9));
 
-    const sorted = [...secondary]
-      .filter (a => a.grade && a.value != null)
-      .sort ((a, b) => (GRADE_ORDER[a.grade] ?? 9) - (GRADE_ORDER[b.grade] ?? 9));
+      const gradeA = sorted.filter (a => a.grade === 'S' || a.grade === 'A');
+      const gradeB = sorted.filter (a => a.grade === 'B');
 
-    const gradeA = sorted.filter (a => a.grade === 'S' || a.grade === 'A');
-    const gradeB = sorted.filter (a => a.grade === 'B');
+      const attempts = [sorted, gradeA, gradeB, []];
 
-    const attempts = [sorted, gradeA, gradeB, []];
+      for (const attrs of attempts) {
+        const params = new URLSearchParams ();
+        params.set ('item_id', itemId);
+        if (rarity) params.set ('rarity', rarity.toLowerCase ());
+        params.set ('has_sold', 'false');
+        params.set ('has_expired', 'false');
+        params.set ('has_cancelled', 'false');
+        params.set ('sort', 'price:asc');
+        params.set ('limit', '1');
 
-    for (const attrs of attempts) {
-      const params = new URLSearchParams ();
-      params.set ('item_id', itemId);
-      if (rarity) params.set ('rarity', rarity.toLowerCase ());
-      params.set ('has_sold', 'false');
-      params.set ('has_expired', 'false');
-      params.set ('has_cancelled', 'false');
-      params.set ('sort', 'price:asc');
-      params.set ('limit', '1');
+        for (const attr of attrs) {
+          const field = attrToField (attr.display);
+          params.set (`secondary[${field}]`, `>=${attr.value}`);
+        }
 
-      for (const attr of attrs) {
-        const field = attrToField (attr.display);
-        params.set (`secondary[${field}]`, `>=${attr.value}`);
+        const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });
+        if (!res.ok) continue;
+
+        const body = await res.json ();
+        const listings = body.body;
+        if (Array.isArray (listings) && listings.length > 0) {
+          price = listings[0].price;
+          logger.info (`[MarketLive] price=${price} (${attrs.length} attrs filtered)`);
+          break;
+        }
       }
 
-      const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });
-      if (!res.ok) continue;
-
-      const body = await res.json ();
-      const listings = body.body;
-      if (Array.isArray (listings) && listings.length > 0) {
-        logger.info (`[MarketLive] price=${listings[0].price} (${attrs.length} attrs filtered)`);
-        send ('hover:live-price', { scanId, price: listings[0].price });
-        return;
-      }
+      if (price === null) logger.info (`[MarketLive] no active listings`);
     }
-
-    logger.info (`[MarketLive] no active listings`);
   } catch (e) {
     logger.error (`[MarketLive] ${e.message}`);
   }
+  send ('hover:live-price', { scanId, price });
 }

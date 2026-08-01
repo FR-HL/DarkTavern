@@ -46,6 +46,7 @@ const currentScanId = ref(0);
 
 // Track loading state for spinner
 const isLoading = ref(false);
+const livePriceLoading = ref(false);
 const errorMessage = ref(null);
 
 // Window state for gating tooltip scans
@@ -363,6 +364,7 @@ onMounted(() => {
     item.value.prices.density = null;
     item.value.prices.vendor = null;
     item.value.prices.live = null;
+    livePriceLoading.value = true;
     item.value.demand = null;
     item.value.quality = null;
     item.value.adventurePoints = null;
@@ -478,6 +480,7 @@ onMounted(() => {
   electron.on("hover:live-price", (data) => {
     if (data.scanId !== currentScanId.value) return;
     item.value.prices.live = data.price ?? null;
+    livePriceLoading.value = false;
   });
 
   electron.on("hover:error", async (data) => {
@@ -749,15 +752,18 @@ function getGradeColor(grade) {
               </div> -->
               <div class="flex items-center justify-center">
                 <span>市场现价:</span>
-                <span class="ml-2" :class="item.prices.live !== null ? 'gold' : 'price-empty'">{{ item.prices.live !== null ? item.prices.live : '暂无' }}</span>
+                <img v-if="livePriceLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
+                <span v-else class="ml-2" :class="item.prices.live !== null ? 'gold' : 'price-empty'">{{ item.prices.live !== null ? item.prices.live : '暂无' }}</span>
               </div>
               <div class="flex items-center justify-center">
                 <span>商人回收:</span>
-                <span class="ml-2" :class="item.prices.vendor !== null ? 'gold' : 'price-empty'">{{ item.prices.vendor !== null ? item.prices.vendor : '暂无' }}</span>
+                <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
+                <span v-else class="ml-2" :class="item.prices.vendor !== null ? 'gold' : 'price-empty'">{{ item.prices.vendor !== null ? item.prices.vendor : '暂无' }}</span>
               </div>
               <div class="flex items-center justify-center">
                 <span>每格价值:</span>
-                <span class="ml-2" :class="item.prices.density !== null ? 'gold' : 'price-empty'">{{ item.prices.density !== null ? item.prices.density : '暂无' }}</span>
+                <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
+                <span v-else class="ml-2" :class="item.prices.density !== null ? 'gold' : 'price-empty'">{{ item.prices.density !== null ? item.prices.density : '暂无' }}</span>
               </div>
             </div>
 
@@ -833,5 +839,11 @@ function getGradeColor(grade) {
   @apply text-lg;
   color: var(--dnd-dust, #c8b89a);
   opacity: 0.55;
+}
+
+.price-spinner {
+  width: 18px;
+  height: 18px;
+  animation: spin 1s linear infinite;
 }
 </style>
