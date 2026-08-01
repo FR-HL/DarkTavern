@@ -52,7 +52,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from capture import capture_game_window, find_game_window, get_window_rect, get_monitor_info
 from detect import TooltipDetector
-from ocr_engine import ChineseOCR
+from ocr_engine_rapid import ChineseOCR
 from translator import Translator
 
 # --- Configuration ---
@@ -75,15 +75,7 @@ MAPPING_DIR = os.environ.get(
 # Server port
 PORT = int(os.environ.get("DARKTAVERN_OCR_PORT", "19528"))
 
-# PaddleOCR v5 recognizer (per-line, no detection model)
-REC_MODEL_PATH = os.environ.get(
-    "DARKTAVERN_REC_MODEL",
-    os.path.join(os.path.dirname(__file__), "..", "..", "models", "paddle", "ch", "rec.onnx"),
-)
-REC_DICT_PATH = os.environ.get(
-    "DARKTAVERN_REC_DICT",
-    os.path.join(os.path.dirname(__file__), "..", "..", "models", "paddle", "ch", "dict.txt"),
-)
+# RapidOCR (PP-OCRv4) ships its own detection + recognition models; no external model paths needed.
 
 # --- Logging ---
 
@@ -150,8 +142,8 @@ def initialize():
     logger.info(f"Loading tooltip detection model: {model_path}")
     detector = TooltipDetector(model_path)
 
-    logger.info("Initializing OCR recognizer (PaddleOCR v5, no det)...")
-    ocr = ChineseOCR(REC_MODEL_PATH, REC_DICT_PATH)
+    logger.info("Initializing OCR recognizer (RapidOCR / PP-OCRv4)...")
+    ocr = ChineseOCR()
 
     logger.info(f"Loading translation mappings from: {MAPPING_DIR}")
     translator = Translator(MAPPING_DIR)
@@ -164,7 +156,7 @@ def initialize():
     try:
         import numpy as np
         dummy = np.zeros((48, 320, 3), dtype=np.uint8)
-        ocr.read_line(dummy)
+        ocr.read(dummy)
         logger.info("OCR warmup complete - ready for fast inference")
     except Exception as e:
         logger.warning(f"OCR warmup failed (non-critical): {e}")
