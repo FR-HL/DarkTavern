@@ -126,8 +126,8 @@ det 仍在，比 A 慢，但比当前快一截。改动：仅构造参数一行�
 
 | 档 | 稳态 ocr+translate (ms) | 蓝字完整? | 评分显示? | 备注 |
 |---|---|---|---|---|
-| v1fix | _待填_ | _待填_ | _待填_ | 旧引擎改切点（默认先测） |
-| hybrid | _待填_ | _待填_ | _待填_ | 旧壳 + 动态宽 rec |
+| v1fix | **197** | ❌ 蓝字全乱码（`+3活力`→`t3Vigor`、`+1灵巧`→`[t1n`、`护甲值66`→`[Peee`） | ❌ | 旧 rec 模型对蓝字能力不足，非切点问题，**不可用** |
+| hybrid | **1152**（首次含 ONNX warmup；稳态待测） | ✅ 完美（`+3 Vigor`/`+5 Additional Memory Capacity`/`+3.2% Undead Damage Reduction` 全对） | ✅ | rec warmup 已修（构造时喂 dummy batch 触发 ONNX 编译），稳态应显著回落 |
 | rapid | _待填_ | _待填_ | _待填_ | 整图 det+rec（基线，已知准/慢） |
 
 ## 9. 决策记录

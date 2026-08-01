@@ -56,7 +56,7 @@ from detect import TooltipDetector
 #   v1fix  -> old per-line Paddle rec with valley-point slicing (fastest, blue lines may still corrupt)
 #   hybrid -> old numpy segmentation + RapidOCR dynamic-width rec (fast + intact blue lines)
 #   rapid  -> RapidOCR full-image det+rec (accurate, slow)
-_OCR_ENGINE = os.environ.get("DARKTAVERN_OCR_ENGINE", "v1fix").strip().lower()
+_OCR_ENGINE = os.environ.get("DARKTAVERN_OCR_ENGINE", "hybrid").strip().lower()
 if _OCR_ENGINE == "hybrid":
     from ocr_engine_hybrid import ChineseOCR
 elif _OCR_ENGINE == "rapid":

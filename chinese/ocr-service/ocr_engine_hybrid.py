@@ -12,6 +12,8 @@ Result target: speed ~ old engine (no det/cls), quality = intact blue lines.
 """
 
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+import os
 
 import cv2
 import numpy as np
@@ -167,9 +169,16 @@ def trim_title_rule(line):
 
 class ChineseOCR:
     def __init__(self):
-        # Only the recognizer is loaded — no det, no cls → fast startup like
-        # the old engine.
         self.rec = TextRecognizer(_REC_CFG)
+        cpu = os.cpu_count() or 4
+        self._workers = max(1, min(cpu // 2, 6))
+        self._pool = ThreadPoolExecutor(max_workers=self._workers)
+        dummy = np.zeros((48, 200, 3), dtype=np.uint8)
+        self.rec([dummy, dummy])
+
+    def _rec_one(self, crop):
+        res, _ = self.rec(crop)
+        return res[0][0] if res else ""
 
     def read(self, region):
         if region is None or region.size == 0:
@@ -203,7 +212,8 @@ class ChineseOCR:
         if not line_crops:
             return ""
 
-        # Batch recognize; TextRecognizer returns results aligned to input order.
-        rec_res, _ = self.rec(line_crops)
-        texts = [r[0] for r in rec_res if r and r[0]]
-        return "\n".join(texts)
+        if len(line_crops) == 1:
+            texts = [self._rec_one(line_crops[0])]
+        else:
+            texts = list(self._pool.map(self._rec_one, line_crops))
+        return "\n".join(t for t in texts if t)
