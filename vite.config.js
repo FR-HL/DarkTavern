@@ -6,8 +6,6 @@ import vue from '@vitejs/plugin-vue';
 const __filename = fileURLToPath (import.meta.url);
 const __dirname = dirname (__filename);
 
-console.log (resolve (__dirname, '../web/src'));
-
 export default defineConfig ({
   plugins: [ vue () ],
 
@@ -30,7 +28,6 @@ export default defineConfig ({
     alias: {
       '@': resolve (__dirname, 'ui'),
       '@assets': resolve (__dirname, 'assets'),
-      '@web': resolve (__dirname, '../web/src'),
     }
   },
 

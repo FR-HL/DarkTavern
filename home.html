@@ -409,7 +409,6 @@
 
   <script>
     const { ipcRenderer, clipboard } = require('electron');
-    const OCR = 'http://127.0.0.1:19528';
     const $ = (s) => document.querySelector(s);
     let ocrOk = false, gameOk = false;
 
@@ -459,7 +458,7 @@
     let healthTimer = null;
     async function pollHealth () {
       try {
-        const r = await fetch(OCR + '/health'); const d = await r.json();
+        const d = await ipcRenderer.invoke('backend:health');
         if (d && d.status === 'ok') {
           ocrOk = true;
           setRune('stat-ocr', 'ok', '已就绪', 'var(--gold)');
@@ -482,7 +481,7 @@
 
     async function pollWindow () {
       try {
-        const r = await fetch(OCR + '/window'); const d = await r.json();
+        const d = await ipcRenderer.invoke('backend:window');
         if (d && d.found) { gameOk = true; setRune('stat-game', 'ok', '已检测到', 'var(--teal)'); }
         else { gameOk = false; setRune('stat-game', 'pending', '等待游戏…', 'var(--ink-faint)'); }
       } catch (e) { gameOk = false; setRune('stat-game', 'pending', '等待游戏…', 'var(--ink-faint)'); }
@@ -554,7 +553,7 @@
     let allMappings = { items: {}, attributes: {}, keywords: {}, custom: {} };
     let currentTab = 'custom', editingRow = null, currentEntries = [], mappingsLoaded = false;
     async function loadMappings () {
-      try { const r = await fetch(OCR + '/mapping/list'); allMappings = await r.json(); updateCounts(); renderTable(); }
+      try { allMappings = await ipcRenderer.invoke('chinese:mappings'); updateCounts(); renderTable(); }
       catch (e) { showMappingStatus('OCR 服务未运行，请先启动应用。', 'error'); }
     }
     function updateCounts () {
@@ -589,8 +588,8 @@
       const nc = ci.value.trim(), ne = ei.value.trim();
       if (!nc || !ne) { showMappingStatus('中文和英文都不能为空', 'error'); return; }
       try {
-        if (nc !== entry.cn) await fetch(OCR + '/mapping/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chinese: entry.cn }) });
-        await fetch(OCR + '/mapping/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chinese: nc, english: ne }) });
+        if (nc !== entry.cn) await ipcRenderer.invoke('chinese:remove-mapping', { chinese: entry.cn });
+        await ipcRenderer.invoke('chinese:add-mapping', { chinese: nc, english: ne });
         showToast('已保存'); editingRow = null; await loadMappings();
       } catch (e) { showMappingStatus('保存失败：' + e.message, 'error'); }
     }
@@ -598,7 +597,7 @@
       const cn = $('#cn-input').value.trim(), en = $('#en-input').value.trim();
       if (!cn || !en) { showMappingStatus('请填写中文和英文', 'error'); return; }
       try {
-        await fetch(OCR + '/mapping/add', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chinese: cn, english: en }) });
+        await ipcRenderer.invoke('chinese:add-mapping', { chinese: cn, english: en });
         $('#cn-input').value = ''; $('#en-input').value = '';
         showMappingStatus('已添加：' + cn + ' → ' + en, 'success'); await loadMappings(); switchTab('custom');
       } catch (e) { showMappingStatus('添加失败：' + e.message, 'error'); }
@@ -606,7 +605,7 @@
     async function removeMapping (idx) {
       const entry = currentEntries[idx]; if (!entry) return;
       if (!confirm('确定删除 “' + entry.cn + '” 吗？')) return;
-      try { await fetch(OCR + '/mapping/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chinese: entry.cn }) }); showToast('已删除'); await loadMappings(); }
+      try { await ipcRenderer.invoke('chinese:remove-mapping', { chinese: entry.cn }); showToast('已删除'); await loadMappings(); }
       catch (e) { showMappingStatus('删除失败：' + e.message, 'error'); }
     }
     loadMappings();

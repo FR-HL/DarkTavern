@@ -94,6 +94,10 @@ export async function health () {
   return data?.status === 'ok';
 }
 
+export async function healthRaw () {
+  return await get ('/health');
+}
+
 export async function getWindow () {
   const data = await get ('/window');
   if (!data || !data.found) return null;

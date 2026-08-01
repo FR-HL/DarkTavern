@@ -78,6 +78,8 @@ export function wire (overlay) {
     scanning = false;
   });
 
+  ipcMain.handle ('backend:health', () => backend.healthRaw ());
+  ipcMain.handle ('backend:window', () => backend.getWindow ());
   ipcMain.handle ('chinese:status', async () => {
     return { enabled: true, available: await backend.health () };
   });
