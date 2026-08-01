@@ -54,7 +54,10 @@ app.on ('ready', async () => {
   tray = new Tray (join (ROOT, 'assets/images/Icon-81x89.png'));
   tray.setToolTip ('DarkTavern');
   refreshTrayMenu ();
-  healthTimer = setInterval (refreshTrayMenu, 10000);
+  healthTimer = setInterval (() => {
+    refreshTrayMenu ();
+    if (ocrStatus && healthTimer) { clearInterval (healthTimer); healthTimer = null; }
+  }, 3000);
 
   setOnStateChange ((gameOk) => {
     refreshTrayMenu ();

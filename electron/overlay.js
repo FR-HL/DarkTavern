@@ -41,6 +41,20 @@ export function getCanScan () {
   return canScan;
 }
 
+export function resendState () {
+  if (!overlay || !canScan) return;
+  overlay.webContents.send ('game:state', { canScan: true, visible: true, focused: true });
+  if (prevBounds) {
+    const monitor = getMonitorInfo (prevBounds);
+    overlay.webContents.send ('game:bounds', {
+      ...prevBounds,
+      x: prevBounds.x - monitor.x,
+      y: prevBounds.y - monitor.y,
+      scale: monitor.scale,
+    });
+  }
+}
+
 export function setOnStateChange (cb) {
   onStateChange = cb;
 }

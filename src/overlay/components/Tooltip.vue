@@ -221,7 +221,7 @@ const tooltipPosition = computed(() => {
   return { left, top };
 });
 
-const scan = () => {
+const scan = (source = 'auto') => {
   if (props.mode === modes.disabled) {
     return;
   }
@@ -242,7 +242,7 @@ const scan = () => {
   };
 
   logger.debug(`Checking for tooltips (scan #${scanId})`);
-  electron.send("scan", { scanId });
+  electron.send("scan", { scanId, source });
 };
 
 onMouseStill(() => {
@@ -261,16 +261,17 @@ onMouseWakeup(() => {
   isTooltipActive.value = false;
 }, MOUSE_WAKEUP_DISTANCE);
 
-electron.on("scan:start", () => {
-  isLoading.value = true;
+electron.on("scan:start", (data) => {
   errorMessage.value = null;
   isTooltipActive.value = false;
 
-  // Show spinner at current mouse position
-  markerTop.value = currentMousePos.value.y;
-  markerLeft.value = currentMousePos.value.x;
-  markerWidth.value = 1;
-  markerHeight.value = 1;
+  if (data?.source === 'manual') {
+    isLoading.value = true;
+    markerTop.value = currentMousePos.value.y;
+    markerLeft.value = currentMousePos.value.x;
+    markerWidth.value = 1;
+    markerHeight.value = 1;
+  }
 });
 
 electron.on("clear", (data) => {
@@ -295,7 +296,7 @@ electron.on("manual:scan", () => {
   const scanId = ++currentScanId.value;
   scanStartMousePos.value = { x: currentMousePos.value.x, y: currentMousePos.value.y };
   logger.debug(`Manual scan triggered (scan #${scanId})`);
-  electron.send("scan", { scanId });
+  electron.send("scan", { scanId, source: 'manual' });
 });
 
 // Mouse button scanning support

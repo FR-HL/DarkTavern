@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { logger } from './logger.js';
 import { settings, saveSettings } from './settings.js';
-import { getCanScan } from './overlay.js';
+import { getCanScan, resendState } from './overlay.js';
 import * as backend from './backend.js';
 
 const DARKERDB_URL = 'https://api.darkerdb.com/v1/internal/grimvault/analyze';
@@ -16,6 +16,7 @@ export function wire (overlay) {
   ipcMain.on ('ready', () => {
     logger.info ('Frontend ready');
     send ('settings', settings);
+    resendState ();
   });
 
   ipcMain.on ('log', (e, data) => {
@@ -24,15 +25,18 @@ export function wire (overlay) {
 
   ipcMain.on ('scan', async (e, data) => {
     const scanId = data?.scanId || 0;
+    const source = data?.source || 'auto';
     if (scanning) return;
     scanning = true;
 
-    overlay.setAlwaysOnTop (true, 'screen-saver');
-    overlay.moveTop ();
-    send ('scan:start');
+    if (source === 'manual') {
+      overlay.setAlwaysOnTop (true, 'screen-saver');
+      overlay.moveTop ();
+      send ('scan:start', { scanId, source });
+    }
 
     if (!getCanScan ()) {
-      send ('clear', { scanId });
+      if (source === 'manual') send ('clear', { scanId });
       send ('scan:finish');
       scanning = false;
       return;
@@ -46,7 +50,7 @@ export function wire (overlay) {
     }
 
     if (!tooltip) {
-      send ('clear', { scanId });
+      if (source === 'manual') send ('clear', { scanId });
       send ('scan:finish');
       scanning = false;
       return;
