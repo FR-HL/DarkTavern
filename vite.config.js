@@ -9,24 +9,24 @@ const __dirname = dirname (__filename);
 export default defineConfig ({
   plugins: [ vue () ],
 
-  // Load files relative to index.html instead of relative to the local filesystem
   base: './',
 
-  root: resolve (__dirname, 'ui/overlay'),
+  root: resolve (__dirname, 'src'),
 
   build: {
     rollupOptions: {
       input: {
-        overlay: resolve (__dirname, 'ui/overlay/index.html')
+        home: resolve (__dirname, 'src/home/index.html'),
+        overlay: resolve (__dirname, 'src/overlay/index.html'),
       }
     },
-    outDir: 'dist',
-    emptyOutDir: true 
+    outDir: resolve (__dirname, 'dist'),
+    emptyOutDir: true
   },
 
   resolve: {
     alias: {
-      '@': resolve (__dirname, 'ui'),
+      '@': resolve (__dirname, 'src'),
       '@assets': resolve (__dirname, 'assets'),
     }
   },

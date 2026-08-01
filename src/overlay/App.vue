@@ -2,7 +2,7 @@
 import { onMounted, ref, watch } from "vue";
 import Tooltip from "./components/Tooltip.vue";
 import Popup from "./components/Popup.vue";
-import { modes } from "./lib/modes.js";
+import { modes } from "@/shared/lib/modes.js";
 
 const mode = ref(modes.automatic);
 const popup = ref(false);

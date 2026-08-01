@@ -1,7 +1,7 @@
 # Build output
 dist/
+release/
 build/
-ui/overlay/dist/
 
 # Dependencies
 node_modules/
@@ -18,7 +18,6 @@ chinese/_build_temp/
 *.spec
 
 # Native build
-src/native/.build/
 prebuild/
 
 # IDE & OS

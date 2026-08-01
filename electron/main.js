@@ -79,7 +79,7 @@ app.on ('ready', async () => {
   });
 
   overlay.webContents.setZoomFactor (1);
-  overlay.loadFile (join (ROOT, 'ui', 'overlay', 'dist', 'index.html'));
+  overlay.loadFile (join (ROOT, 'dist', 'overlay', 'index.html'));
 
   startTracking (overlay);
   wire (overlay);
@@ -214,7 +214,7 @@ function openHomeWindow () {
     if (pendingPane) { homeWindow.webContents.send ('navigate', pendingPane); pendingPane = null; }
   });
 
-  homeWindow.loadFile (join (ROOT, 'ui', 'home', 'dist', 'index.html'));
+  homeWindow.loadFile (join (ROOT, 'dist', 'home', 'index.html'));
   homeWindow.once ('ready-to-show', () => { homeWindow.show (); homeWindow.focus (); });
   homeWindow.on ('closed', () => { homeWindow = null; });
 }

@@ -1,5 +1,5 @@
-import '@/main.css';
-import '@/environment.js';
+import '@/shared/styles/overlay.css';
+import '@/shared/environment.js';
 
 import { createApp } from 'vue';
 import App from './App.vue';

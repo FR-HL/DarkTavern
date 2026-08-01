@@ -10,10 +10,10 @@ import {
   onMouseStill,
   onMouseWakeup,
   setMouseSleepPosition,
-} from "../lib/mouse.js";
+} from "@/shared/lib/mouse.js";
 
-import { modes } from "../lib/modes.js";
-import { interpolateColor } from "../lib/util.js";
+import { modes } from "@/shared/lib/modes.js";
+import { interpolateColor } from "@/shared/lib/util.js";
 
 const props = defineProps({
   mode: {

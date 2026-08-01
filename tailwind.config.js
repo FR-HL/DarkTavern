@@ -1,8 +1,8 @@
-import palette from "./ui/palette.js";
+import palette from "./src/shared/palette.js";
 import colors from 'tailwindcss/colors';
 
 export default {
-  content: ["./ui/**/*.{html,js,vue}"],
+  content: ["./src/**/*.{html,js,vue}"],
   theme: {
     colors: {
       transparent: "transparent",

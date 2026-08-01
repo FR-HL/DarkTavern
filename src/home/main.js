@@ -1,5 +1,5 @@
-import './style.css';
-import '@/environment.js';
+import '@/shared/styles/home.css';
+import '@/shared/environment.js';
 
 import { createApp } from 'vue';
 import App from './App.vue';

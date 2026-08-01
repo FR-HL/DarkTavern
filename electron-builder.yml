@@ -1,7 +1,7 @@
 appId: com.darktavern.app
 productName: DarkTavern
 directories:
-  output: dist
+  output: release
   buildResources: resources
 asar: true
 asarUnpack:
@@ -13,13 +13,15 @@ files:
   - node_modules/**/*
   - package.json
   - settings.ini
-  - src/**/*
-  - ui/**/*
+  - electron/**/*
+  - dist/**/*
   - chinese/**/*
+forceCodeSigning: false
 win:
   icon: assets/images/icon.ico
   target:
     - nsis
+  signtoolOptions: null
   extraFiles:
     - from: chinese/ocr-service/dist/ocr-service/
       to: resources/chinese/ocr-service/
