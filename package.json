@@ -6,9 +6,9 @@
   "type": "module",
   "main": "src/main.js",
   "scripts": {
-    "build": "vite build && electron-builder",
+    "build": "vite build && vite build --config vite.home.config.js && electron-builder",
     "build:dev": "cross-env NODE_ENV=development",
-    "dev": "cross-env NODE_ENV=development concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
+    "dev": "vite build --config vite.home.config.js && cross-env NODE_ENV=development concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
     "publish": "electron-builder --publish always"
   },
   "dependencies": {

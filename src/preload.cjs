@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require ('electron');
+const { contextBridge, ipcRenderer, clipboard, shell } = require ('electron');
 
 contextBridge.exposeInMainWorld ('logger', (() => {
   let bridge = {};
@@ -27,5 +27,9 @@ contextBridge.exposeInMainWorld ('electron', {
 
   once: (channel, func) => {
     ipcRenderer.once (channel, (event, ... args) => func (... args));
-  }
+  },
+
+  invoke: (channel, data) => ipcRenderer.invoke (channel, data),
+  clipboardWriteText: (text) => clipboard.writeText (text),
+  openExternal: (url) => shell.openExternal (url)
 });

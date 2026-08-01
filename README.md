@@ -103,8 +103,8 @@ DarkTavern/
 │   ├── capture.py          # 游戏窗口截图（mss）
 │   └── translator.py       # 中→英词条翻译
 ├── chinese/mapping/        # 中→英翻译词条表
-├── ui/overlay/             # 悬浮窗前端（Vue 3 + Tailwind，原版样式）
-├── home.html               # 启动主页
+├── ui/overlay/             # 悬浮窗前端（Vue 3 + Vite + Tailwind）
+├── ui/home/                # 启动主页（Vue 3 + Vite，与悬浮窗同栈）
 ├── assets/                 # 悬浮窗纹理 / 字体 / 图标
 ├── models/tooltip.onnx     # 提示框检测模型
 ├── models/paddle/ch/       # 中文识别模型（rec.onnx + dict.txt）
@@ -119,7 +119,8 @@ DarkTavern/
 | 组件 | 技术 |
 |------|------|
 | 桌面壳 | Electron 33 |
-| 悬浮窗 UI | Vue 3 + Tailwind CSS |
+| 悬浮窗 UI | Vue 3 + Vite + Tailwind CSS |
+| 启动主页 | Vue 3 + Vite（与悬浮窗同栈，contextIsolation + preload） |
 | 截图 | mss |
 | 提示框检测 | YOLO DNN（tooltip.onnx，OpenCV dnn） |
 | 中文 OCR | 像素行分割 + ONNX Runtime（PP-OCRv5 rec，行级并行，无检测模型） |

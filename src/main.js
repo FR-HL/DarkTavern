@@ -207,14 +207,14 @@ function openHomeWindow () {
   homeWindow = new BrowserWindow ({
     width: 1120, height: 740, minWidth: 980, minHeight: 660,
     show: false, title: 'DarkTavern', autoHideMenuBar: true,
-    webPreferences: { sandbox: false, nodeIntegration: true, contextIsolation: false },
+    webPreferences: { sandbox: false, preload: join (SOURCE, 'preload.cjs') },
   });
 
   homeWindow.webContents.on ('did-finish-load', () => {
     if (pendingPane) { homeWindow.webContents.send ('navigate', pendingPane); pendingPane = null; }
   });
 
-  homeWindow.loadFile (join (ROOT, 'home.html'));
+  homeWindow.loadFile (join (ROOT, 'ui', 'home', 'dist', 'index.html'));
   homeWindow.once ('ready-to-show', () => { homeWindow.show (); homeWindow.focus (); });
   homeWindow.on ('closed', () => { homeWindow = null; });
 }
