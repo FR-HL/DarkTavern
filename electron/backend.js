@@ -164,8 +164,8 @@ export async function getCharacter (id) {
   return await get (`/stash/character/${id}`);
 }
 
-export async function getCharacterTouch (id) {
-  return await get (`/stash/character/${id}/updated_at`);
+export function getServicePort () {
+  return OCR_PORT;
 }
 
 export async function clearCharacters () {

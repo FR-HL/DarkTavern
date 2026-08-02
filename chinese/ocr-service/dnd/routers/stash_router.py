@@ -1,6 +1,6 @@
 import logging
 import os
-from fastapi import APIRouter
+from fastapi import APIRouter, WebSocket
 from dnd.appdirs import get_characters_dir
 
 logger = logging.getLogger(__name__)
@@ -119,12 +119,10 @@ def get_character(character_id: str):
     }
 
 
-@router.get("/character/{character_id}/updated_at")
-def character_updated_at(character_id: str):
-    from dnd.service import get_stash_manager
-    mgr = get_stash_manager()
-    char_data = mgr.characters_cache.get(character_id)
-    return {"updated_at": char_data.get("lastUpdate", "") if char_data else ""}
+@router.websocket("/events")
+async def stash_events(ws: WebSocket):
+    from dnd import events
+    await events.handle_socket(ws)
 
 
 @router.post("/clear")

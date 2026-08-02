@@ -120,7 +120,7 @@ app.on ('ready', async () => {
 
   ipcMain.handle ('dnd:characters', () => backend.getCharacters ());
   ipcMain.handle ('dnd:character', (e, id) => backend.getCharacter (id));
-  ipcMain.handle ('dnd:character-touch', (e, id) => backend.getCharacterTouch (id));
+  ipcMain.handle ('dnd:service-port', () => backend.getServicePort ());
   ipcMain.handle ('dnd:clear-characters', () => backend.clearCharacters ());
 
   ipcMain.handle ('dnd:sort-start', async (e, params) => {

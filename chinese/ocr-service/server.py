@@ -40,6 +40,7 @@ import os
 import re
 import sys
 import time
+from contextlib import asynccontextmanager
 
 import cv2
 
@@ -97,7 +98,17 @@ logger = logging.getLogger("darktavern-ocr")
 
 # --- Application ---
 
-app = FastAPI(title="DarkTavern OCR Service", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    try:
+        from dnd import events
+        import asyncio
+        events.main_loop = asyncio.get_running_loop()
+    except Exception:
+        pass
+    yield
+
+app = FastAPI(title="DarkTavern OCR Service", version="1.0.0", lifespan=lifespan)
 
 # --- DnD Tools routers (capture / stash / sort / packets) ---
 try:

@@ -122,6 +122,8 @@ def _handle_character(message):
             file_path = os.path.join(get_characters_dir(), f"{char_id}.json")
             mgr = get_stash_manager()
             mgr.update_single_character(char_id, file_path)
+            from dnd import events
+            events.broadcast({"type": "character_updated", "character_id": char_id})
         except Exception as e:
             logger.error(f"Incremental cache update failed, falling back to force_reload: {e}")
             get_stash_manager().force_reload()

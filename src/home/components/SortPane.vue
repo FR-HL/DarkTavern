@@ -98,15 +98,12 @@ function itemStyle (it) {
   };
 }
 
-const lastUpdated = ref ('');
-
 async function loadCharData (id, silent = false) {
   if (!silent) { loading.value = true; error.value = ''; charData.value = null; }
   try {
     const d = await invoke ('dnd:character', id);
     if (d && !d.error) {
       charData.value = d;
-      lastUpdated.value = d.updated_at || '';
       if (!stashList.value.some (s => s.id === stashId.value)) {
         stashId.value = '';
         const first = stashList.value[0];
@@ -251,13 +248,31 @@ async function cancelSort () {
   await invoke ('dnd:sort-cancel');
 }
 
-async function pollCharData () {
-  if (!charId.value || sorting.value || loading.value) return;
+let ws = null;
+let wsRetry = null;
+let wsClosed = false;
+
+async function connectEvents () {
+  if (ws || wsClosed) return;
   try {
-    const t = await invoke ('dnd:character-touch', charId.value);
-    if (t && t.updated_at && t.updated_at !== lastUpdated.value) {
-      await loadCharData (charId.value, true);
-    }
+    const port = await invoke ('dnd:service-port');
+    ws = new WebSocket (`ws://127.0.0.1:${port}/stash/events`);
+    ws.onmessage = (ev) => {
+      try {
+        const m = JSON.parse (ev.data);
+        if (m.type === 'character_updated' && m.character_id === charId.value && !sorting.value) {
+          loadCharData (charId.value, true);
+        }
+      } catch (e) {}
+    };
+    ws.onopen = () => {
+      if (charId.value && !sorting.value) loadCharData (charId.value, true);
+    };
+    ws.onclose = () => {
+      ws = null;
+      if (!wsClosed) wsRetry = setTimeout (connectEvents, 3000);
+    };
+    ws.onerror = () => { try { ws.close (); } catch (e) {} };
   } catch (e) {}
 }
 
@@ -298,9 +313,13 @@ onMounted (async () => {
     window.electron.on ('dnd:sort-cancelled', onSortCancelled),
   ];
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
-  poll = setInterval (() => { pollStatus (); pollCharData (); }, 1000);
+  poll = setInterval (pollStatus, 1000);
+  connectEvents ();
 });
 onBeforeUnmount (() => {
+  wsClosed = true;
+  if (wsRetry) clearTimeout (wsRetry);
+  if (ws) { try { ws.close (); } catch (e) {} ws = null; }
   if (poll) clearInterval (poll);
   window.removeEventListener ('dnd:characters-refresh', onCharactersRefresh);
   unsubs.forEach (u => u ());
