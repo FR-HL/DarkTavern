@@ -7,9 +7,9 @@ const characters = ref ([]);
 const charId = ref ('');
 const stashes = ref ([]);
 const stashId = ref ('');
-const packMode = ref (false);
-const stackMode = ref (false);
-const includeInv = ref (false);
+const packMode = ref (true);
+const stackMode = ref (true);
+const includeInv = ref (true);
 const sorting = ref (false);
 const result = ref (null);
 const error = ref ('');
@@ -286,7 +286,7 @@ onBeforeUnmount (() => {
 <template>
   <div>
     <div class="page-title">整理</div>
-    <div class="page-sub">规划最优布局并模拟鼠标拖拽，自动整理仓库。<b>请先在游戏中打开要整理的仓库界面</b>（能看到物品格子），再开始整理；整理期间保持游戏窗口在前台。</div>
+    <div class="page-sub"><b>请先在游戏中打开要整理的仓库界面</b>（能看到物品格子），再开始整理；整理期间保持游戏窗口在前台。</div>
 
     <!-- 角色选择 -->
     <div class="sec" v-if="characters.length">
