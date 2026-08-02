@@ -454,6 +454,65 @@ def _apply_calibration_override(positions, res):
     return positions
 
 
+def _windowed_screen_positions(window_area):
+    """Scale the base 1920x1080 calibration to the game window's actual
+    client area and offset it by the window position.
+
+    Works for *any* windowed size/position — a manually resized window, a
+    window smaller than the screen, etc. — not just windows that exactly
+    match the configured resolution.  Returns ``None`` for a degenerate
+    window area (e.g. minimized → 0×0) so callers fall back to the
+    fullscreen layout.
+    """
+    window_left, window_top, width, height = window_area
+    if width < 200 or height < 200:
+        return None
+    layout = _scaled_layout((width, height))
+    return {
+        'stash': Point(layout['stash'].x + window_left,
+                       layout['stash'].y + window_top),
+        'inv': Point(layout['inv'].x + window_left,
+                     layout['inv'].y + window_top),
+        'jump': float(layout['jump']),
+        'stash_tab_origin': Point(layout['stash_tab_origin'].x + window_left,
+                                  layout['stash_tab_origin'].y + window_top),
+        'stash_tab_spacing': float(layout['stash_tab_spacing']),
+    }
+
+
+def force_activate_game_window(window_title="Dark and Darker  "):
+    """Bring the game window to the foreground, bypassing Windows'
+    foreground-activation lock (the Alt-key trick); restores the window
+    first if it is minimized.
+
+    Returns the window handle on success, else ``None``.
+    """
+    try:
+        hwnd = win32gui.FindWindow(None, window_title)
+        if hwnd == 0:
+            return None
+    except Exception:
+        return None
+
+    user32 = ctypes.windll.user32
+    try:
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        # Briefly press Alt so Windows allows the foreground switch even
+        # when the calling process is not the foreground process.
+        user32.keybd_event(VK_MENU, 0, 0, 0)
+        time.sleep(0.05)
+        ok = bool(user32.SetForegroundWindow(hwnd))
+        user32.keybd_event(VK_MENU, 0, 2, 0)
+        return hwnd if ok else None
+    except Exception:
+        try:
+            user32.keybd_event(VK_MENU, 0, 2, 0)
+        except Exception:
+            pass
+        return None
+
+
 def get_base_screen_positions():
     """Return the *uncalibrated* base screen positions for the current resolution.
 
@@ -466,50 +525,27 @@ def get_base_screen_positions():
     if get_game_window_mode() == WINDOW_MODE:
         window_area = get_window_area_pos()
         if window_area:
-            window_left, window_top, width, height = window_area
-            if width == res[0] and height == res[1]:
-                base_pos = _ensure_positions(res)
-                stash = Point(base_pos["stash"].x + window_left, base_pos["stash"].y + window_top)
-                inv = Point(base_pos["inv"].x + window_left, base_pos["inv"].y + window_top)
-                tab_origin = Point(
-                    base_pos["stash_tab_origin"].x + window_left,
-                    base_pos["stash_tab_origin"].y + window_top,
-                )
-                return {
-                    'stash': stash, 'inv': inv, 'jump': float(base_pos["jump"]),
-                    'stash_tab_origin': tab_origin,
-                    'stash_tab_spacing': base_pos['stash_tab_spacing'],
-                }
+            windowed = _windowed_screen_positions(window_area)
+            if windowed:
+                return windowed
 
     return _clone_layout(_ensure_positions(res))
 
 
 def get_screen_positions():
+    # Keep module-level globals in sync so move_from_to_reliable (and other
+    # helpers) use the calibrated values.
+    global stash_screen_pos, inv_screen_pos, jump
+    global stash_tab_origin, stash_tab_spacing
+
     res = get_current_resolution()
 
     if get_game_window_mode() == WINDOW_MODE:
         window_area = get_window_area_pos()
         if window_area:
-            window_left, window_top, width, height = window_area
-            if width == res[0] and height == res[1]:
-                base_pos = _ensure_positions(res)
-                stash = Point(base_pos["stash"].x + window_left, base_pos["stash"].y + window_top)
-                inv = Point(base_pos["inv"].x + window_left, base_pos["inv"].y + window_top)
-                tab_origin = Point(
-                    base_pos["stash_tab_origin"].x + window_left,
-                    base_pos["stash_tab_origin"].y + window_top,
-                )
-                positions = _apply_calibration_override(
-                    {
-                        'stash': stash, 'inv': inv, 'jump': float(base_pos["jump"]),
-                        'stash_tab_origin': tab_origin,
-                        'stash_tab_spacing': base_pos['stash_tab_spacing'],
-                    }, res,
-                )
-                # Keep module-level globals in sync so move_from_to_reliable
-                # (and other helpers) use the calibrated values.
-                global stash_screen_pos, inv_screen_pos, jump
-                global stash_tab_origin, stash_tab_spacing
+            windowed = _windowed_screen_positions(window_area)
+            if windowed:
+                positions = _apply_calibration_override(windowed, res)
                 stash_screen_pos = positions['stash']
                 inv_screen_pos = positions['inv']
                 jump = float(positions['jump'])
@@ -519,7 +555,6 @@ def get_screen_positions():
 
     positions = _apply_calibration_override(_clone_layout(_ensure_positions(res)), res)
 
-    # Keep module-level globals in sync for internal drag helpers
     stash_screen_pos = positions['stash']
     inv_screen_pos = positions['inv']
     jump = float(positions['jump'])

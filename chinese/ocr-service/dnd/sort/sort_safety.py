@@ -57,10 +57,11 @@ class SortSafetyMonitor:
     FOCUS_POLL_INTERVAL: float = 0.20
     """Seconds between background focus checks."""
 
-    FOCUS_LOSS_GRACE_SECONDS: float = 0.60
+    FOCUS_LOSS_GRACE_SECONDS: float = 1.50
     """How long the game may lose focus before the sort is cancelled.
-    Short enough to react quickly, long enough to survive a brief
-    taskbar flash or overlay tooltip."""
+    Generous enough to survive focus handoff (app minimize, exclusive
+    fullscreen regaining focus) and transient system toasts, while still
+    stopping quickly when the user deliberately switches away."""
 
     MOUSE_DEVIATION_THRESHOLD_PX: int = 120
     """Pixels the cursor must move (in either axis) from the expected

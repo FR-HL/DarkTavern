@@ -71,6 +71,7 @@ app.on ('ready', async () => {
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
+    focusable: false,
     type: 'toolbar',
     webPreferences: {
       preload: join (SOURCE, 'preload.cjs'),
@@ -121,7 +122,12 @@ app.on ('ready', async () => {
   ipcMain.handle ('dnd:character', (e, id) => backend.getCharacter (id));
   ipcMain.handle ('dnd:clear-characters', () => backend.clearCharacters ());
 
-  ipcMain.handle ('dnd:sort-start', (e, params) => backend.sortStart (params));
+  ipcMain.handle ('dnd:sort-start', async (e, params) => {
+    const r = await backend.sortStart (params);
+    // Minimize the app so it can't cover the game during sorting.
+    if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
+    return r;
+  });
   ipcMain.handle ('dnd:sort-cancel', () => backend.sortCancel ());
   ipcMain.handle ('dnd:sort-status', () => backend.sortStatus ());
   ipcMain.handle ('dnd:sort-order-get', () => backend.getSortOrder ());
@@ -252,6 +258,7 @@ function registerSortHotkeys () {
       const charId = settings.dnd?.sort_char_id || '';
       const stashId = settings.dnd?.sort_stash_id || '';
       if (!charId || !stashId) {
+        logger.warn ('Sort hotkey pressed but no target configured');
         notifyHome ('dnd:sort-notify', { type: 'error', message: '未配置整理目标，请先在整理页选择角色与仓库' });
         return;
       }
@@ -263,11 +270,16 @@ function registerSortHotkeys () {
           stack_mode: !!settings.dnd?.stack_mode,
           include_inventory: !!settings.dnd?.sort_include_inv,
         });
+        logger.info (`Sort hotkey: char=${charId} stash=${stashId} -> ${r?.success ? 'started' : (r?.error || 'failed')}`);
         notifyHome ('dnd:sort-notify', r?.success
           ? { type: 'info', message: `开始整理仓库 ${stashId}` }
           : { type: 'error', message: r?.error || '整理启动失败' });
-        if (r?.success) notifyHome ('dnd:sort-started', { character_id: charId, stash_id: stashId });
+        if (r?.success) {
+          if (homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
+          notifyHome ('dnd:sort-started', { character_id: charId, stash_id: stashId });
+        }
       } catch (e) {
+        logger.error (`Sort hotkey handler failed: ${e.message}`);
         notifyHome ('dnd:sort-notify', { type: 'error', message: `整理启动失败: ${e.message}` });
       }
     });

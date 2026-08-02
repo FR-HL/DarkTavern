@@ -194,13 +194,18 @@ class Storage:
                 rarity_id = item_data_manager.rarity_to_id(rarity)
 
                 if rarity_id is None:
-                    # Item not in assets database (e.g. assets not yet updated).
-                    # Fall back to Common (2) so the sort can still include it.
-                    logger.warning(
-                        "Unknown rarity for item %s (rarity=%r) – defaulting to Common",
-                        item_id, rarity,
-                    )
-                    rarity_id = 2
+                    if rarity == 0:
+                        # Items without a rarity (tokens, potions, etc.) map
+                        # cleanly to Common — no need to warn.
+                        rarity_id = 2
+                    else:
+                        # Item not in assets database (e.g. assets not yet updated).
+                        # Fall back to Common (2) so the sort can still include it.
+                        logger.warning(
+                            "Unknown rarity for item %s (rarity=%r) – defaulting to Common",
+                            item_id, rarity,
+                        )
+                        rarity_id = 2
 
                 if not name:
                     name = item_data_manager.format_design_id_as_name(item_id) or item_id
