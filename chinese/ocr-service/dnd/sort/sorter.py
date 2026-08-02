@@ -325,14 +325,17 @@ class LayoutPlanner:
                 self._ensure_learning_cache(itm)
                 slot = self._find_slot_for(itm, min_y=anchor)
                 if slot is None:
-                    # Group region too fragmented — fall back to a full scan so
-                    # the sort still succeeds (at the cost of pure grouping).
-                    slot = self._find_slot_for(itm)
+                    # Group region too fragmented — fall back to a scan below the
+                    # anchor (never re-enter earlier groups' territory).
+                    slot = self._find_slot_for(itm, min_y=anchor)
                 if slot is None:
                     raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
                 self._mark(slot, itm)
                 positions[id(itm)] = slot
-                group_bottom = max(group_bottom, slot.y)
+                # Track the bottom-most row this group actually occupies,
+                # including the item's own height, so the next group starts
+                # on a fresh row below it.
+                group_bottom = max(group_bottom, slot.y + itm.height - 1)
                 record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
                 if record:
                     learning_payload[id(itm)] = record
