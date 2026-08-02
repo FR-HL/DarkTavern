@@ -679,7 +679,7 @@ onBeforeUnmount (() => {
   position: absolute; display: flex; align-items: flex-end;
   padding: 3px 5px;
   background: var(--rbg);
-  border: 1.5px solid var(--rc);
+  /* border: 1.5px solid var(--rc); */
   border-radius: 5px;
   overflow: hidden; cursor: default;
   transition: transform .14s var(--ease), box-shadow .14s var(--ease);
