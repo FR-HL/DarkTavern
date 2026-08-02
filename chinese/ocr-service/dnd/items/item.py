@@ -39,6 +39,7 @@ class Item:
         quantity=1,
         max_stack_size=1,
         slot_type="",
+        archetype="",
     ):
         self.item_id = item_id
         self.name = name
@@ -49,6 +50,7 @@ class Item:
         self.stash = stash
         self.vendor_price = vendor_price
         self.slot_type = slot_type or ""
+        self.archetype = archetype or ""
         self.quantity = int(quantity) if quantity is not None else 1
         if self.quantity < 1:
             self.quantity = 1

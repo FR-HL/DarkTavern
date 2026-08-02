@@ -206,6 +206,14 @@ export async function updateSortOrder (order) {
   return await post ('/sort/order', { order }) || { error: 'Service unavailable' };
 }
 
+export async function getSortGroupMode () {
+  return await get ('/sort/group-mode');
+}
+
+export async function setSortGroupMode (mode) {
+  return await post ('/sort/group-mode', { mode }) || { error: 'Service unavailable' };
+}
+
 // ── DnD Tools: Packets ──
 
 export async function getPackets (page = 0, pageSize = 50) {

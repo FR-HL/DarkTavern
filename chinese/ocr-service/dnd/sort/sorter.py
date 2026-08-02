@@ -209,6 +209,12 @@ class InventoryBufferTracker:
 class LayoutPlanner:
     """Determines the final resting position for every item before any moves happen."""
 
+    EQUIP_GROUP_ORDER = (
+        "Head", "Chest", "Legs", "Foot", "Hands", "Back",
+        "Necklace", "Ring", "Primary", "Secondary", "Utility",
+        "Unarmed", "Sash",
+    )
+
     def __init__(
         self,
         width: int,
@@ -255,6 +261,82 @@ class LayoutPlanner:
             record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
             if record:
                 learning_payload[id(itm)] = record
+
+        execution_order = sorted(
+            [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
+            key=lambda entry: (
+                entry.target.y,
+                entry.target.x,
+                -(entry.item.width * entry.item.height),
+            ),
+        )
+        return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
+
+    def _group_key(self, item: Item) -> Tuple[str, str]:
+        """Category key: equipment by slot, everything else by archetype."""
+        slot = (getattr(item, "slot_type", "") or "").strip()
+        if slot:
+            return ("equip", slot)
+        arch = (getattr(item, "archetype", "") or "").strip()
+        if arch:
+            return ("misc", arch)
+        return ("misc", "_other")
+
+    def _group_sort_key(self, key: Tuple[str, str]) -> Tuple[int, int, str]:
+        kind, name = key
+        if kind == "equip":
+            try:
+                idx = self.EQUIP_GROUP_ORDER.index(name)
+            except ValueError:
+                idx = 1000
+            return (0, idx, name)
+        return (1, 0, name.lower())
+
+    def build_grouped(
+        self,
+        items: List[Item],
+        comparator: Optional[Callable[[Item, Item], int]] = None,
+        group_key_fn: Optional[Callable[[Item], Tuple[str, str]]] = None,
+    ) -> LayoutPlan:
+        """Place items category by category, each group starting below the previous one.
+
+        Equipment slots (Head, Chest, ...) occupy the top area; non-equipment
+        archetypes (gems, pouches, ...) get their own rows below.
+        """
+        self._reset()
+        self._learning_cache = {}
+        groups: Dict[Tuple[str, str], List[Item]] = {}
+        for itm in items:
+            key = (group_key_fn or self._group_key)(itm)
+            groups.setdefault(key, []).append(itm)
+
+        group_keys = sorted(groups.keys(), key=self._group_sort_key)
+        positions: Dict[int, Point] = {}
+        learning_payload: Dict[int, Dict[str, Any]] = {}
+        anchor = 0
+        for key in group_keys:
+            group = groups[key]
+            if comparator:
+                ordered = sorted(group, key=cmp_to_key(comparator))
+            else:
+                ordered = sorted(group, key=self._learning_sort_key)
+            group_bottom = anchor
+            for itm in ordered:
+                self._ensure_learning_cache(itm)
+                slot = self._find_slot_for(itm, min_y=anchor)
+                if slot is None:
+                    # Group region too fragmented — fall back to a full scan so
+                    # the sort still succeeds (at the cost of pure grouping).
+                    slot = self._find_slot_for(itm)
+                if slot is None:
+                    raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
+                self._mark(slot, itm)
+                positions[id(itm)] = slot
+                group_bottom = max(group_bottom, slot.y)
+                record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+                if record:
+                    learning_payload[id(itm)] = record
+            anchor = group_bottom + 1
 
         execution_order = sorted(
             [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
@@ -445,7 +527,7 @@ class LayoutPlanner:
                                 matches += 1
         return float(matches) / float(max(1, neighbors_checked))
 
-    def _find_slot_for(self, item: Item) -> Optional[Point]:
+    def _find_slot_for(self, item: Item, min_y: int = 0) -> Optional[Point]:
         max_x = self.width - item.width
         max_y = self.height - item.height
         best_score = None
@@ -459,7 +541,8 @@ class LayoutPlanner:
             if self.learning_manager.score_item(probe) is None:
                 use_ml = False
 
-        for y in range(0, max_y + 1):
+        start_y = max(0, min(int(min_y), max_y))
+        for y in range(start_y, max_y + 1):
             for x in range(0, max_x + 1):
                 if not self._fits(item, x, y):
                     continue
@@ -1325,12 +1408,14 @@ class StashSorter:
         character_id: Optional[str] = None,
         stash_id: Optional[int] = None,
         feedback_manager=None,
+        group_mode: str = "none",
     ):
         self.stash = stash
         self.inv = inv
         self.cancel_event = None
         self.pack_mode = bool(pack_mode)
         self.stack_mode = bool(stack_mode)
+        self.group_mode = group_mode if group_mode in ("none", "category") else "none"
         self.character_id = character_id
         self.stash_id = stash_id
         self.overlay_session: Optional[Union[SortOverlaySession, NullOverlaySession]] = None
@@ -2172,7 +2257,10 @@ class StashSorter:
                 learning_session_id=self._learning_session_id,
             )
             try:
-                plan = planner.build(items, comparator=comparator)
+                if self.group_mode == "category":
+                    plan = planner.build_grouped(items, comparator=comparator)
+                else:
+                    plan = planner.build(items, comparator=comparator)
                 if fallback_used and comparator is None:
                     self._overlay_log(
                         "Custom ordering could not be perfectly applied; using default layout heuristics instead."
@@ -2180,6 +2268,15 @@ class StashSorter:
                 break
             except LayoutPlanError as exc:
                 if comparator is None:
+                    if self.group_mode == "category":
+                        logger.warning("Category layout failed; retrying with plain layout: %s", exc)
+                        fallback_used = True
+                        try:
+                            plan = planner.build(items)
+                            break
+                        except LayoutPlanError as fallback_exc:
+                            logger.error("Layout planner failed: %s", fallback_exc)
+                            return None
                     logger.error("Layout planner failed: %s", exc)
                     return None
                 fallback_used = True

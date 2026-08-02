@@ -13,6 +13,11 @@ class SortStartRequest(BaseModel):
     pack_mode: Optional[bool] = None
     stack_mode: Optional[bool] = None
     include_inventory: bool = False
+    group_mode: Optional[str] = None
+
+
+class SortGroupModeUpdate(BaseModel):
+    mode: str = "none"
 
 
 class SortOrderItem(BaseModel):
@@ -94,6 +99,7 @@ def sort_start(body: SortStartRequest):
         pack_mode=body.pack_mode,
         stack_mode=body.stack_mode,
         include_inventory=body.include_inventory,
+        group_mode=body.group_mode,
     )
 
 
@@ -120,6 +126,21 @@ def sort_status():
 def get_sort_order():
     from dnd.items.item import Item
     return {"order": Item.sort_order}
+
+
+@router.get("/group-mode")
+def get_sort_group_mode():
+    from dnd.settings import settings_manager
+    mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+    return {"mode": mode}
+
+
+@router.post("/group-mode")
+def update_sort_group_mode(body: SortGroupModeUpdate):
+    from dnd.settings import settings_manager
+    mode = body.mode if body.mode in ("none", "category") else "none"
+    settings_manager.update({"sortGroupMode": mode}, persist=True)
+    return {"success": True, "mode": mode}
 
 
 @router.post("/order")

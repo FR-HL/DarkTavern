@@ -136,6 +136,8 @@ app.on ('ready', async () => {
   ipcMain.handle ('dnd:sort-speed-set', (e, value) => backend.setSortSpeed (value));
   ipcMain.handle ('dnd:sort-order-get', () => backend.getSortOrder ());
   ipcMain.handle ('dnd:sort-order-set', (e, order) => backend.updateSortOrder (order));
+  ipcMain.handle ('dnd:sort-group-get', () => backend.getSortGroupMode ());
+  ipcMain.handle ('dnd:sort-group-set', (e, mode) => backend.setSortGroupMode (mode));
   ipcMain.handle ('dnd:sort-config-get', () => ({
     character_id: settings.dnd?.sort_char_id || '',
     stash_id: settings.dnd?.sort_stash_id || '',

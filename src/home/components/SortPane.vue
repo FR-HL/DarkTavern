@@ -35,6 +35,14 @@ const SORT_PRESETS = [
     ],
   },
   {
+    id: 'category', label: '类别分区',
+    groupMode: 'category',
+    order: [
+      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
+      { field: 'rarity', direction: 'desc' }, { field: 'name', direction: 'asc' },
+    ],
+  },
+  {
     id: 'rarity', label: '稀有度优先',
     order: [
       { field: 'rarity', direction: 'desc' }, { field: 'width', direction: 'desc' },
@@ -234,7 +242,11 @@ function samePreset (a, b) {
 
 async function loadSortOrder () {
   try {
-    const d = await invoke ('dnd:sort-order-get');
+    const [d, g] = await Promise.all ([
+      invoke ('dnd:sort-order-get'),
+      invoke ('dnd:sort-group-get'),
+    ]);
+    if (g && g.mode === 'category') { sortPreset.value = 'category'; return; }
     if (d && Array.isArray (d.order)) {
       const hit = SORT_PRESETS.find (p => samePreset (d.order, p.order));
       sortPreset.value = hit ? hit.id : 'default';
@@ -248,6 +260,7 @@ async function changePreset (id) {
   sortPreset.value = id;
   try {
     await invoke ('dnd:sort-order-set', p.order);
+    await invoke ('dnd:sort-group-set', p.groupMode || 'none');
   } catch (e) {}
 }
 

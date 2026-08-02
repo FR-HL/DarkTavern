@@ -926,6 +926,7 @@ class StashManager:
         stack_mode=False,
         overlay_session: Union[SortOverlaySession, NullOverlaySession, None] = None,
         include_inventory=False,
+        group_mode: str = "none",
     ):
         logger.info(f"Sorting stash {stash_id} for character {character_id}")
         session_summary = None
@@ -1056,6 +1057,7 @@ class StashManager:
             stack_mode=stack_mode,
             character_id=str(character_id),
             stash_id=int(stash_id) if stash_id is not None else None,
+            group_mode=group_mode,
         )
         session.add_log(
             f"Pack mode: {'On' if sorter.pack_mode else 'Off'} · Stack mode: {'On' if sorter.stack_mode else 'Off'}"
