@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from fastapi import APIRouter, WebSocket
@@ -5,6 +6,34 @@ from dnd.appdirs import get_characters_dir
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+_EQUIPMENT_SLOTS = None
+
+
+def _load_equipment_slots():
+    """Equipment page slot layout (slot id -> grid position/size)."""
+    global _EQUIPMENT_SLOTS
+    if _EQUIPMENT_SLOTS is not None:
+        return _EQUIPMENT_SLOTS
+    try:
+        from dnd.appdirs import resource_path
+        with open(resource_path('equipment_slots.json'), 'r', encoding='utf-8') as f:
+            raw = json.load(f)
+        slots = raw.get('equipment_slots', {})
+        _EQUIPMENT_SLOTS = {
+            str(k): {
+                'name': v.get('name', ''),
+                'x': int(v.get('x', 0)),
+                'y': int(v.get('y', 0)),
+                'w': int(v.get('w', 1)),
+                'h': int(v.get('h', 1)),
+            }
+            for k, v in slots.items()
+        }
+    except Exception as exc:
+        logger.warning("Failed to load equipment_slots.json: %s", exc)
+        _EQUIPMENT_SLOTS = {}
+    return _EQUIPMENT_SLOTS
 
 
 def _stash_dimensions(stash_id):
@@ -15,7 +44,7 @@ def _stash_dimensions(stash_id):
     if sid == 2:
         return 10, 5
     if sid == 3:
-        return 8, 7
+        return 8, 8
     return 12, 20
 
 
@@ -83,6 +112,7 @@ def get_character(character_id: str):
     stashes_info = {}
     for stash_id, items in char_data.get("stashes", {}).items():
         width, height = _stash_dimensions(stash_id)
+        equipment_slots = _load_equipment_slots() if str(stash_id) == "3" else None
         item_list = []
         for item in items:
             item_id = item.get("itemId", "")
@@ -90,24 +120,42 @@ def get_character(character_id: str):
             w = item_db.get("inventory_width", 1)
             h = item_db.get("inventory_height", 1)
             slot_id = item.get("slotId", 0)
+            if equipment_slots is not None:
+                # Equipment page: slotId is a fixed gear slot id, not a grid
+                # index — position items on their slot.
+                slot = equipment_slots.get(str(slot_id))
+                if slot is not None:
+                    x, y, w, h = slot["x"], slot["y"], slot["w"], slot["h"]
+                else:
+                    x, y = 0, 0
+                    logger.debug("Equipment item with unknown slot id: %s", slot_id)
+            else:
+                x, y = slot_id % width, slot_id // width
             item_list.append({
                 "name": item.get("name", "Unknown"),
                 "item_id": item_id,
                 "rarity": item_db.get("rarity", "Common"),
                 "width": w,
                 "height": h,
-                "x": slot_id % width,
-                "y": slot_id // width,
+                "x": x,
+                "y": y,
                 "slot_id": slot_id,
                 "quantity": item.get("itemCount", 1),
                 "vendor_price": item.get("vendor_price", 0),
             })
-        stashes_info[str(stash_id)] = {
+        stash_entry = {
             "label": _stash_label(stash_id),
             "width": width,
             "height": height,
             "items": item_list,
         }
+        if equipment_slots is not None:
+            stash_entry["layout"] = "equipment"
+            stash_entry["slots"] = [
+                {"id": k, **v}
+                for k, v in sorted(equipment_slots.items(), key=lambda kv: int(kv[0]))
+            ]
+        stashes_info[str(stash_id)] = stash_entry
 
     return {
         "id": character_id,

@@ -59,6 +59,11 @@ class Storage:
             self.base_screen_pos = macros.get_screen_positions()['inv']
             self.width = 10
             self.height = 5
+        elif self.stash_type == StashType.EQUIPMENT.value:
+            # Equipment page is a fixed 8x8 slot layout; not sortable, but
+            # keep dimensions defined so Storage construction never breaks.
+            self.width = 8
+            self.height = 8
         
         self.size = self.height * self.width
         self.grid = [[0 for _ in range(self.height)] for _ in range(self.width)]

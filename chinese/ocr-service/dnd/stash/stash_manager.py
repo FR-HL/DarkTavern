@@ -939,6 +939,11 @@ class StashManager:
             session.add_log("No packet data available for selected character.")
             logger.warning("Character %s not found in cache", character_id)
             return False, "Character not found", session_summary
+        if str(stash_id) == str(StashType.EQUIPMENT.value):
+            session.update_status("Equipment page cannot be sorted.", status="error")
+            session.add_log("The equipment page is not sortable — gear is worn, not stored.")
+            logger.warning("Sorting refused: equipment stash %s", stash_id)
+            return False, "装备页不可整理", session_summary
         stash_items = char.get('stashes', {}).get(str(stash_id))
         if not stash_items:
             session.update_status("Selected stash is empty or missing.", status="error")

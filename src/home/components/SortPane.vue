@@ -65,6 +65,17 @@ const currentStash = computed (() =>
   stashList.value.find (s => s.id === stashId.value) || null
 );
 
+const isEquipment = computed (() => !!currentStash.value && currentStash.value.layout === 'equipment');
+
+function slotStyle (s) {
+  return {
+    left: s.x * (CELL + GAP) + 'px',
+    top: s.y * (CELL + GAP) + 'px',
+    width: s.w * CELL + (s.w - 1) * GAP + 'px',
+    height: s.h * CELL + (s.h - 1) * GAP + 'px',
+  };
+}
+
 const totalItems = computed (() =>
   currentStash.value ? currentStash.value.items.length : 0
 );
@@ -136,7 +147,7 @@ async function reloadCharacters () {
 const onCharactersRefresh = () => reloadCharacters ();
 
 const canStart = computed (() =>
-  !!charId.value && stashId.value !== '' && !sorting.value && !uipiBlocked.value);
+  !!charId.value && stashId.value !== '' && !isEquipment.value && !sorting.value && !uipiBlocked.value);
 
 const uipiBlocked = computed (() => !!(uipi.value && uipi.value.blocked));
 
@@ -408,12 +419,16 @@ onBeforeUnmount (() => {
                  width: currentStash.width * (34 + 2) - 2 + 'px',
                  height: currentStash.height * (34 + 2) - 2 + 'px',
                }">
-            <div class="grid-bg"
+            <div v-if="!isEquipment" class="grid-bg"
                  :style="{
                    gridTemplateColumns: `repeat(${currentStash.width}, 34px)`,
                    gridTemplateRows: `repeat(${currentStash.height}, 34px)`,
                  }">
               <span v-for="n in bgCells" :key="n" class="bg-cell"></span>
+            </div>
+            <div v-else class="equip-bg">
+              <span v-for="s in currentStash.slots" :key="s.id" class="eq-slot"
+                    :style="slotStyle (s)" :title="s.name"></span>
             </div>
             <div v-for="(it, i) in currentStash.items" :key="i" class="cell-item"
                  :style="itemStyle (it)"
@@ -639,6 +654,15 @@ onBeforeUnmount (() => {
   background: var(--field-soft);
   border: 1px solid var(--line-soft);
   border-radius: 4px;
+}
+/* equipment page: fixed gear slots instead of a uniform grid */
+.equip-bg { position: absolute; inset: 0; pointer-events: none; }
+.eq-slot {
+  position: absolute;
+  border: 1.5px dashed rgba(255,255,255,0.16);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.02);
+  box-sizing: border-box;
 }
 .cell-item {
   position: absolute; display: flex; align-items: flex-end;
