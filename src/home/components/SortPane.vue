@@ -41,6 +41,13 @@ const CLASS_CN = {
   Wizard: '法师',
 };
 
+const classIcons = import.meta.glob ('@assets/classes/*.avif', { eager: true, import: 'default' });
+function classIcon (cls) {
+  const f = `${(cls || '').toLowerCase ()}.avif`;
+  const hit = Object.entries (classIcons).find (([k]) => k.endsWith (f));
+  return hit ? hit[1] : '';
+}
+
 const selected = ref (null);
 const charData = ref (null);
 const loading = ref (false);
@@ -378,7 +385,7 @@ onBeforeUnmount (() => {
       <div class="char-row">
         <button v-for="c in characters" :key="c.id" class="char-card"
                 :class="{ on: selected === c.id }" @click="selectCharacter (c.id)">
-          <span class="char-seal">{{ (c.class || '?').charAt (0) }}</span>
+          <span class="char-seal"><img v-if="classIcon (c.class)" class="char-icon" :src="classIcon (c.class)" alt="" /></span>
           <span class="char-meta">
             <span class="char-name">{{ c.nickname }}</span>
             <span class="char-sub"><b>{{ CLASS_CN[c.class] || c.class }}</b> · Lv.<b>{{ c.level }}</b></span>
@@ -595,9 +602,11 @@ onBeforeUnmount (() => {
 .char-seal {
   width: 38px; height: 38px; flex: none; display: grid; place-items: center;
   border-radius: 10px;
-  background: linear-gradient(150deg, #2a8bf2, var(--accent) 50%, var(--accent-strong));
-  color: #fff; font-size: 16px; font-weight: 700;
-  box-shadow: 0 2px 6px rgba(0,113,227,0.3);
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+}
+.char-icon {
+  width: 100%; height: 100%; object-fit: cover; display: block;
 }
 .char-meta { display: flex; flex-direction: column; gap: 2px; }
 .char-name { font-size: 13.5px; font-weight: 650; color: var(--text); letter-spacing: -0.01em; }
