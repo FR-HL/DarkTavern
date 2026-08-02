@@ -38,8 +38,9 @@ const SORT_PRESETS = [
     id: 'category', label: '类别分区',
     groupMode: 'category',
     order: [
+      { field: 'name', direction: 'asc' },
       { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
-      { field: 'rarity', direction: 'desc' }, { field: 'name', direction: 'asc' },
+      { field: 'rarity', direction: 'desc' },
     ],
   },
   {
