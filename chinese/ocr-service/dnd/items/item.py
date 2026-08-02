@@ -2,7 +2,7 @@ import copy
 
 _DEFAULT_DIRECTION = "desc"
 _DEFAULT_SORTABLE_FIELDS = ("width", "height", "slot", "rarity", "name")
-_EXTRA_SORTABLE_FIELDS = ("vendor_price", "quantity")
+_EXTRA_SORTABLE_FIELDS = ("vendor_price", "quantity", "category")
 _DEFAULT_SORT_ORDER = [{"field": key, "direction": _DEFAULT_DIRECTION} for key in _DEFAULT_SORTABLE_FIELDS]
 
 
@@ -51,6 +51,7 @@ class Item:
         self.vendor_price = vendor_price
         self.slot_type = slot_type or ""
         self.archetype = archetype or ""
+        self.category = self.slot_type or self.archetype.replace("id.item.", "") or "_other"
         self.quantity = int(quantity) if quantity is not None else 1
         if self.quantity < 1:
             self.quantity = 1
@@ -151,6 +152,12 @@ class Item:
                 result = cls._compare_string(
                     getattr(left, "slot_type", ""),
                     getattr(right, "slot_type", ""),
+                    direction,
+                )
+            elif field == "category":
+                result = cls._compare_string(
+                    getattr(left, "category", ""),
+                    getattr(right, "category", ""),
                     direction,
                 )
             elif field == "rarity":

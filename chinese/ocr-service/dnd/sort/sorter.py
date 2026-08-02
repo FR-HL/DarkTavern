@@ -273,14 +273,11 @@ class LayoutPlanner:
         return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
 
     def _group_key(self, item: Item) -> Tuple[str, str]:
-        """Category key: equipment by slot, everything else by archetype."""
+        """Category key: equipment by slot, everything else in one shared band."""
         slot = (getattr(item, "slot_type", "") or "").strip()
         if slot:
             return ("equip", slot)
-        arch = (getattr(item, "archetype", "") or "").strip()
-        if arch:
-            return ("misc", arch)
-        return ("misc", "_other")
+        return ("misc", "")
 
     def _group_sort_key(self, key: Tuple[str, str]) -> Tuple[int, int, str]:
         kind, name = key
@@ -302,6 +299,10 @@ class LayoutPlanner:
 
         Equipment slots (Head, Chest, ...) occupy the top area; non-equipment
         archetypes (gems, pouches, ...) get their own rows below.
+
+        Best-effort: items that cannot fit inside their group's band are
+        collected into a final "overflow" band below all groups instead of
+        failing the whole plan.
         """
         self._reset()
         self._learning_cache = {}
@@ -314,6 +315,7 @@ class LayoutPlanner:
         positions: Dict[int, Point] = {}
         learning_payload: Dict[int, Dict[str, Any]] = {}
         anchor = 0
+        overflow: List[Item] = []
         for key in group_keys:
             group = groups[key]
             if comparator:
@@ -325,11 +327,10 @@ class LayoutPlanner:
                 self._ensure_learning_cache(itm)
                 slot = self._find_slot_for(itm, min_y=anchor)
                 if slot is None:
-                    # Group region too fragmented — fall back to a scan below the
-                    # anchor (never re-enter earlier groups' territory).
-                    slot = self._find_slot_for(itm, min_y=anchor)
-                if slot is None:
-                    raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
+                    # Group band too fragmented — park the item in the overflow
+                    # band below all groups (never re-enter earlier groups).
+                    overflow.append(itm)
+                    continue
                 self._mark(slot, itm)
                 positions[id(itm)] = slot
                 # Track the bottom-most row this group actually occupies,
@@ -340,6 +341,25 @@ class LayoutPlanner:
                 if record:
                     learning_payload[id(itm)] = record
             anchor = group_bottom + 1
+
+        # Overflow band: everything that could not fit its own group's band is
+        # packed below the last group, in group order, as compactly as possible.
+        # Items that still don't fit there fall back to a whole-stash scan so a
+        # crowded stash never fails the entire sort.
+        for itm in overflow:
+            self._ensure_learning_cache(itm)
+            slot = self._find_slot_for(itm, min_y=anchor)
+            if slot is None:
+                # Bottom-first so stragglers pile up below the bands.
+                slot = self._find_slot_from_bottom(itm)
+            if slot is None:
+                raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
+            self._mark(slot, itm)
+            positions[id(itm)] = slot
+            anchor = max(anchor, slot.y + itm.height)
+            record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+            if record:
+                learning_payload[id(itm)] = record
 
         execution_order = sorted(
             [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
@@ -604,6 +624,19 @@ class LayoutPlanner:
         for dx in range(item.width):
             for dy in range(item.height):
                 self.occupancy[point.x + dx][point.y + dy] = True
+
+    def _find_slot_from_bottom(self, item: Item) -> Optional[Point]:
+        """Bottom-right-first scan, used for overflow items so stragglers
+        gather at the stash bottom instead of cluttering earlier groups."""
+        max_x = self.width - item.width
+        max_y = self.height - item.height
+        if max_x < 0 or max_y < 0:
+            return None
+        for y in range(max_y, -1, -1):
+            for x in range(max_x, -1, -1):
+                if self._fits(item, x, y):
+                    return Point(x, y)
+        return None
 
 
 class StackingEngine:
