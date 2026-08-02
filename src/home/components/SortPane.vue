@@ -27,7 +27,7 @@ const SPEED_OPTIONS = [
 
 const SORT_PRESETS = [
   {
-    id: 'default', label: '综合',
+    id: 'default', label: '默认整理',
     order: [
       { field: 'name', direction: 'asc' },
       { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
