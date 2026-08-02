@@ -442,8 +442,10 @@ onBeforeUnmount (() => {
                  :style="itemStyle (it)"
                  :title="`${it.name} · ${it.rarity} · ${it.width}×${it.height}`">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
+              <!-- 仅显示图标，隐藏名字与数量
               <span class="cell-name">{{ it.name }}</span>
               <span v-if="it.quantity > 1" class="cell-qty">×{{ it.quantity }}</span>
+              -->
             </div>
           </div>
           </div>
@@ -689,6 +691,7 @@ onBeforeUnmount (() => {
   pointer-events: none;
 }
 .cell-item:hover { transform: scale(1.05); box-shadow: 0 3px 10px rgba(0,0,0,0.2); z-index: 5; }
+/*
 .cell-name {
   position: relative; z-index: 1;
   font-size: 9.5px; font-weight: 650; line-height: 1.2; color: var(--rc);
@@ -701,4 +704,5 @@ onBeforeUnmount (() => {
   font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 2px rgba(0,0,0,0.85);
 }
+*/
 </style>
