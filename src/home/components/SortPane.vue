@@ -298,15 +298,22 @@ async function connectEvents () {
   try {
     const port = await invoke ('dnd:service-port');
     ws = new WebSocket (`ws://127.0.0.1:${port}/stash/events`);
-    ws.onmessage = (ev) => {
+    ws.onmessage = async (ev) => {
       try {
         const m = JSON.parse (ev.data);
         if (m.type === 'current_character') {
           activeCharacterId.value = m.character_id || '';
         } else if (m.type === 'character_updated') {
-          if (m.character_id) activeCharacterId.value = m.character_id;
-          if (m.character_id === charId.value && !sorting.value) {
-            loadCharData (charId.value, true);
+          const cid = m.character_id || '';
+          activeCharacterId.value = cid;
+          try {
+            const d = await invoke ('dnd:characters');
+            if (d?.characters) characters.value = d.characters;
+          } catch (e) {}
+          if (cid && !sorting.value && characters.value.some (c => c.id === cid)) {
+            if (selected.value !== cid) selected.value = cid;
+            if (charId.value !== cid) charId.value = cid;
+            loadCharData (cid, true);
           }
         }
       } catch (e) {}
