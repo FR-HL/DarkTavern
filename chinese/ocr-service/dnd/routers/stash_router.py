@@ -1,8 +1,9 @@
 import json
 import logging
 import os
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, Response, WebSocket
 from dnd.appdirs import get_characters_dir
+from dnd.items.icon_pak import canonical_icon_path, icon_store
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -81,6 +82,18 @@ def _stash_label(stash_id):
     return f"仓库 {sid}"
 
 
+@router.get("/icon/{path:path}")
+def get_item_icon(path: str):
+    stream = icon_store.stream(path)
+    if stream is None:
+        return Response(status_code=404)
+    return Response(
+        content=stream.read(),
+        media_type="image/webp",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
 @router.get("/characters")
 def list_characters():
     from dnd.service import get_stash_manager
@@ -135,6 +148,7 @@ def get_character(character_id: str):
                 "name": item.get("name", "Unknown"),
                 "item_id": item_id,
                 "rarity": item_db.get("rarity", "Common"),
+                "icon": canonical_icon_path(item_db.get("iconPath")),
                 "width": w,
                 "height": h,
                 "x": x,

@@ -17,6 +17,8 @@ const uipi = ref (null);
 const sortSpeed = ref ('medium');
 // Character currently being played in-game (latest snapshot via WebSocket).
 const activeCharacterId = ref ('');
+// OCR service port, used to build icon URLs.
+const servicePort = ref (19528);
 const SPEED_OPTIONS = [
   { id: 'slow', label: '慢', desc: '最稳，每步约 1.5s' },
   { id: 'medium', label: '中', desc: '默认，兼顾稳定与速度' },
@@ -98,6 +100,11 @@ const bgCells = computed (() => {
 });
 
 function rarityOf (it) { return RARITY[it.rarity] || RARITY.Common; }
+
+function iconUrl (it) {
+  if (!it.icon) return '';
+  return `http://127.0.0.1:${servicePort.value}/stash/icon/${it.icon}`;
+}
 
 function itemStyle (it) {
   const r = rarityOf (it);
@@ -336,6 +343,7 @@ onMounted (async () => {
   await restoreConfig ();
   checkUipi ();
   loadSortSpeed ();
+  try { servicePort.value = await invoke ('dnd:service-port'); } catch (e) {}
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
@@ -433,6 +441,7 @@ onBeforeUnmount (() => {
             <div v-for="(it, i) in currentStash.items" :key="i" class="cell-item"
                  :style="itemStyle (it)"
                  :title="`${it.name} · ${it.rarity} · ${it.width}×${it.height}`">
+              <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
               <span class="cell-name">{{ it.name }}</span>
               <span v-if="it.quantity > 1" class="cell-qty">×{{ it.quantity }}</span>
             </div>
@@ -673,14 +682,23 @@ onBeforeUnmount (() => {
   overflow: hidden; cursor: default;
   transition: transform .14s var(--ease), box-shadow .14s var(--ease);
 }
+.item-icon {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  pointer-events: none;
+}
 .cell-item:hover { transform: scale(1.05); box-shadow: 0 3px 10px rgba(0,0,0,0.2); z-index: 5; }
 .cell-name {
+  position: relative; z-index: 1;
   font-size: 9.5px; font-weight: 650; line-height: 1.2; color: var(--rc);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.85);
 }
 .cell-qty {
-  position: absolute; top: 2px; right: 4px;
+  position: absolute; top: 2px; right: 4px; z-index: 1;
   font-size: 9px; font-weight: 700; color: var(--rc);
   font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.85);
 }
 </style>
