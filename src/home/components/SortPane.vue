@@ -29,9 +29,9 @@ const SORT_PRESETS = [
   {
     id: 'default', label: '综合',
     order: [
+      { field: 'name', direction: 'asc' },
       { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
       { field: 'slot', direction: 'desc' }, { field: 'rarity', direction: 'desc' },
-      { field: 'name', direction: 'desc' },
     ],
   },
   {
