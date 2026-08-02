@@ -20,6 +20,17 @@ const defaults = {
   hotkeys: {
     run_price_check: 'XButton1',
   },
+  dnd: {
+    sort_hotkey: 'Ctrl+F11',
+    cancel_hotkey: 'Ctrl+F12',
+    capture_interface: 'Ethernet',
+    capture_port_low: 20200,
+    capture_port_high: 20300,
+    wireshark_path: '',
+    sort_speed: 0.2,
+    pack_mode: false,
+    stack_mode: false,
+  },
 };
 
 const settingsPath = join (app.getPath ('userData'), 'settings.ini');
@@ -45,6 +56,16 @@ settings.general.python_path = settings.general.python_path || 'python';
 settings.general.api_key = settings.general.api_key || '';
 
 settings.hotkeys.run_price_check = settings.hotkeys.run_price_check || 'XButton1';
+
+settings.dnd.sort_hotkey = settings.dnd.sort_hotkey || 'Ctrl+F11';
+settings.dnd.cancel_hotkey = settings.dnd.cancel_hotkey || 'Ctrl+F12';
+settings.dnd.capture_interface = settings.dnd.capture_interface || 'Ethernet';
+settings.dnd.capture_port_low = parseInt (settings.dnd.capture_port_low) || 20200;
+settings.dnd.capture_port_high = parseInt (settings.dnd.capture_port_high) || 20300;
+settings.dnd.wireshark_path = settings.dnd.wireshark_path || '';
+settings.dnd.sort_speed = parseFloat (settings.dnd.sort_speed) || 0.2;
+settings.dnd.pack_mode = toBool (settings.dnd.pack_mode);
+settings.dnd.stack_mode = toBool (settings.dnd.stack_mode);
 
 function toBool (s) {
   if (s === true || s === 'true') return true;

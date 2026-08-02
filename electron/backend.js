@@ -123,3 +123,83 @@ export async function addMapping (chinese, english) {
 export async function removeMapping (chinese) {
   return await post ('/mapping/remove', { chinese }) || { error: 'OCR service unavailable' };
 }
+
+// ── DnD Tools: Capture ──
+
+export async function captureStart () {
+  return await post ('/capture/start') || { error: 'Service unavailable' };
+}
+
+export async function captureStop () {
+  return await post ('/capture/stop') || { error: 'Service unavailable' };
+}
+
+export async function captureRestart () {
+  return await post ('/capture/restart') || { error: 'Service unavailable' };
+}
+
+export async function captureStatus () {
+  return await get ('/capture/status');
+}
+
+export async function captureInterfaces () {
+  return await get ('/capture/interfaces');
+}
+
+export async function captureDiagnose () {
+  return await get ('/capture/diagnose');
+}
+
+export async function captureUpdateSettings (settings) {
+  return await post ('/capture/settings', settings) || { error: 'Service unavailable' };
+}
+
+// ── DnD Tools: Stash ──
+
+export async function getCharacters () {
+  return await get ('/stash/characters');
+}
+
+export async function getCharacter (id) {
+  return await get (`/stash/character/${id}`);
+}
+
+export async function clearCharacters () {
+  return await post ('/stash/clear') || { error: 'Service unavailable' };
+}
+
+// ── DnD Tools: Sort ──
+
+export async function sortStart (params) {
+  return await post ('/sort/start', params) || { error: 'Service unavailable' };
+}
+
+export async function sortCancel () {
+  return await post ('/sort/cancel') || { error: 'Service unavailable' };
+}
+
+export async function sortStatus () {
+  return await get ('/sort/status');
+}
+
+export async function getSortOrder () {
+  return await get ('/sort/order');
+}
+
+export async function updateSortOrder (order) {
+  return await post ('/sort/order', { order }) || { error: 'Service unavailable' };
+}
+
+// ── DnD Tools: Packets ──
+
+export async function getPackets (page = 0, pageSize = 50) {
+  return await get (`/packets?page=${page}&page_size=${pageSize}`);
+}
+
+export async function getPacketDetail (id) {
+  return await get (`/packets/${id}`);
+}
+
+export async function clearPackets () {
+  return await post ('/packets/clear') || { error: 'Service unavailable' };
+}

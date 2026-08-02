@@ -7,7 +7,7 @@ import { startTracking, stopTracking, getCanScan, setOnStateChange } from './ove
 import { wire } from './scan.js';
 import * as backend from './backend.js';
 
-const { app, BrowserWindow, ipcMain } = electron;
+const { app, BrowserWindow, ipcMain, dialog } = electron;
 
 let debugging = false;
 let homeWindow = null;
@@ -95,6 +95,41 @@ app.on ('ready', async () => {
   globalShortcut.register ('F8', () => overlay.webContents.send ('clear'));
 
   registerScanHotkey (overlay);
+  registerSortHotkeys ();
+
+  // ── DnD Tools IPC handlers ──
+
+  ipcMain.handle ('dnd:capture-start', () => backend.captureStart ());
+  ipcMain.handle ('dnd:capture-stop', () => backend.captureStop ());
+  ipcMain.handle ('dnd:capture-restart', () => backend.captureRestart ());
+  ipcMain.handle ('dnd:capture-status', () => backend.captureStatus ());
+  ipcMain.handle ('dnd:capture-interfaces', () => backend.captureInterfaces ());
+  ipcMain.handle ('dnd:capture-diagnose', () => backend.captureDiagnose ());
+  ipcMain.handle ('dnd:capture-settings', (e, data) => backend.captureUpdateSettings (data));
+  ipcMain.handle ('dnd:pick-tshark', async () => {
+    const res = await dialog.showOpenDialog ({
+      title: '选择 tshark.exe（或 Wireshark.exe / Wireshark 安装目录）',
+      buttonLabel: '选择',
+      filters: [{ name: 'Wireshark / TShark', extensions: ['exe'] }],
+      properties: ['openFile', 'showHiddenFiles'],
+    });
+    if (res.canceled || !res.filePaths.length) return { canceled: true, path: '' };
+    return { canceled: false, path: res.filePaths[0] };
+  });
+
+  ipcMain.handle ('dnd:characters', () => backend.getCharacters ());
+  ipcMain.handle ('dnd:character', (e, id) => backend.getCharacter (id));
+  ipcMain.handle ('dnd:clear-characters', () => backend.clearCharacters ());
+
+  ipcMain.handle ('dnd:sort-start', (e, params) => backend.sortStart (params));
+  ipcMain.handle ('dnd:sort-cancel', () => backend.sortCancel ());
+  ipcMain.handle ('dnd:sort-status', () => backend.sortStatus ());
+  ipcMain.handle ('dnd:sort-order-get', () => backend.getSortOrder ());
+  ipcMain.handle ('dnd:sort-order-set', (e, order) => backend.updateSortOrder (order));
+
+  ipcMain.handle ('dnd:packets', (e, page, pageSize) => backend.getPackets (page, pageSize));
+  ipcMain.handle ('dnd:packet-detail', (e, id) => backend.getPacketDetail (id));
+  ipcMain.handle ('dnd:packets-clear', () => backend.clearPackets ());
 
   ipcMain.handle ('settings:get', () => ({
     api_key: settings.general.api_key || '',
@@ -184,6 +219,30 @@ async function registerScanHotkey (overlay) {
   }
 
   previousScanAccelerator = accelerator;
+}
+
+function registerSortHotkeys () {
+  const sortKey = settings.dnd?.sort_hotkey || 'Ctrl+F11';
+  const cancelKey = settings.dnd?.cancel_hotkey || 'Ctrl+F12';
+
+  try {
+    globalShortcut.register (sortKey, async () => {
+      if (homeWindow) homeWindow.webContents.send ('dnd:sort-hotkey');
+    });
+    logger.info (`Sort hotkey: ${sortKey}`);
+  } catch (e) {
+    logger.error (`Failed to register sort hotkey ${sortKey}: ${e.message}`);
+  }
+
+  try {
+    globalShortcut.register (cancelKey, async () => {
+      await backend.sortCancel ();
+      if (homeWindow) homeWindow.webContents.send ('dnd:sort-cancelled');
+    });
+    logger.info (`Sort cancel hotkey: ${cancelKey}`);
+  } catch (e) {
+    logger.error (`Failed to register cancel hotkey ${cancelKey}: ${e.message}`);
+  }
 }
 
 function openSettingsWindow (tab) {

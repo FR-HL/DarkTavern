@@ -99,6 +99,21 @@ logger = logging.getLogger("darktavern-ocr")
 
 app = FastAPI(title="DarkTavern OCR Service", version="1.0.0")
 
+# --- DnD Tools routers (capture / stash / sort / packets) ---
+try:
+    from dnd.routers.capture_router import router as capture_router
+    from dnd.routers.stash_router import router as stash_router
+    from dnd.routers.sort_router import router as sort_router
+    from dnd.routers.packet_router import router as packet_router
+
+    app.include_router(capture_router, prefix="/capture", tags=["capture"])
+    app.include_router(stash_router, prefix="/stash", tags=["stash"])
+    app.include_router(sort_router, prefix="/sort", tags=["sort"])
+    app.include_router(packet_router, prefix="/packets", tags=["packets"])
+    logger.info("DnD Tools routers mounted")
+except Exception as _dnd_err:
+    logger.warning(f"DnD Tools routers unavailable: {_dnd_err}")
+
 # Global instances (initialized on startup)
 detector = None
 ocr = None
