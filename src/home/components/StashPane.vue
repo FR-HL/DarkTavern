@@ -24,6 +24,7 @@ const tsharkOk = computed (() => !!tsharkPath.value);
 
 const diag = ref (null);
 const diagBusy = ref (false);
+const diagOpen = ref (false);
 
 const RARITY = {
   Poor:      { c: '#8a8a8e', bg: 'rgba(138,138,142,0.10)' },
@@ -254,12 +255,18 @@ onBeforeUnmount (() => { if (timer) clearInterval (timer); });
         <button class="btn subtle sm" :disabled="tsharkBusy" @click="pickTshark">选择路径</button>
       </div>
 
-      <div class="diag-head">
+      <div class="diag-head" :class="{ open: diagOpen }">
         <div class="diag-summary" :class="{ warn: diag && !diag.game.running }">{{ diagSummary }}</div>
-        <button class="btn subtle sm" :disabled="diagBusy" @click="loadDiagnose">{{ diagBusy ? '检测中…' : '重新检测' }}</button>
+        <div class="diag-actions">
+          <button class="btn subtle sm" :disabled="diagBusy" @click="loadDiagnose">{{ diagBusy ? '检测中…' : '重新检测' }}</button>
+          <button class="diag-toggle" :class="{ open: diagOpen }" @click="diagOpen = !diagOpen" :title="diagOpen ? '收起链路详情' : '展开链路详情'">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
       </div>
 
-      <div class="topo" v-if="diag">
+      <template v-if="diagOpen">
+        <div class="topo" v-if="diag">
           <!-- 游戏进程 -->
           <div class="topo-node" :class="{ dim: !diag.game.running }">
             <div class="node-ic game">
@@ -327,6 +334,7 @@ onBeforeUnmount (() => { if (timer) clearInterval (timer); });
         </div>
 
         <div class="diag-foot mono" v-if="diag">抓包过滤器&nbsp;&nbsp;{{ diag.capture.filter }}</div>
+      </template>
     </div>
 
     <div v-if="error" class="status error">{{ error }}</div>
@@ -443,6 +451,18 @@ onBeforeUnmount (() => { if (timer) clearInterval (timer); });
   margin-top: 13px; padding-top: 13px;
   border-top: 1px solid var(--line-soft);
 }
+.diag-actions { display: flex; align-items: center; gap: 8px; }
+.diag-toggle {
+  display: grid; place-items: center;
+  width: 28px; height: 28px; padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card-2);
+  color: var(--text-3); cursor: pointer;
+  transition: all .18s var(--ease);
+}
+.diag-toggle:hover { border-color: var(--accent-soft); color: var(--accent); }
+.diag-toggle svg { width: 15px; height: 15px; transition: transform .22s var(--ease); }
+.diag-toggle.open svg { transform: rotate(180deg); }
 .diag-summary { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--text); }
 .diag-summary.warn { color: var(--amber); }
 
