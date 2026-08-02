@@ -24,6 +24,19 @@ const SPEED_OPTIONS = [
 const SORT_HOTKEY = 'Ctrl+F11';
 const CANCEL_HOTKEY = 'Ctrl+F12';
 
+const CLASS_CN = {
+  Barbarian: '野蛮人',
+  Bard: '吟游诗人',
+  Cleric: '牧师',
+  Druid: '德鲁伊',
+  Fighter: '战士',
+  Ranger: '游侠',
+  Rogue: '潜行者',
+  Sorcerer: '术士',
+  Warlock: '邪术师',
+  Wizard: '法师',
+};
+
 const selected = ref (null);
 const charData = ref (null);
 const loading = ref (false);
@@ -297,7 +310,7 @@ onBeforeUnmount (() => {
           <span class="char-seal">{{ (c.class || '?').charAt (0) }}</span>
           <span class="char-meta">
             <span class="char-name">{{ c.nickname }}</span>
-            <span class="char-sub">{{ c.class }} · Lv.{{ c.level }} · {{ c.total_items }} 件</span>
+            <span class="char-sub"><b>{{ CLASS_CN[c.class] || c.class }}</b> · Lv.<b>{{ c.level }}</b></span>
           </span>
         </button>
       </div>
@@ -511,6 +524,7 @@ onBeforeUnmount (() => {
 .char-name { font-size: 13.5px; font-weight: 650; color: var(--text); letter-spacing: -0.01em; }
 .char-card.on .char-name { color: var(--accent); }
 .char-sub { font-size: 11.5px; color: var(--text-3); }
+.char-sub b { font-weight: 650; color: var(--text-2); }
 
 /* empty */
 .empty-hint {
