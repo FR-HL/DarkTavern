@@ -253,20 +253,13 @@ onBeforeUnmount (() => { if (timer) clearInterval (timer); });
         </span>
         <button class="btn subtle sm" :disabled="tsharkBusy" @click="pickTshark">选择路径</button>
       </div>
-    </div>
 
-    <div v-if="error" class="status error">{{ error }}</div>
+      <div class="diag-head">
+        <div class="diag-summary" :class="{ warn: diag && !diag.game.running }">{{ diagSummary }}</div>
+        <button class="btn subtle sm" :disabled="diagBusy" @click="loadDiagnose">{{ diagBusy ? '检测中…' : '重新检测' }}</button>
+      </div>
 
-    <!-- 网络链路诊断 -->
-    <div class="sec">
-      <div class="sec-label">网络链路诊断</div>
-      <div class="card diag-card">
-        <div class="diag-head">
-          <div class="diag-summary" :class="{ warn: diag && !diag.game.running }">{{ diagSummary }}</div>
-          <button class="btn subtle sm" :disabled="diagBusy" @click="loadDiagnose">{{ diagBusy ? '检测中…' : '重新检测' }}</button>
-        </div>
-
-        <div class="topo" v-if="diag">
+      <div class="topo" v-if="diag">
           <!-- 游戏进程 -->
           <div class="topo-node" :class="{ dim: !diag.game.running }">
             <div class="node-ic game">
@@ -334,8 +327,9 @@ onBeforeUnmount (() => { if (timer) clearInterval (timer); });
         </div>
 
         <div class="diag-foot mono" v-if="diag">抓包过滤器&nbsp;&nbsp;{{ diag.capture.filter }}</div>
-      </div>
     </div>
+
+    <div v-if="error" class="status error">{{ error }}</div>
 
     <!-- 角色选择 -->
     <div class="sec" v-if="characters.length">
@@ -443,17 +437,16 @@ onBeforeUnmount (() => { if (timer) clearInterval (timer); });
   font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em;
 }
 
-/* ===== network topology diagnose ===== */
-.diag-card { padding: 0; overflow: hidden; }
+/* ===== network topology diagnose (inside capture card) ===== */
 .diag-head {
   display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding: 14px 18px;
-  background: var(--card-2); border-bottom: 1px solid var(--line-soft);
+  margin-top: 13px; padding-top: 13px;
+  border-top: 1px solid var(--line-soft);
 }
 .diag-summary { font-size: 14px; font-weight: 650; letter-spacing: -0.01em; color: var(--text); }
 .diag-summary.warn { color: var(--amber); }
 
-.topo { padding: 16px 18px 8px; }
+.topo { padding: 14px 0 8px; }
 .topo-node {
   display: flex; align-items: center; gap: 13px;
   padding: 9px 12px;
@@ -516,8 +509,7 @@ onBeforeUnmount (() => { if (timer) clearInterval (timer); });
   font-size: 11px; color: var(--text-2);
 }
 .diag-foot {
-  padding: 10px 18px; border-top: 1px solid var(--line-soft);
-  background: var(--card-2);
+  margin-top: 4px; padding: 8px 0 2px; border-top: 1px solid var(--line-soft);
   font-size: 11px; color: var(--text-3);
 }
 .cap-dot {
