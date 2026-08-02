@@ -1427,7 +1427,12 @@ class StashSorter:
         self._failure_reason: Optional[str] = None
         self._session_summary: Optional[Dict[str, Any]] = None
         self._safety_monitor: Optional[SortSafetyMonitor] = None
-        self.learning_manager = get_sort_learning_manager()
+        from dnd.settings import settings_manager as _settings_manager
+        self.learning_manager = (
+            get_sort_learning_manager()
+            if bool(_settings_manager.get("sortLearningEnabled", False))
+            else None
+        )
         self._learning_session_id: Optional[str] = None
         self.feedback_handle = None
 

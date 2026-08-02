@@ -106,6 +106,7 @@ class SettingsManager:
             "autoStashSelection": True,
             "stashPackMode": False,
             "stashStackMode": False,
+            "sortLearningEnabled": False,
         }
 
     def set_logger(self, logger: Optional[logging.Logger]) -> None:
