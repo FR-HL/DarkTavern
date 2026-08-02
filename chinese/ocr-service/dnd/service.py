@@ -121,6 +121,7 @@ def _handle_character(message):
             char_id = str(char_data.characterId)
             file_path = os.path.join(get_characters_dir(), f"{char_id}.json")
             mgr = get_stash_manager()
+            mgr.current_character_id = char_id
             mgr.update_single_character(char_id, file_path)
             from dnd import events
             events.broadcast({"type": "character_updated", "character_id": char_id})
@@ -128,6 +129,39 @@ def _handle_character(message):
             logger.error(f"Incremental cache update failed, falling back to force_reload: {e}")
             get_stash_manager().force_reload()
     return saved
+
+
+def _incremental_handler(kind, items_field, old_items_field=None):
+    """Build a packet handler that applies an incremental inventory update."""
+    from google.protobuf.json_format import MessageToDict
+    from dnd.stash.incremental import apply_character_update
+
+    def handler(message):
+        mgr = get_stash_manager()
+        char_id = getattr(mgr, "current_character_id", None)
+        if not char_id:
+            return
+        try:
+            items = list(getattr(message, items_field, []) or [])
+            if not items:
+                return
+            old_items = None
+            if old_items_field:
+                old_items = list(getattr(message, old_items_field, []) or [])
+            result = int(getattr(message, "result", 0) or 0)
+            dicts = [MessageToDict(i, preserving_proto_field_name=False) for i in items]
+            old_dicts = [MessageToDict(i, preserving_proto_field_name=False) for i in old_items] if old_items else None
+            if apply_character_update(char_id, kind, dicts, old_items=old_dicts, result=result):
+                import os
+                from dnd.appdirs import get_characters_dir
+                file_path = os.path.join(get_characters_dir(), f"{char_id}.json")
+                mgr.update_single_character(char_id, file_path)
+                from dnd import events
+                events.broadcast({"type": "character_updated", "character_id": char_id})
+        except Exception as e:
+            logger.error(f"Incremental handler {kind} failed: {e}")
+
+    return handler
 
 
 def get_packet_capture():
@@ -151,6 +185,14 @@ def get_packet_capture():
             )
             capture.capture_info = {
                 _PacketCommand_pb2.PacketCommand.S2C_LOBBY_CHARACTER_INFO_RES: _handle_character,
+                _PacketCommand_pb2.PacketCommand.S2C_INVENTORY_SINGLE_UPDATE_RES: _incremental_handler(
+                    "single", "newItem", "oldItem"),
+                _PacketCommand_pb2.PacketCommand.S2C_INVENTORY_ALL_UPDATE_RES: _incremental_handler(
+                    "all", "inventoryItems"),
+                _PacketCommand_pb2.PacketCommand.S2C_INVENTORY_INFO_RES: _incremental_handler(
+                    "info", "inventoryItems"),
+                _PacketCommand_pb2.PacketCommand.S2C_STORAGE_INFO_RES: _incremental_handler(
+                    "storage", "storageItems"),
             }
             _packet_capture = capture
         return _packet_capture
