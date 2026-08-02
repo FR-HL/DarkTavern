@@ -649,7 +649,7 @@ onBeforeUnmount (() => {
   padding: 9px 12px;
   border: 1px solid var(--line); border-radius: 8px;
   background: var(--card-2);
-  font-size: 13px; font-weight: 600; color: var(--text-2);
+  font-size: 14px; font-weight: 600; color: var(--text-2);
   cursor: pointer;
   transition: all .15s var(--ease);
 }
@@ -658,7 +658,7 @@ onBeforeUnmount (() => {
   background: var(--accent); border-color: var(--accent);
   color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.28);
 }
-.side-tab .count { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.side-tab .count { color: var(--text-3); font-size: 14px; font-variant-numeric: tabular-nums; }
 .side-tab.active .count { color: rgba(255,255,255,0.85); }
 .stash-body { padding: 0; flex: 1; min-width: 0; }
 .stash-meta {
