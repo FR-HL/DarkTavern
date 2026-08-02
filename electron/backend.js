@@ -164,6 +164,10 @@ export async function getCharacter (id) {
   return await get (`/stash/character/${id}`);
 }
 
+export async function getCharacterTouch (id) {
+  return await get (`/stash/character/${id}/updated_at`);
+}
+
 export async function clearCharacters () {
   return await post ('/stash/clear') || { error: 'Service unavailable' };
 }

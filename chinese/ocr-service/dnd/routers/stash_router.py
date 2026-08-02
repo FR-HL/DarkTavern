@@ -114,8 +114,17 @@ def get_character(character_id: str):
         "nickname": char_data.get("nickname", "Unknown"),
         "class": char_data.get("class", "Unknown"),
         "level": char_data.get("level", 0),
+        "updated_at": char_data.get("lastUpdate", ""),
         "stashes": stashes_info,
     }
+
+
+@router.get("/character/{character_id}/updated_at")
+def character_updated_at(character_id: str):
+    from dnd.service import get_stash_manager
+    mgr = get_stash_manager()
+    char_data = mgr.characters_cache.get(character_id)
+    return {"updated_at": char_data.get("lastUpdate", "") if char_data else ""}
 
 
 @router.post("/clear")

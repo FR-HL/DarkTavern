@@ -98,23 +98,25 @@ function itemStyle (it) {
   };
 }
 
-async function loadCharData (id) {
-  loading.value = true;
-  error.value = '';
-  charData.value = null;
+const lastUpdated = ref ('');
+
+async function loadCharData (id, silent = false) {
+  if (!silent) { loading.value = true; error.value = ''; charData.value = null; }
   try {
     const d = await invoke ('dnd:character', id);
     if (d && !d.error) {
       charData.value = d;
-      if (!stashId.value) {
+      lastUpdated.value = d.updated_at || '';
+      if (!stashList.value.some (s => s.id === stashId.value)) {
+        stashId.value = '';
         const first = stashList.value[0];
         if (first) stashId.value = first.id;
       }
-    } else {
+    } else if (!silent) {
       error.value = d?.error || '加载失败';
     }
-  } catch (e) { error.value = '加载失败'; }
-  loading.value = false;
+  } catch (e) { if (!silent) error.value = '加载失败'; }
+  if (!silent) loading.value = false;
 }
 
 async function selectCharacter (id) {
@@ -249,6 +251,16 @@ async function cancelSort () {
   await invoke ('dnd:sort-cancel');
 }
 
+async function pollCharData () {
+  if (!charId.value || sorting.value || loading.value) return;
+  try {
+    const t = await invoke ('dnd:character-touch', charId.value);
+    if (t && t.updated_at && t.updated_at !== lastUpdated.value) {
+      await loadCharData (charId.value, true);
+    }
+  } catch (e) {}
+}
+
 let poll = null;
 async function pollStatus () {
   if (!sorting.value) return;
@@ -286,7 +298,7 @@ onMounted (async () => {
     window.electron.on ('dnd:sort-cancelled', onSortCancelled),
   ];
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
-  poll = setInterval (pollStatus, 800);
+  poll = setInterval (() => { pollStatus (); pollCharData (); }, 1000);
 });
 onBeforeUnmount (() => {
   if (poll) clearInterval (poll);
