@@ -24,6 +24,40 @@ class SortOrderUpdate(BaseModel):
     order: List[SortOrderItem]
 
 
+class SortSpeedUpdate(BaseModel):
+    value: float
+
+
+SPEED_PRESETS = {
+    "slow": 0.4,
+    "medium": 0.2,
+    "instant": 0.0,
+}
+
+
+def _preset_for_value(value: float) -> str:
+    if value <= 0.05:
+        return "instant"
+    if value <= 0.25:
+        return "medium"
+    return "slow"
+
+
+@router.get("/speed")
+def get_sort_speed():
+    from dnd.settings import settings_manager
+    value = float(settings_manager.get("sortSpeed", 0.2))
+    return {"value": value, "preset": _preset_for_value(value)}
+
+
+@router.post("/speed")
+def update_sort_speed(body: SortSpeedUpdate):
+    from dnd.settings import settings_manager
+    value = max(0.0, float(body.value))
+    settings_manager.update({"sortSpeed": value}, persist=True)
+    return {"success": True, "value": value, "preset": _preset_for_value(value)}
+
+
 @router.get("/uipi-status")
 def sort_uipi_status():
     """Report whether Windows would block simulated mouse input.

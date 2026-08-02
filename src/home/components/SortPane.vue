@@ -14,6 +14,12 @@ const sorting = ref (false);
 const result = ref (null);
 const error = ref ('');
 const uipi = ref (null);
+const sortSpeed = ref ('medium');
+const SPEED_OPTIONS = [
+  { id: 'slow', label: '慢', desc: '最稳，每步约 1.5s' },
+  { id: 'medium', label: '中', desc: '默认，兼顾稳定与速度' },
+  { id: 'instant', label: '极速', desc: '最快，约 10 倍提速，偶发漏操作' },
+];
 
 const SORT_HOTKEY = 'Ctrl+F11';
 const CANCEL_HOTKEY = 'Ctrl+F12';
@@ -27,6 +33,24 @@ async function checkUipi () {
   try {
     uipi.value = await invoke ('dnd:sort-uipi');
   } catch (e) { uipi.value = null; }
+}
+
+async function loadSortSpeed () {
+  try {
+    const s = await invoke ('dnd:sort-speed-get');
+    if (s && s.preset) sortSpeed.value = s.preset;
+  } catch (e) {}
+}
+
+async function changeSpeed (id) {
+  const opt = SPEED_OPTIONS.find (o => o.id === id);
+  if (!opt) return;
+  const speeds = { slow: 0.4, medium: 0.2, instant: 0 };
+  sortSpeed.value = id;
+  try {
+    const r = await invoke ('dnd:sort-speed-set', speeds[id]);
+    if (!r?.success) sortSpeed.value = 'medium';
+  } catch (e) {}
 }
 
 async function loadCharacters () {
@@ -138,6 +162,7 @@ onMounted (async () => {
   await loadCharacters ();
   await restoreConfig ();
   checkUipi ();
+  loadSortSpeed ();
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
@@ -193,6 +218,19 @@ onBeforeUnmount (() => {
     <div class="sec">
       <div class="sec-label">整理选项</div>
       <div class="card">
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">整理速度</div>
+            <div class="srow-d">极速≈10 倍提速；若出现漏放/串位，改用中或慢</div>
+          </div>
+          <div class="srow-ctl speed-group">
+            <button v-for="o in SPEED_OPTIONS" :key="o.id"
+                    class="speed-opt" :class="{ active: sortSpeed === o.id }"
+                    @click="changeSpeed(o.id)">
+              {{ o.label }}
+            </button>
+          </div>
+        </div>
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">紧凑模式</div>
@@ -272,6 +310,19 @@ onBeforeUnmount (() => {
   font-size: 13px; color: #7a4d0d; line-height: 1.6;
 }
 .uipi-warn b { font-weight: 650; color: #a05a00; }
+
+.speed-group { display: flex; gap: 6px; }
+.speed-opt {
+  padding: 6px 16px; font-size: 13px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card-2); color: var(--text-2);
+  cursor: pointer; transition: all .15s;
+}
+.speed-opt:hover { border-color: var(--accent-soft); }
+.speed-opt.active {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.28);
+}
 
 .run-progress {
   display: flex; align-items: center; gap: 12px;

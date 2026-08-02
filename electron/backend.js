@@ -186,6 +186,14 @@ export async function getSortUipiStatus () {
   return await get ('/sort/uipi-status');
 }
 
+export async function getSortSpeed () {
+  return await get ('/sort/speed');
+}
+
+export async function setSortSpeed (value) {
+  return await post ('/sort/speed', { value }) || { error: 'Service unavailable' };
+}
+
 export async function getSortOrder () {
   return await get ('/sort/order');
 }
