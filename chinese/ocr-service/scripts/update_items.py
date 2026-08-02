@@ -108,13 +108,13 @@ def http_get(url: str, headers: Dict, timeout: int = 30, retries: int = 3) -> re
     raise last_exc
 
 
-def fetch_all_items(headers: Dict) -> Dict[str, Dict]:
-    """Fetch the full item catalog (paginated via cursor)."""
+def fetch_all_items(headers: Dict, locale: str = "en") -> Dict[str, Dict]:
+    """Fetch the full item catalog (paginated via cursor) in one locale."""
     records: Dict[str, Dict] = {}
     cursor = None
     page = 1
     while page <= MAX_PAGES:
-        url = f"{API_ITEMS_URL}?limit={PAGE_SIZE}"
+        url = f"{API_ITEMS_URL}?limit={PAGE_SIZE}&locale={locale}"
         if cursor:
             url += f"&cursor={cursor}"
         resp = http_get(url, headers)
@@ -128,14 +128,14 @@ def fetch_all_items(headers: Dict) -> Dict[str, Dict]:
 
         pagination = data.get("pagination") or {}
         total = pagination.get("total") or 0
-        render_progress(len(records), total, prefix="Items: ")
+        render_progress(len(records), total, prefix=f"Items ({locale}): ")
         cursor = pagination.get("next")
         if not cursor:
             break
         page += 1
         time.sleep(PAGE_DELAY)
 
-    logger.info("Total items fetched: %d", len(records))
+    logger.info("Total items fetched (%s): %d", locale, len(records))
     return records
 
 
@@ -227,10 +227,15 @@ def update(force_icons: bool, api_key: str) -> bool:
 
     headers = {"X-Api-Key": api_key, "User-Agent": "DarkTavern-Updater/1.0"}
 
-    records = fetch_all_items(headers)
+    records = fetch_all_items(headers, locale="en")
     if not records:
         logger.error("No items fetched from API")
         return False
+
+    logger.info("Fetching Chinese names (zh-Hans)...")
+    zh_records = fetch_all_items(headers, locale="zh-Hans")
+    for rid, record in records.items():
+        record["name_zh"] = zh_records.get(rid, {}).get("name", "")
 
     logger.info("Loading existing icons.pak...")
     existing_pak = load_existing_pak()
@@ -248,6 +253,26 @@ def update(force_icons: bool, api_key: str) -> bool:
     return True
 
 
+def resolve_api_key(args_key: Optional[str]) -> str:
+    key = args_key or os.environ.get("DARKERDB_API_KEY", "").strip()
+    if key:
+        return key
+    import re
+    for candidate in (r"D:\code\DADEquipment\config.py",):
+        path = Path(candidate)
+        if not path.exists():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+            m = re.search(r'DARKERDB_API_KEY\s*=\s*os\.environ\.get\([^)]*\)\s*or\s*"([^"]+)"', text)
+            if m:
+                logger.info("API key read from %s", candidate)
+                return m.group(1)
+        except Exception as exc:
+            logger.warning("Failed to read API key from %s: %s", candidate, exc)
+    return ""
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Update items.json and icons.pak from DarkerDB API.")
     parser.add_argument("--force-icons", action="store_true", help="Re-download all icons.")
@@ -256,7 +281,7 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    api_key = args.api_key or os.environ.get("DARKERDB_API_KEY", "").strip()
+    api_key = resolve_api_key(args.api_key)
     logger.info("DarkerDB Items Updater")
     logger.info("Items file: %s", ITEMS_FILE)
     logger.info("Icons pak:  %s", ICONS_PAK_FILE)
