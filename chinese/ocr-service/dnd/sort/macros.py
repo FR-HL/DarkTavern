@@ -280,6 +280,10 @@ class INPUT(ctypes.Structure):
 SendInput = ctypes.windll.user32.SendInput
 
 INSTANT_MODE_MIN_PAUSE = 0.004  # tiny floor so instant mode still yields reliable inputs
+INSTANT_MODE_HOLD_BEFORE_DRAG = 0.035  # keep the button down for ~2 frames so the game registers the drag
+INSTANT_MODE_ARRIVAL_PAUSE = 0.02  # let the game process the arrival before releasing
+INSTANT_MODE_RELEASE_PAUSE = 0.02  # let the drop settle after releasing
+INSTANT_MODE_RELIABILITY_GAP = 0.03  # spacing between reliability-click press/release
 DOUBLE_CLICK_PROTECT_WINDOW = 0.18
 
 _last_drop_signature = None
@@ -752,7 +756,10 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
         _ensure_not_cancelled()
         mouse_down()
         primary_button_held = True
-        maybe_sleep(DELAY, 0.07, enforce_floor=True)
+        if no_delay_mode:
+            _sleep_with_cancel(INSTANT_MODE_HOLD_BEFORE_DRAG)
+        else:
+            maybe_sleep(DELAY, 0.07, enforce_floor=True)
 
         # Move to end position smoothly
         travel_steps = 25
@@ -768,12 +775,18 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
             max_delay=0.003,
             no_delay=no_delay_mode,
         )
-        maybe_sleep(DELAY, 0.07, enforce_floor=True)
+        if no_delay_mode:
+            _sleep_with_cancel(INSTANT_MODE_ARRIVAL_PAUSE)
+        else:
+            maybe_sleep(DELAY, 0.07, enforce_floor=True)
 
         _ensure_not_cancelled()
         mouse_up()
         primary_button_held = False
-        maybe_sleep(DELAY, 0.07, enforce_floor=True)
+        if no_delay_mode:
+            _sleep_with_cancel(INSTANT_MODE_RELEASE_PAUSE)
+        else:
+            maybe_sleep(DELAY, 0.07, enforce_floor=True)
 
         drop_signature = (id(end_stash), int(getattr(end_pos, "x", 0)), int(getattr(end_pos, "y", 0)))
         now = time.perf_counter()
@@ -794,15 +807,24 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
                 max_delay=0.0015,
                 no_delay=no_delay_mode,
             )
-            maybe_sleep(base_reliability_delay, 0.02, enforce_floor=True)
+            if no_delay_mode:
+                _sleep_with_cancel(INSTANT_MODE_RELIABILITY_GAP)
+            else:
+                maybe_sleep(base_reliability_delay, 0.02, enforce_floor=True)
             _ensure_not_cancelled()
             mouse_down()
             reliability_button_held = True
-            maybe_sleep(base_reliability_delay / 2, 0.015, enforce_floor=True)
+            if no_delay_mode:
+                _sleep_with_cancel(INSTANT_MODE_RELIABILITY_GAP)
+            else:
+                maybe_sleep(base_reliability_delay / 2, 0.015, enforce_floor=True)
             _ensure_not_cancelled()
             mouse_up()
             reliability_button_held = False
-            maybe_sleep(base_reliability_delay, 0.02, enforce_floor=True)
+            if no_delay_mode:
+                _sleep_with_cancel(INSTANT_MODE_RELIABILITY_GAP)
+            else:
+                maybe_sleep(base_reliability_delay, 0.02, enforce_floor=True)
         else:
             logger.debug("Skipping reliability click to avoid double-click on %s", drop_signature)
             maybe_sleep(INSTANT_MODE_MIN_PAUSE, 0.005, enforce_floor=True)
