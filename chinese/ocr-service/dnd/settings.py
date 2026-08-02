@@ -96,7 +96,7 @@ class SettingsManager:
             "interface": os.getenv("CAPTURE_INTERFACE", "Ethernet"),
             "sortHotkey": "ctrl+f11",
             "cancelHotkey": "ctrl+f12",
-            "sortSpeed": 0.2,
+            "sortSpeed": 0.1,
             "resolution": "Auto",
             "stashSortOrder": Item.copy_sort_order(),
             "wiresharkPath": detect_wireshark_installation(),

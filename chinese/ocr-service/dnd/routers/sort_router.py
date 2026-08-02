@@ -30,7 +30,7 @@ class SortSpeedUpdate(BaseModel):
 
 SPEED_PRESETS = {
     "slow": 0.4,
-    "medium": 0.2,
+    "medium": 0.1,
     "instant": 0.0,
 }
 
@@ -46,7 +46,7 @@ def _preset_for_value(value: float) -> str:
 @router.get("/speed")
 def get_sort_speed():
     from dnd.settings import settings_manager
-    value = float(settings_manager.get("sortSpeed", 0.2))
+    value = float(settings_manager.get("sortSpeed", 0.1))
     return {"value": value, "preset": _preset_for_value(value)}
 
 

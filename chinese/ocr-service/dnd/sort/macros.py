@@ -721,20 +721,20 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
         # Move to start position smoothly from current mouse position
         pt = POINT()
         ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-        start_steps = 20
+        start_steps = 16
         if max_travel <= max(jump * 0.6, 12):
-            start_steps = 24
+            start_steps = 20
         move_mouse_smooth(
             float(pt.x),
             float(pt.y),
             sx,
             sy,
             steps=start_steps,
-            min_delay=0.001,
-            max_delay=0.003,
+            min_delay=0.0006,
+            max_delay=0.0015,
             no_delay=no_delay_mode,
         )
-        maybe_sleep(DELAY, 0.07, enforce_floor=True)
+        maybe_sleep(DELAY, 0.04, enforce_floor=True)
 
         # Protect against rapid consecutive pickups from the same slot or
         # picking up from where we just dropped — the game may interpret
@@ -759,26 +759,26 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
         if no_delay_mode:
             _sleep_with_cancel(INSTANT_MODE_HOLD_BEFORE_DRAG)
         else:
-            maybe_sleep(DELAY, 0.07, enforce_floor=True)
+            maybe_sleep(DELAY, 0.04, enforce_floor=True)
 
         # Move to end position smoothly
-        travel_steps = 25
+        travel_steps = 20
         if max_travel <= max(jump * 0.6, 12):
-            travel_steps = 28
+            travel_steps = 22
         move_mouse_smooth(
             sx,
             sy,
             ex,
             ey,
             steps=travel_steps,
-            min_delay=0.001,
-            max_delay=0.003,
+            min_delay=0.0006,
+            max_delay=0.0015,
             no_delay=no_delay_mode,
         )
         if no_delay_mode:
             _sleep_with_cancel(INSTANT_MODE_ARRIVAL_PAUSE)
         else:
-            maybe_sleep(DELAY, 0.07, enforce_floor=True)
+            maybe_sleep(DELAY, 0.04, enforce_floor=True)
 
         _ensure_not_cancelled()
         mouse_up()
@@ -786,7 +786,7 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
         if no_delay_mode:
             _sleep_with_cancel(INSTANT_MODE_RELEASE_PAUSE)
         else:
-            maybe_sleep(DELAY, 0.07, enforce_floor=True)
+            maybe_sleep(DELAY, 0.04, enforce_floor=True)
 
         drop_signature = (id(end_stash), int(getattr(end_pos, "x", 0)), int(getattr(end_pos, "y", 0)))
         now = time.perf_counter()
