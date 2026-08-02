@@ -609,10 +609,10 @@ onBeforeUnmount (() => {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
 .char-meta { display: flex; flex-direction: column; gap: 2px; }
-.char-name { font-size: 13.5px; font-weight: 650; color: var(--text); letter-spacing: -0.01em; }
+.char-name { font-size: 15.5px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
 .char-card.on .char-name { color: var(--accent); }
-.char-sub { font-size: 11.5px; color: var(--text-3); }
-.char-sub b { font-weight: 650; color: var(--text-2); }
+.char-sub { font-size: 13px; color: var(--text-3); }
+.char-sub b { font-weight: 700; color: var(--text-2); }
 .char-live {
   margin-left: auto; flex: none;
   font-size: 11px; font-weight: 650;
