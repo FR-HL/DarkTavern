@@ -15,6 +15,8 @@ const result = ref (null);
 const error = ref ('');
 const uipi = ref (null);
 const sortSpeed = ref ('medium');
+// Character currently being played in-game (latest snapshot via WebSocket).
+const activeCharacterId = ref ('');
 const SPEED_OPTIONS = [
   { id: 'slow', label: '慢', desc: '最稳，每步约 1.5s' },
   { id: 'medium', label: '中', desc: '默认，兼顾稳定与速度' },
@@ -231,6 +233,20 @@ async function startSort () {
   if (!canStart.value) { error.value = '请选择角色和仓库'; return; }
   error.value = '';
   result.value = null;
+  const sid = parseInt (stashId.value) || 0;
+  const isPersonal = sid < 20 || (sid >= 100 && sid <= 102);
+  if (isPersonal && activeCharacterId.value && activeCharacterId.value !== charId.value) {
+    const live = characters.value.find (c => c.id === activeCharacterId.value);
+    const liveName = live?.nickname || activeCharacterId.value;
+    const picked = characters.value.find (c => c.id === charId.value);
+    const pickedName = picked?.nickname || charId.value;
+    const ok = window.confirm (
+      `游戏内当前角色是「${liveName}」，你选择整理的是「${pickedName}」。\n` +
+      '整理会操作游戏内当前打开的仓库界面，角色不一致会整理错仓库。\n' +
+      '请先在游戏中切换到「' + pickedName + '」并打开它的仓库。\n\n仍要继续吗？'
+    );
+    if (!ok) return;
+  }
   sorting.value = true;
   try {
     const r = await invoke ('dnd:sort-start', {
@@ -260,8 +276,13 @@ async function connectEvents () {
     ws.onmessage = (ev) => {
       try {
         const m = JSON.parse (ev.data);
-        if (m.type === 'character_updated' && m.character_id === charId.value && !sorting.value) {
-          loadCharData (charId.value, true);
+        if (m.type === 'current_character') {
+          activeCharacterId.value = m.character_id || '';
+        } else if (m.type === 'character_updated') {
+          if (m.character_id) activeCharacterId.value = m.character_id;
+          if (m.character_id === charId.value && !sorting.value) {
+            loadCharData (charId.value, true);
+          }
         }
       } catch (e) {}
     };
@@ -343,6 +364,7 @@ onBeforeUnmount (() => {
             <span class="char-name">{{ c.nickname }}</span>
             <span class="char-sub"><b>{{ CLASS_CN[c.class] || c.class }}</b> · Lv.<b>{{ c.level }}</b></span>
           </span>
+          <span v-if="activeCharacterId === c.id" class="char-live">游戏中</span>
         </button>
       </div>
     </div>
@@ -556,6 +578,14 @@ onBeforeUnmount (() => {
 .char-card.on .char-name { color: var(--accent); }
 .char-sub { font-size: 11.5px; color: var(--text-3); }
 .char-sub b { font-weight: 650; color: var(--text-2); }
+.char-live {
+  margin-left: auto; flex: none;
+  font-size: 11px; font-weight: 650;
+  color: #23c48e;
+  background: rgba(35, 196, 142, 0.12);
+  border: 1px solid rgba(35, 196, 142, 0.4);
+  border-radius: 999px; padding: 2px 9px;
+}
 
 /* empty */
 .empty-hint {

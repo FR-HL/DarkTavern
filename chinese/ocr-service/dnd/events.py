@@ -42,11 +42,18 @@ def broadcast(payload: dict) -> None:
         logger.debug("broadcast: event loop not available, event dropped")
 
 
-async def handle_socket(ws: WebSocket) -> None:
+async def handle_socket(ws: WebSocket, on_connect=None) -> None:
     """Serve a single WebSocket client. Messages from the client are ignored
-    except as a way to detect disconnects."""
+    except as a way to detect disconnects. ``on_connect`` (optional) is a
+    coroutine called right after accept so the endpoint can send initial state
+    (e.g. the current character) to a fresh client."""
     await ws.accept()
     _clients.add(ws)
+    if on_connect is not None:
+        try:
+            await on_connect(ws)
+        except Exception:
+            logger.debug("handle_socket: on_connect failed", exc_info=True)
     try:
         while True:
             try:

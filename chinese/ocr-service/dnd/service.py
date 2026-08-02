@@ -11,6 +11,10 @@ _stash_manager = None
 _packet_capture = None
 _capture_lock = threading.Lock()
 _sort_lock = threading.Lock()
+# Character id of the most recent S2C_LOBBY_CHARACTER_INFO_RES snapshot —
+# the game only pushes full snapshots when entering the character-select
+# / lobby flow, so this is the character currently being played.
+last_snapshot_character_id: Optional[str] = None
 _sort_state = {
     "running": False,
     "character_id": None,
@@ -110,6 +114,7 @@ def get_stash_manager():
 
 
 def _handle_character(message):
+    global last_snapshot_character_id
     from dnd.stash.character import save_packet_data
     from dnd.appdirs import get_characters_dir
     import os
@@ -119,6 +124,7 @@ def _handle_character(message):
         try:
             char_data = message.characterDataBase
             char_id = str(char_data.characterId)
+            last_snapshot_character_id = char_id
             file_path = os.path.join(get_characters_dir(), f"{char_id}.json")
             mgr = get_stash_manager()
             mgr.update_single_character(char_id, file_path)

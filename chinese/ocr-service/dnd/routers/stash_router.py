@@ -121,8 +121,18 @@ def get_character(character_id: str):
 
 @router.websocket("/events")
 async def stash_events(ws: WebSocket):
-    from dnd import events
-    await events.handle_socket(ws)
+    import json
+    from dnd import events, service
+
+    async def _push_current(ws):
+        current = service.last_snapshot_character_id
+        if current:
+            await ws.send_text(json.dumps(
+                {"type": "current_character", "character_id": current},
+                ensure_ascii=False,
+            ))
+
+    await events.handle_socket(ws, on_connect=_push_current)
 
 
 @router.post("/clear")
