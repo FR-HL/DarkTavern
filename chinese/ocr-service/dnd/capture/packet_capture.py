@@ -617,7 +617,7 @@ class PacketCapture:
                 self.capture_mode = "accelerator"
                 self.active_proxy_port = proxy_port
                 capture_iface = find_loopback_interface(self.tshark_path)
-                display_filter = f'tcp.srcport == {proxy_port}'
+                display_filter = f'tcp.port == {proxy_port}'
                 self.logger.info(
                     f"Accelerator detected — capturing loopback '{capture_iface}', proxy port {proxy_port}"
                 )

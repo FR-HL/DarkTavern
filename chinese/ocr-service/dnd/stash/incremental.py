@@ -74,6 +74,120 @@ def _match_index(items, item):
     return -1
 
 
+def _find_item(payload, unique_id, inventory_id=None, slot_id=None):
+    """Locate an item by unique id (falling back to container+slot) and
+    return (container_list, index) so callers can mutate it."""
+    base = _base_of(payload)
+    if base is None:
+        return None, -1
+    candidates = []
+    for entry in _storage_entries(base):
+        candidates.append(entry.get("CharacterStorageItemList") or [])
+    candidates.append(base.get("CharacterItemList") or [])
+    for items in candidates:
+        if not isinstance(items, list):
+            continue
+        for idx, it in enumerate(items):
+            if unique_id is not None and str(it.get("itemUniqueId")) == str(unique_id):
+                return items, idx
+    if inventory_id is not None and slot_id is not None:
+        for items in candidates:
+            if not isinstance(items, list):
+                continue
+            for idx, it in enumerate(items):
+                if (str(it.get("inventoryId")) == str(inventory_id)
+                        and str(it.get("slotId")) == str(slot_id)):
+                    return items, idx
+    return None, -1
+
+
+def apply_move(payload, unique_id, src_inventory_id, src_slot_id, dst_inventory_id, dst_slot_id):
+    """C2S_INVENTORY_MOVE_REQ: relocate an item to a new container/slot."""
+    base = _base_of(payload)
+    if base is None or dst_inventory_id is None:
+        return False
+    src_items, idx = _find_item(payload, unique_id, src_inventory_id, src_slot_id)
+    if src_items is None or idx < 0:
+        return False
+    item = src_items.pop(idx)
+    item["inventoryId"] = int(dst_inventory_id)
+    item["slotId"] = int(dst_slot_id)
+    dst_items = _container_for(base, dst_inventory_id)
+    if dst_items is None:
+        return False
+    _remove(dst_items, {"inventoryId": int(dst_inventory_id), "slotId": int(dst_slot_id)})
+    dst_items.append(item)
+    return True
+
+
+def apply_swap(payload, src, dst):
+    """C2S_INVENTORY_SWAP_REQ: exchange positions of two items.
+
+    src/dst: dicts with itemUniqueId / inventoryId / slotId (src may also
+    carry newSlotId/newInventoryId for the swapped destination).
+    """
+    base = _base_of(payload)
+    if base is None:
+        return False
+    src_items, src_idx = _find_item(payload, src.get("itemUniqueId"), src.get("inventoryId"), src.get("slotId"))
+    dst_items, dst_idx = _find_item(payload, dst.get("itemUniqueId"), dst.get("inventoryId"), dst.get("slotId"))
+    if src_items is None or src_idx < 0 or dst_items is None or dst_idx < 0:
+        return False
+    if src_items is dst_items:
+        # Same container: pop the higher index first so indices stay valid.
+        if src_idx > dst_idx:
+            src_item = src_items.pop(src_idx)
+            dst_item = dst_items.pop(dst_idx)
+        else:
+            dst_item = dst_items.pop(dst_idx)
+            src_item = src_items.pop(src_idx)
+    else:
+        src_item = src_items.pop(src_idx)
+        dst_item = dst_items.pop(dst_idx)
+
+    dst_inv = dst.get("newInventoryId")
+    if dst_inv is None:
+        dst_inv = dst_item.get("inventoryId")
+    dst_slot = dst.get("newSlotId")
+    if dst_slot is None:
+        dst_slot = dst_item.get("slotId")
+
+    src_inv = src.get("inventoryId")
+    src_slot = src.get("slotId")
+
+    dst_item["inventoryId"] = int(src_inv)
+    dst_item["slotId"] = int(src_slot)
+    src_item["inventoryId"] = int(dst_inv)
+    src_item["slotId"] = int(dst_slot)
+
+    dst_items.append(src_item)
+    src_items.append(dst_item)
+    return True
+
+
+def apply_merge(payload, src, dst):
+    """C2S_INVENTORY_MERGE_REQ: fold src item count into dst item, remove src."""
+    base = _base_of(payload)
+    if base is None:
+        return False
+    src_items, src_idx = _find_item(payload, src.get("itemUniqueId"), src.get("inventoryId"), src.get("slotId"))
+    dst_items, dst_idx = _find_item(payload, dst.get("itemUniqueId"), dst.get("inventoryId"), dst.get("slotId"))
+    if src_items is None or src_idx < 0 or dst_items is None or dst_idx < 0:
+        return False
+    if src_items is dst_items and src_idx > dst_idx:
+        src_item = src_items.pop(src_idx)
+        dst_item = dst_items[dst_idx]
+    else:
+        src_item = src_items.pop(src_idx)
+        dst_idx = dst_idx - 1 if src_items is dst_items else dst_idx
+        dst_item = dst_items[dst_idx]
+    dst_item["itemCount"] = int(dst_item.get("itemCount", 1)) + int(src_item.get("itemCount", 1))
+    contents = src_item.get("itemContentsCount")
+    if contents:
+        dst_item["itemContentsCount"] = int(dst_item.get("itemContentsCount", 0)) + int(contents)
+    return True
+
+
 def _remove(items, item):
     idx = _match_index(items, item)
     if idx >= 0:

@@ -131,6 +131,88 @@ def _handle_character(message):
     return saved
 
 
+def _c2s_item_handler(kind):
+    """Build a handler for client-initiated inventory requests (MOVE/SWAP/
+    MERGE). These carry the full target data (server confirmations are empty
+    messages), so they are the only way to see real-time item movement."""
+    from dnd.stash.incremental import apply_character_update, apply_move, apply_swap, apply_merge
+
+    def _info(pb):
+        if pb is None:
+            return None
+        return {
+            "itemUniqueId": getattr(pb, "itemUniqueId", None),
+            "inventoryId": getattr(pb, "inventoryId", None),
+            "slotId": getattr(pb, "slotId", None),
+        }
+
+    def _commit(char_id, payload, changed):
+        if not changed:
+            return
+        try:
+            import os
+            from dnd.appdirs import get_characters_dir
+            from dnd.stash.incremental import apply_character_update
+            file_path = os.path.join(get_characters_dir(), f"{char_id}.json")
+            with open(file_path, "w", encoding="utf-8") as f:
+                import json
+                json.dump(payload, f, ensure_ascii=False)
+            mgr = get_stash_manager()
+            mgr.update_single_character(char_id, file_path)
+            from dnd import events
+            events.broadcast({"type": "character_updated", "character_id": char_id})
+        except Exception as e:
+            logger.error(f"C2S handler {kind} commit failed: {e}")
+
+    def handler(message):
+        mgr = get_stash_manager()
+        char_id = getattr(mgr, "current_character_id", None)
+        if not char_id:
+            return
+        try:
+            import os
+            import json as _json
+            from dnd.appdirs import get_characters_dir
+            path = os.path.join(get_characters_dir(), f"{char_id}.json")
+            if not os.path.isfile(path):
+                return
+            with open(path, "r", encoding="utf-8") as f:
+                payload = _json.load(f)
+
+            if kind == "move":
+                src = _info(getattr(message, "srcInfo", None))
+                changed = apply_move(
+                    payload,
+                    src.get("itemUniqueId") if src else None,
+                    src.get("inventoryId") if src else None,
+                    src.get("slotId") if src else None,
+                    getattr(message, "dstInventoryId", None),
+                    getattr(message, "dstSlotId", None),
+                )
+            elif kind == "swap":
+                src = _info(getattr(message, "srcInfo", None))
+                dst = _info(getattr(message, "dstInfo", None))
+                swap_infos = list(getattr(message, "swapInfos", []) or [])
+                if swap_infos and src:
+                    first = swap_infos[0]
+                    f_dst = _info(getattr(first, "dstInfo", None))
+                    if f_dst and str(f_dst.get("itemUniqueId")) == str(src.get("itemUniqueId")):
+                        src["newSlotId"] = getattr(first, "newSlotId", None)
+                        src["newInventoryId"] = getattr(first, "newInventoryId", None)
+                changed = apply_swap(payload, src or {}, dst or {})
+            elif kind == "merge":
+                src = _info(getattr(message, "srcInfo", None))
+                dst = _info(getattr(message, "dstInfo", None))
+                changed = apply_merge(payload, src or {}, dst or {})
+            else:
+                return
+            _commit(char_id, payload, changed)
+        except Exception as e:
+            logger.error(f"C2S handler {kind} failed: {e}")
+
+    return handler
+
+
 def _incremental_handler(kind, items_field, old_items_field=None):
     """Build a packet handler that applies an incremental inventory update."""
     from google.protobuf.json_format import MessageToDict
@@ -193,6 +275,13 @@ def get_packet_capture():
                     "info", "inventoryItems"),
                 _PacketCommand_pb2.PacketCommand.S2C_STORAGE_INFO_RES: _incremental_handler(
                     "storage", "storageItems"),
+                _PacketCommand_pb2.PacketCommand.C2S_INVENTORY_MOVE_REQ: _c2s_item_handler("move"),
+                _PacketCommand_pb2.PacketCommand.C2S_INVENTORY_SWAP_REQ: _c2s_item_handler("swap"),
+                _PacketCommand_pb2.PacketCommand.C2S_INVENTORY_MERGE_REQ: _c2s_item_handler("merge"),
+                _PacketCommand_pb2.PacketCommand.C2S_INVENTORY_SINGLE_UPDATE_REQ: _incremental_handler(
+                    "single", "newItem", "oldItem"),
+                _PacketCommand_pb2.PacketCommand.C2S_INVENTORY_ALL_UPDATE_REQ: _incremental_handler(
+                    "all", "inventoryItems"),
             }
             _packet_capture = capture
         return _packet_capture
