@@ -311,14 +311,16 @@ onBeforeUnmount (() => {
     <div v-if="charData && currentStash" class="sec">
       <div class="sec-label">{{ charData.nickname }} 的仓库</div>
 
-      <div class="tab-bar">
-        <button v-for="s in stashList" :key="s.id" class="tab"
-                :class="{ active: stashId === s.id }" @click="stashId = s.id">
-          {{ s.label }}<span class="count">{{ s.items.length }}</span>
-        </button>
-      </div>
+      <div class="stash-layout">
+        <div class="stash-side">
+          <button v-for="s in stashList" :key="s.id" class="side-tab"
+                  :class="{ active: stashId === s.id }" @click="stashId = s.id"
+                  :title="`${s.items.length} 件物品`">
+            {{ s.label }}<span class="count">{{ s.items.length }}</span>
+          </button>
+        </div>
 
-      <div class="stash-body card">
+        <div class="stash-body card">
         <div class="stash-meta">
           <div class="stash-stat">
             <span class="stash-k">物品</span><span class="stash-v">{{ totalItems }}</span>
@@ -353,6 +355,7 @@ onBeforeUnmount (() => {
               <span class="cell-name">{{ it.name }}</span>
               <span v-if="it.quantity > 1" class="cell-qty">×{{ it.quantity }}</span>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -518,7 +521,26 @@ onBeforeUnmount (() => {
 .empty-d { margin-top: 7px; font-size: 13px; color: var(--text-3); line-height: 1.6; max-width: 420px; margin-left: auto; margin-right: auto; }
 
 /* stash body */
-.stash-body { padding: 0; }
+.stash-layout { display: flex; gap: 12px; align-items: flex-start; }
+.stash-side {
+  flex: none; width: 150px;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 5px;
+  background: var(--field-soft);
+  border-radius: 10px;
+}
+.side-tab {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  transition: all .15s var(--ease);
+}
+.side-tab:hover { color: var(--text); background: var(--card); }
+.side-tab.active { background: var(--card); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.side-tab .count { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.side-tab.active .count { color: var(--accent); }
+.stash-body { padding: 0; flex: 1; min-width: 0; }
 .stash-meta {
   display: flex; align-items: center; gap: 22px;
   padding: 14px 18px; border-bottom: 1px solid var(--line-soft);
