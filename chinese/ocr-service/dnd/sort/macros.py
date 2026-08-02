@@ -1,6 +1,7 @@
 # Rebuilt macros module with cancellation support
 import ctypes
 import logging
+import math
 import os
 import random
 import re
@@ -279,7 +280,7 @@ class INPUT(ctypes.Structure):
 
 SendInput = ctypes.windll.user32.SendInput
 
-INSTANT_MODE_MIN_PAUSE = 0.004  # tiny floor so instant mode still yields reliable inputs
+INSTANT_MODE_MIN_PAUSE = 0.01  # tiny floor so instant mode still yields reliable inputs
 INSTANT_MODE_HOLD_BEFORE_DRAG = 0.035  # keep the button down for ~2 frames so the game registers the drag
 INSTANT_MODE_ARRIVAL_PAUSE = 0.02  # let the game process the arrival before releasing
 INSTANT_MODE_RELEASE_PAUSE = 0.02  # let the drop settle after releasing
@@ -651,25 +652,39 @@ def get_sort_delay():
     return settings_manager.get_sort_speed()
 
 
-def move_mouse_smooth(x1, y1, x2, y2, steps=25, min_delay=0.008, max_delay=0.01, no_delay=False):
+def move_mouse_smooth(x1, y1, x2, y2, steps=25, min_delay=0.008, max_delay=0.01, no_delay=False, jitter_px=0.0):
     """
     Move the mouse smoothly from (x1, y1) to (x2, y2).
 
     When ``no_delay`` is True we still interpolate the path but skip the per-step sleep
     to keep movement nearly instantaneous.
+
+    ``jitter_px`` adds a random perpendicular offset to every intermediate point so the
+    path is slightly curved instead of a perfect straight line (endpoints stay exact).
     """
     _ensure_not_cancelled()
+    dx = x2 - x1
+    dy = y2 - y1
+    length = math.hypot(dx, dy)
+    nx = -dy / length if length > 0 else 0.0
+    ny = dx / length if length > 0 else 0.0
     for i in range(1, steps + 1):
         _ensure_not_cancelled()
         t = i / steps
         # Linear interpolation
-        x = x1 + (x2 - x1) * t
-        y = y1 + (y2 - y1) * t
+        x = x1 + dx * t
+        y = y1 + dy * t
+        if i < steps and jitter_px > 0:
+            offset = random.uniform(-jitter_px, jitter_px)
+            x += nx * offset
+            y += ny * offset
         move_mouse(round(x), round(y))
         if not no_delay:
             sleep_floor = max(0.003, min_delay)
             sleep_ceiling = max(sleep_floor, max_delay)
             _sleep_with_cancel(random.uniform(sleep_floor, sleep_ceiling))
+        else:
+            _sleep_with_cancel(random.uniform(0.0005, 0.002))
 
 
 def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_width=1, start_height=1, end_width=1, end_height=1):
@@ -733,6 +748,7 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
             min_delay=0.0006,
             max_delay=0.0015,
             no_delay=no_delay_mode,
+            jitter_px=3.0,
         )
         maybe_sleep(DELAY, 0.04, enforce_floor=True)
 
@@ -774,6 +790,7 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
             min_delay=0.0006,
             max_delay=0.0015,
             no_delay=no_delay_mode,
+            jitter_px=3.0,
         )
         if no_delay_mode:
             _sleep_with_cancel(INSTANT_MODE_ARRIVAL_PAUSE)
