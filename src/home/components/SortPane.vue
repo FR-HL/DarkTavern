@@ -524,22 +524,24 @@ onBeforeUnmount (() => {
 .stash-layout { display: flex; gap: 12px; align-items: flex-start; }
 .stash-side {
   flex: none; width: 150px;
-  display: flex; flex-direction: column; gap: 3px;
-  padding: 5px;
-  background: var(--field-soft);
-  border-radius: 10px;
+  display: flex; flex-direction: column; gap: 8px;
 }
 .side-tab {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 9px 12px;
-  border-radius: 8px;
-  font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card-2);
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+  cursor: pointer;
   transition: all .15s var(--ease);
 }
-.side-tab:hover { color: var(--text); background: var(--card); }
-.side-tab.active { background: var(--card); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.side-tab:hover { border-color: var(--accent-soft); }
+.side-tab.active {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.28);
+}
 .side-tab .count { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
-.side-tab.active .count { color: var(--accent); }
+.side-tab.active .count { color: rgba(255,255,255,0.85); }
 .stash-body { padding: 0; flex: 1; min-width: 0; }
 .stash-meta {
   display: flex; align-items: center; gap: 22px;
