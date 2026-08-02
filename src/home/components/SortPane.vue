@@ -1,10 +1,11 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
 const characters = ref ([]);
 const charId = ref ('');
+const stashes = ref ([]);
 const stashId = ref ('');
 const packMode = ref (false);
 const stackMode = ref (false);
@@ -26,8 +27,61 @@ async function loadCharacters () {
   } catch (e) {}
 }
 
+async function loadStashes () {
+  stashes.value = [];
+  if (!charId.value) { stashId.value = ''; return; }
+  try {
+    const d = await invoke ('dnd:character', charId.value);
+    if (d && d.stashes) {
+      stashes.value = Object.entries (d.stashes)
+        .map (([id, s]) => ({ id, label: s.label, count: s.items.length }))
+        .sort ((a, b) => parseInt (a.id) - parseInt (b.id));
+      if (!stashId.value) {
+        // Default to the first non-empty standard stash, else the first.
+        const preferred = stashes.value.find (s => s.count > 0 && parseInt (s.id) >= 4)
+          || stashes.value.find (s => s.count > 0)
+          || stashes.value[0];
+        if (preferred) stashId.value = preferred.id;
+      }
+    }
+  } catch (e) {}
+}
+
+watch (charId, loadStashes);
+
+async function saveConfig () {
+  try {
+    await invoke ('dnd:sort-config-save', {
+      character_id: charId.value,
+      stash_id: stashId.value,
+      pack_mode: packMode.value,
+      stack_mode: stackMode.value,
+      include_inventory: includeInv.value,
+    });
+  } catch (e) {}
+}
+
+watch ([charId, stashId, packMode, stackMode, includeInv], saveConfig);
+
+async function restoreConfig () {
+  try {
+    const cfg = await invoke ('dnd:sort-config-get');
+    if (!cfg) return;
+    if (cfg.character_id && characters.value.some (c => c.id === cfg.character_id)) {
+      charId.value = cfg.character_id;
+      packMode.value = !!cfg.pack_mode;
+      stackMode.value = !!cfg.stack_mode;
+      includeInv.value = !!cfg.include_inventory;
+      if (cfg.stash_id) {
+        await loadStashes ();
+        if (stashes.value.some (s => s.id === cfg.stash_id)) stashId.value = cfg.stash_id;
+      }
+    }
+  } catch (e) {}
+}
+
 async function startSort () {
-  if (!canStart.value) { error.value = '请选择角色并填写仓库 ID'; return; }
+  if (!canStart.value) { error.value = '请选择角色和仓库'; return; }
   error.value = '';
   result.value = null;
   sorting.value = true;
@@ -60,8 +114,34 @@ async function pollStatus () {
   } catch (e) {}
 }
 
-onMounted (() => { loadCharacters (); poll = setInterval (pollStatus, 800); });
-onBeforeUnmount (() => { if (poll) clearInterval (poll); });
+function onSortStarted () {
+  sorting.value = true;
+  error.value = '';
+  result.value = null;
+}
+function onSortCancelled () {
+  sorting.value = false;
+}
+
+let unsubs = [];
+onMounted (async () => {
+  await loadCharacters ();
+  await restoreConfig ();
+  try {
+    const s = await invoke ('dnd:sort-status');
+    if (s && s.running) sorting.value = true;
+  } catch (e) {}
+  unsubs = [
+    window.electron.on ('dnd:sort-started', onSortStarted),
+    window.electron.on ('dnd:sort-cancelled', onSortCancelled),
+  ];
+  poll = setInterval (pollStatus, 800);
+});
+onBeforeUnmount (() => {
+  if (poll) clearInterval (poll);
+  unsubs.forEach (u => u ());
+  unsubs = [];
+});
 </script>
 
 <template>
@@ -86,11 +166,14 @@ onBeforeUnmount (() => { if (poll) clearInterval (poll); });
         </div>
         <div class="srow">
           <div class="srow-info">
-            <div class="srow-t">仓库 ID</div>
-            <div class="srow-d">常用：<b>4</b> 仓库 · <b>2</b> 背包 · <b>30</b> 共享</div>
+            <div class="srow-t">仓库</div>
+            <div class="srow-d">选择要整理的仓库（自动列出该角色的所有仓库）</div>
           </div>
           <div class="srow-ctl">
-            <input type="text" v-model="stashId" class="ctl-input" placeholder="例如 4">
+            <select v-model="stashId" class="ctl-select">
+              <option v-if="!stashes.length" value="" disabled>{{ charId ? '该角色暂无仓库数据' : '请先选择角色' }}</option>
+              <option v-for="s in stashes" :key="s.id" :value="s.id">{{ s.label }}（{{ s.count }} 件）</option>
+            </select>
           </div>
         </div>
       </div>

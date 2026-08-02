@@ -7,39 +7,36 @@ logger = logging.getLogger(__name__)
 
 
 class NullOverlaySession:
+    """No-op overlay session.
+
+    All methods swallow any positional/keyword arguments so callers written
+    against the real SortOverlaySession (which uses keyword args like
+    ``status=``) never raise a TypeError when the overlay is disabled.
+    """
     finished: bool = True
 
-    def wait_for_countdown(self) -> bool:
+    def wait_for_countdown(self, *args, **kwargs) -> bool:
         return True
 
-    def update_status(self, _subtitle: str, _status: str = "info") -> None:
+    def update_status(self, *args, **kwargs) -> None:
         return None
 
-    def add_log(self, _message: str) -> None:
+    def add_log(self, *args, **kwargs) -> None:
         return None
 
-    def finish(self, _success: bool = True, _message: Optional[str] = None) -> None:
+    def finish(self, *args, **kwargs) -> None:
         return None
 
-    def force_close(self) -> None:
+    def force_close(self, *args, **kwargs) -> None:
         return None
 
-    def set_chip(
-        self,
-        _key: str,
-        *,
-        label: str,
-        value: str,
-        detail: str = "",
-        status: str = "info",
-        refresh: bool = True,
-    ) -> None:
+    def set_chip(self, *args, **kwargs) -> None:
         return None
 
-    def update_sort_overview(self, **_kwargs) -> None:
+    def update_sort_overview(self, *args, **kwargs) -> None:
         return None
 
-    def update_progress(self, _processed: int, _total: int) -> None:
+    def update_progress(self, *args, **kwargs) -> None:
         return None
 
 

@@ -393,6 +393,9 @@ onMounted (() => {
   window.electron.on ('navigate', (p) => { if (p) showPane (p); });
   window.electron.on ('ocr:status', onOcrStatus);
   window.electron.on ('game:status', onGameStatus);
+  window.electron.on ('dnd:sort-notify', (d) => {
+    if (d?.message) showToast (d.message);
+  });
   document.addEventListener ('keydown', onKeyDown);
   document.addEventListener ('mousedown', onMouseDown);
   uptimeTimer = setInterval (tick, 1000);
@@ -412,13 +415,8 @@ onBeforeUnmount (() => {
   <div class="app">
     <aside class="side">
       <div class="brand">
-        <div class="brand-badge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-        </div>
-        <div>
-          <div class="brand-name">DarkTavern</div>
-          <div class="brand-sub">Dark and Darker 查价</div>
-        </div>
+        <svg class="brand-icon" viewBox="0 0 576 512" fill="currentColor"><path d="M0 80l0 48c0 17.7 14.3 32 32 32l16 0 48 0 0-80c0-26.5-21.5-48-48-48S0 53.5 0 80zM112 32c10 13.4 16 30 16 48l0 304c0 35.3 28.7 64 64 64s64-28.7 64-64l0-5.3c0-32.4 26.3-58.7 58.7-58.7L480 320l0-192c0-53-43-96-96-96L112 32zM464 480c61.9 0 112-50.1 112-112c0-8.8-7.2-16-16-16l-245.3 0c-14.7 0-26.7 11.9-26.7 26.7l0 5.3c0 53-43 96-96 96l176 0 96 0z"/></svg>
+        <span class="brand-name"><span class="brand-grad">冒险者</span>酒馆</span>
       </div>
 
       <nav class="nav">

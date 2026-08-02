@@ -18,7 +18,9 @@ contextBridge.exposeInMainWorld ('electron', {
   },
   
   on: (channel, func) => {
-    ipcRenderer.addListener (channel, (event, ...args) => func (...args));
+    const wrapper = (event, ...args) => func (...args);
+    ipcRenderer.addListener (channel, wrapper);
+    return () => ipcRenderer.removeListener (channel, wrapper);
   },
   
   off: (channel, func) => {

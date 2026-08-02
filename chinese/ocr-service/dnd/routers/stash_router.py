@@ -20,14 +20,26 @@ def _stash_dimensions(stash_id):
 
 
 def _stash_label(stash_id):
-    labels = {
-        "1": "Chest", "2": "Bag", "3": "Equipment", "4": "Storage",
-        "5": "Storage +1", "6": "Storage +2", "7": "Storage +3",
-        "8": "Storage +4", "9": "Storage +5",
-        "20": "Seasonal Shared", "30": "Shared",
-        "100": "Gear Set 1", "101": "Gear Set 2", "102": "Gear Set 3",
+    try:
+        sid = int(stash_id)
+    except (ValueError, TypeError):
+        return f"仓库 {stash_id}"
+
+    fixed = {
+        0: "无", 1: "箱子", 2: "背包", 3: "装备", 4: "仓库",
+        20: "赛季共享", 30: "共享仓库",
     }
-    return labels.get(str(stash_id), f"Stash {stash_id}")
+    if sid in fixed:
+        return fixed[sid]
+    if 5 <= sid <= 9:
+        return f"仓库 +{sid - 4}"
+    if 21 <= sid <= 29:
+        return f"赛季共享 +{sid - 20}"
+    if 31 <= sid <= 39:
+        return f"共享仓库 +{sid - 30}"
+    if 100 <= sid <= 102:
+        return f"装备方案 {sid - 99}"
+    return f"仓库 {sid}"
 
 
 @router.get("/characters")

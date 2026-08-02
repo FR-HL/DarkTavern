@@ -30,6 +30,9 @@ const defaults = {
     sort_speed: 0.2,
     pack_mode: false,
     stack_mode: false,
+    sort_char_id: '',
+    sort_stash_id: '',
+    sort_include_inv: false,
   },
 };
 

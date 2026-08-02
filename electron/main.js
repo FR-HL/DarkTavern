@@ -126,6 +126,24 @@ app.on ('ready', async () => {
   ipcMain.handle ('dnd:sort-status', () => backend.sortStatus ());
   ipcMain.handle ('dnd:sort-order-get', () => backend.getSortOrder ());
   ipcMain.handle ('dnd:sort-order-set', (e, order) => backend.updateSortOrder (order));
+  ipcMain.handle ('dnd:sort-config-get', () => ({
+    character_id: settings.dnd?.sort_char_id || '',
+    stash_id: settings.dnd?.sort_stash_id || '',
+    pack_mode: !!settings.dnd?.pack_mode,
+    stack_mode: !!settings.dnd?.stack_mode,
+    include_inventory: !!settings.dnd?.sort_include_inv,
+  }));
+  ipcMain.handle ('dnd:sort-config-save', (e, data = {}) => {
+    const dnd = settings.dnd || {};
+    if (data.character_id !== undefined) dnd.sort_char_id = String (data.character_id || '');
+    if (data.stash_id !== undefined) dnd.sort_stash_id = String (data.stash_id || '');
+    if (data.pack_mode !== undefined) dnd.pack_mode = !!data.pack_mode;
+    if (data.stack_mode !== undefined) dnd.stack_mode = !!data.stack_mode;
+    if (data.include_inventory !== undefined) dnd.sort_include_inv = !!data.include_inventory;
+    settings.dnd = dnd;
+    saveSettings ();
+    return { success: true };
+  });
 
   ipcMain.handle ('dnd:packets', (e, page, pageSize) => backend.getPackets (page, pageSize));
   ipcMain.handle ('dnd:packet-detail', (e, id) => backend.getPacketDetail (id));
@@ -221,13 +239,37 @@ async function registerScanHotkey (overlay) {
   previousScanAccelerator = accelerator;
 }
 
+function notifyHome (event, data) {
+  if (homeWindow && !homeWindow.isDestroyed ()) homeWindow.webContents.send (event, data);
+}
+
 function registerSortHotkeys () {
   const sortKey = settings.dnd?.sort_hotkey || 'Ctrl+F11';
   const cancelKey = settings.dnd?.cancel_hotkey || 'Ctrl+F12';
 
   try {
     globalShortcut.register (sortKey, async () => {
-      if (homeWindow) homeWindow.webContents.send ('dnd:sort-hotkey');
+      const charId = settings.dnd?.sort_char_id || '';
+      const stashId = settings.dnd?.sort_stash_id || '';
+      if (!charId || !stashId) {
+        notifyHome ('dnd:sort-notify', { type: 'error', message: '未配置整理目标，请先在整理页选择角色与仓库' });
+        return;
+      }
+      try {
+        const r = await backend.sortStart ({
+          character_id: charId,
+          stash_id: stashId,
+          pack_mode: !!settings.dnd?.pack_mode,
+          stack_mode: !!settings.dnd?.stack_mode,
+          include_inventory: !!settings.dnd?.sort_include_inv,
+        });
+        notifyHome ('dnd:sort-notify', r?.success
+          ? { type: 'info', message: `开始整理仓库 ${stashId}` }
+          : { type: 'error', message: r?.error || '整理启动失败' });
+        if (r?.success) notifyHome ('dnd:sort-started', { character_id: charId, stash_id: stashId });
+      } catch (e) {
+        notifyHome ('dnd:sort-notify', { type: 'error', message: `整理启动失败: ${e.message}` });
+      }
     });
     logger.info (`Sort hotkey: ${sortKey}`);
   } catch (e) {
@@ -237,7 +279,7 @@ function registerSortHotkeys () {
   try {
     globalShortcut.register (cancelKey, async () => {
       await backend.sortCancel ();
-      if (homeWindow) homeWindow.webContents.send ('dnd:sort-cancelled');
+      notifyHome ('dnd:sort-cancelled', {});
     });
     logger.info (`Sort cancel hotkey: ${cancelKey}`);
   } catch (e) {
