@@ -281,10 +281,10 @@ class INPUT(ctypes.Structure):
 SendInput = ctypes.windll.user32.SendInput
 
 INSTANT_MODE_MIN_PAUSE = 0.01  # tiny floor so instant mode still yields reliable inputs
-INSTANT_MODE_HOLD_BEFORE_DRAG = 0.035  # keep the button down for ~2 frames so the game registers the drag
-INSTANT_MODE_ARRIVAL_PAUSE = 0.02  # let the game process the arrival before releasing
-INSTANT_MODE_RELEASE_PAUSE = 0.02  # let the drop settle after releasing
-INSTANT_MODE_RELIABILITY_GAP = 0.03  # spacing between reliability-click press/release
+INSTANT_MODE_HOLD_BEFORE_DRAG = 0.025  # keep the button down for ~1-2 frames so the game registers the drag
+INSTANT_MODE_ARRIVAL_PAUSE = 0.012  # let the game process the arrival before releasing
+INSTANT_MODE_RELEASE_PAUSE = 0.012  # let the drop settle after releasing
+INSTANT_MODE_RELIABILITY_GAP = 0.02  # spacing between reliability-click press/release
 DOUBLE_CLICK_PROTECT_WINDOW = 0.18
 
 _last_drop_signature = None
@@ -684,7 +684,7 @@ def move_mouse_smooth(x1, y1, x2, y2, steps=25, min_delay=0.008, max_delay=0.01,
             sleep_ceiling = max(sleep_floor, max_delay)
             _sleep_with_cancel(random.uniform(sleep_floor, sleep_ceiling))
         else:
-            _sleep_with_cancel(random.uniform(0.0005, 0.002))
+            _sleep_with_cancel(random.uniform(0.0003, 0.0008))
 
 
 def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_width=1, start_height=1, end_width=1, end_height=1):
@@ -736,9 +736,9 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
         # Move to start position smoothly from current mouse position
         pt = POINT()
         ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
-        start_steps = 16
+        start_steps = 10 if no_delay_mode else 16
         if max_travel <= max(jump * 0.6, 12):
-            start_steps = 20
+            start_steps = 12 if no_delay_mode else 20
         move_mouse_smooth(
             float(pt.x),
             float(pt.y),
@@ -778,9 +778,9 @@ def move_from_to_reliable(start_stash, start_pos, end_stash, end_pos, start_widt
             maybe_sleep(DELAY, 0.04, enforce_floor=True)
 
         # Move to end position smoothly
-        travel_steps = 20
+        travel_steps = 12 if no_delay_mode else 20
         if max_travel <= max(jump * 0.6, 12):
-            travel_steps = 22
+            travel_steps = 14 if no_delay_mode else 22
         move_mouse_smooth(
             sx,
             sy,
