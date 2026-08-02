@@ -2,13 +2,14 @@ import copy
 
 _DEFAULT_DIRECTION = "desc"
 _DEFAULT_SORTABLE_FIELDS = ("width", "height", "slot", "rarity", "name")
+_EXTRA_SORTABLE_FIELDS = ("vendor_price", "quantity")
 _DEFAULT_SORT_ORDER = [{"field": key, "direction": _DEFAULT_DIRECTION} for key in _DEFAULT_SORTABLE_FIELDS]
 
 
 class Item:
     """Represents an item that can be sorted inside a stash."""
 
-    SORTABLE_FIELDS = _DEFAULT_SORTABLE_FIELDS
+    SORTABLE_FIELDS = _DEFAULT_SORTABLE_FIELDS + _EXTRA_SORTABLE_FIELDS
     DEFAULT_DIRECTION = _DEFAULT_DIRECTION
     sort_order = copy.deepcopy(_DEFAULT_SORT_ORDER)
 
@@ -108,7 +109,7 @@ class Item:
             normalized.append(directive)
             seen.add(field)
 
-        for field in cls.SORTABLE_FIELDS:
+        for field in _DEFAULT_SORTABLE_FIELDS:
             if field not in seen:
                 normalized.append({"field": field, "direction": cls.DEFAULT_DIRECTION})
                 seen.add(field)

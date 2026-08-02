@@ -25,6 +25,51 @@ const SPEED_OPTIONS = [
   { id: 'instant', label: '极速', desc: '最快，约 10 倍提速，偶发漏操作' },
 ];
 
+const SORT_PRESETS = [
+  {
+    id: 'default', label: '综合',
+    order: [
+      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
+      { field: 'slot', direction: 'desc' }, { field: 'rarity', direction: 'desc' },
+      { field: 'name', direction: 'desc' },
+    ],
+  },
+  {
+    id: 'rarity', label: '稀有度优先',
+    order: [
+      { field: 'rarity', direction: 'desc' }, { field: 'width', direction: 'desc' },
+      { field: 'name', direction: 'asc' },
+    ],
+  },
+  {
+    id: 'price', label: '价格优先',
+    order: [
+      { field: 'vendor_price', direction: 'desc' }, { field: 'width', direction: 'desc' },
+    ],
+  },
+  {
+    id: 'name', label: '按名称',
+    order: [
+      { field: 'name', direction: 'asc' }, { field: 'width', direction: 'desc' },
+    ],
+  },
+  {
+    id: 'slot', label: '按部位',
+    order: [
+      { field: 'slot', direction: 'asc' }, { field: 'rarity', direction: 'desc' },
+      { field: 'width', direction: 'desc' },
+    ],
+  },
+  {
+    id: 'big', label: '大件优先',
+    order: [
+      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
+      { field: 'rarity', direction: 'desc' },
+    ],
+  },
+];
+const sortPreset = ref ('default');
+
 const SORT_HOTKEY = 'Ctrl+F11';
 const CANCEL_HOTKEY = 'Ctrl+F12';
 
@@ -175,6 +220,34 @@ async function loadSortSpeed () {
   try {
     const s = await invoke ('dnd:sort-speed-get');
     if (s && s.preset) sortSpeed.value = s.preset;
+  } catch (e) {}
+}
+
+function samePreset (a, b) {
+  if (!Array.isArray (a) || !Array.isArray (b)) return false;
+  for (let i = 0; i < b.length; i++) {
+    const x = a[i], y = b[i];
+    if (!x || !y || x.field !== y.field || x.direction !== y.direction) return false;
+  }
+  return true;
+}
+
+async function loadSortOrder () {
+  try {
+    const d = await invoke ('dnd:sort-order-get');
+    if (d && Array.isArray (d.order)) {
+      const hit = SORT_PRESETS.find (p => samePreset (d.order, p.order));
+      sortPreset.value = hit ? hit.id : 'default';
+    }
+  } catch (e) {}
+}
+
+async function changePreset (id) {
+  const p = SORT_PRESETS.find (o => o.id === id);
+  if (!p) return;
+  sortPreset.value = id;
+  try {
+    await invoke ('dnd:sort-order-set', p.order);
   } catch (e) {}
 }
 
@@ -357,6 +430,7 @@ onMounted (async () => {
   await restoreConfig ();
   checkUipi ();
   loadSortSpeed ();
+  loadSortOrder ();
   try { servicePort.value = await invoke ('dnd:service-port'); } catch (e) {}
   try {
     const s = await invoke ('dnd:sort-status');
@@ -472,6 +546,19 @@ onBeforeUnmount (() => {
     <div class="sec">
       <div class="sec-label">整理选项</div>
       <div class="card">
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">排序方案</div>
+            <div class="srow-d">决定物品的摆放顺序；可随时切换，重启后保留</div>
+          </div>
+          <div class="srow-ctl preset-group">
+            <button v-for="o in SORT_PRESETS" :key="o.id"
+                    class="speed-opt" :class="{ active: sortPreset === o.id }"
+                    @click="changePreset(o.id)">
+              {{ o.label }}
+            </button>
+          </div>
+        </div>
         <div class="srow speed-row">
           <div class="srow-info">
             <div class="srow-t">整理速度</div>
