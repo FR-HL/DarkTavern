@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
@@ -106,14 +106,11 @@ async function clearData () {
   window.dispatchEvent (new CustomEvent ('dnd:characters-refresh'));
 }
 
-let timer = null;
 onMounted (() => {
   refreshCapture ();
   loadInterfaces ();
   loadDiagnose ();
-  timer = setInterval (refreshCapture, 4000);
 });
-onBeforeUnmount (() => { if (timer) clearInterval (timer); });
 </script>
 
 <template>
