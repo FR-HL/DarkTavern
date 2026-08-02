@@ -366,7 +366,7 @@ onBeforeUnmount (() => {
     <div class="sec">
       <div class="sec-label">整理选项</div>
       <div class="card">
-        <div class="srow">
+        <div class="srow speed-row">
           <div class="srow-info">
             <div class="srow-t">整理速度</div>
             <div class="srow-d">极速≈10 倍提速；若出现漏放/串位，改用中或慢</div>
@@ -459,6 +459,7 @@ onBeforeUnmount (() => {
 .uipi-warn b { font-weight: 650; color: #a05a00; }
 
 .speed-group { display: flex; gap: 6px; }
+.speed-row .srow-info { flex: 0 0 300px; }
 .speed-opt {
   padding: 6px 16px; font-size: 13px; font-weight: 600;
   border: 1px solid var(--line); border-radius: 8px;
