@@ -130,6 +130,7 @@ app.on ('ready', async () => {
   });
   ipcMain.handle ('dnd:sort-cancel', () => backend.sortCancel ());
   ipcMain.handle ('dnd:sort-status', () => backend.sortStatus ());
+  ipcMain.handle ('dnd:sort-uipi', () => backend.getSortUipiStatus ());
   ipcMain.handle ('dnd:sort-order-get', () => backend.getSortOrder ());
   ipcMain.handle ('dnd:sort-order-set', (e, order) => backend.updateSortOrder (order));
   ipcMain.handle ('dnd:sort-config-get', () => ({

@@ -24,9 +24,36 @@ class SortOrderUpdate(BaseModel):
     order: List[SortOrderItem]
 
 
+@router.get("/uipi-status")
+def sort_uipi_status():
+    """Report whether Windows would block simulated mouse input.
+
+    ``blocked`` is True when the game runs elevated (admin) while this
+    tool does not — in that case the sorter's mouse moves are silently
+    discarded by Windows and the sort appears to do nothing.
+    """
+    from dnd import uipi
+    return uipi.check_uipi_status()
+
+
 @router.post("/start")
 def sort_start(body: SortStartRequest):
+    from dnd import uipi
     from dnd.service import start_sort
+
+    status = uipi.check_uipi_status()
+    if status["blocked"]:
+        return {
+            "success": False,
+            "error": (
+                "检测到游戏以管理员权限运行，而 DarkTavern 不是管理员。"
+                "Windows 会拦截鼠标模拟输入，整理将无效。"
+                "请以管理员身份运行 DarkTavern（右键→以管理员身份运行），"
+                "或取消游戏的管理员权限后重试。"
+            ),
+            "uipi": status,
+        }
+
     return start_sort(
         character_id=body.character_id,
         stash_id=body.stash_id,

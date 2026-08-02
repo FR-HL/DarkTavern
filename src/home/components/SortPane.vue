@@ -13,11 +13,21 @@ const includeInv = ref (false);
 const sorting = ref (false);
 const result = ref (null);
 const error = ref ('');
+const uipi = ref (null);
 
 const SORT_HOTKEY = 'Ctrl+F11';
 const CANCEL_HOTKEY = 'Ctrl+F12';
 
-const canStart = computed (() => !!charId.value && stashId.value !== '' && !sorting.value);
+const canStart = computed (() =>
+  !!charId.value && stashId.value !== '' && !sorting.value && !uipiBlocked.value);
+
+const uipiBlocked = computed (() => !!(uipi.value && uipi.value.blocked));
+
+async function checkUipi () {
+  try {
+    uipi.value = await invoke ('dnd:sort-uipi');
+  } catch (e) { uipi.value = null; }
+}
 
 async function loadCharacters () {
   try {
@@ -127,6 +137,7 @@ let unsubs = [];
 onMounted (async () => {
   await loadCharacters ();
   await restoreConfig ();
+  checkUipi ();
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
@@ -147,7 +158,7 @@ onBeforeUnmount (() => {
 <template>
   <div>
     <div class="page-title">整理</div>
-    <div class="page-sub">规划最优布局并模拟鼠标拖拽，自动整理仓库。整理期间请保持游戏窗口在前台。</div>
+    <div class="page-sub">规划最优布局并模拟鼠标拖拽，自动整理仓库。<b>请先在游戏中打开要整理的仓库界面</b>（能看到物品格子），再开始整理；整理期间保持游戏窗口在前台。</div>
 
     <div class="sec">
       <div class="sec-label">整理目标</div>
@@ -214,6 +225,10 @@ onBeforeUnmount (() => {
 
     <div class="sec">
       <div class="sec-label">执行</div>
+      <div v-if="uipiBlocked" class="uipi-warn">
+        <b>鼠标模拟将被系统拦截</b>
+        <span>检测到游戏以<b>管理员权限</b>运行，而 DarkTavern 不是。Windows 会拦截整理时的鼠标操作（游戏内光标不会移动）。请<b>以管理员身份运行 DarkTavern</b>（右键快捷方式 → 以管理员身份运行），或取消游戏快捷方式的"以管理员身份运行"后重试。</span>
+      </div>
       <div class="card run-card">
         <div class="run-row">
           <div class="run-hints">
@@ -248,6 +263,15 @@ onBeforeUnmount (() => {
 .hint { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-3); }
 .btn.lg { padding: 9px 24px; font-size: 14px; }
 .btn:disabled { opacity: .45; cursor: default; transform: none; }
+
+.uipi-warn {
+  display: flex; flex-direction: column; gap: 6px;
+  margin-bottom: 14px; padding: 13px 15px;
+  background: #fff4e5; border: 1px solid #f0c97e;
+  border-radius: 10px;
+  font-size: 13px; color: #7a4d0d; line-height: 1.6;
+}
+.uipi-warn b { font-weight: 650; color: #a05a00; }
 
 .run-progress {
   display: flex; align-items: center; gap: 12px;

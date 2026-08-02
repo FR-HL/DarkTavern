@@ -182,6 +182,10 @@ export async function sortStatus () {
   return await get ('/sort/status');
 }
 
+export async function getSortUipiStatus () {
+  return await get ('/sort/uipi-status');
+}
+
 export async function getSortOrder () {
   return await get ('/sort/order');
 }
