@@ -31,7 +31,6 @@ class StashManager:
         os.makedirs(self.data_dir, exist_ok=True)
         
         self.characters_cache = {}
-        self.current_character_id = None
         self._is_loaded = False
         self._cache_lock = threading.Lock()
         self.resource_dir = resource_dir
