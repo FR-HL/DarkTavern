@@ -43,39 +43,6 @@ const SORT_PRESETS = [
       { field: 'rarity', direction: 'desc' },
     ],
   },
-  {
-    id: 'rarity', label: '稀有度优先',
-    order: [
-      { field: 'rarity', direction: 'desc' }, { field: 'width', direction: 'desc' },
-      { field: 'name', direction: 'asc' },
-    ],
-  },
-  {
-    id: 'price', label: '价格优先',
-    order: [
-      { field: 'vendor_price', direction: 'desc' }, { field: 'width', direction: 'desc' },
-    ],
-  },
-  {
-    id: 'name', label: '按名称',
-    order: [
-      { field: 'name', direction: 'asc' }, { field: 'width', direction: 'desc' },
-    ],
-  },
-  {
-    id: 'slot', label: '按部位',
-    order: [
-      { field: 'slot', direction: 'asc' }, { field: 'rarity', direction: 'desc' },
-      { field: 'width', direction: 'desc' },
-    ],
-  },
-  {
-    id: 'big', label: '大件优先',
-    order: [
-      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
-      { field: 'rarity', direction: 'desc' },
-    ],
-  },
 ];
 const sortPreset = ref ('default');
 
