@@ -221,6 +221,7 @@ app.on ('ready', async () => {
     if (data.stash_id == null) return { success: false, switched: false, reason: 'invalid_stash_id' };
     return await switchInGameStash (String (data.stash_id), data.character_id ? String (data.character_id) : '');
   });
+  ipcMain.handle ('stash:tab-test', (e, characterId = '') => backend.tabTest (characterId));
   ipcMain.handle ('stash:calibration-status', () => backend.calibrationStatus ());
   ipcMain.handle ('stash:calibration-record', (e, index) => backend.calibrationRecord (Number (index)));
   ipcMain.handle ('stash:calibration-save', (e, resolution = '') => backend.calibrationSave (resolution));

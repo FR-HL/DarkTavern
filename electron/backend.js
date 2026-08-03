@@ -180,6 +180,10 @@ export async function switchStash (stashId, characterId = '') {
   return await post ('/stash/switch', { stash_id: String (stashId), character_id: String (characterId) }) || { error: 'Service unavailable' };
 }
 
+export async function tabTest (characterId = '') {
+  return await post ('/stash/tabtest', { stash_id: '4', character_id: String (characterId) }) || { error: 'Service unavailable' };
+}
+
 export async function calibrationStatus () {
   return await get ('/stash/calibration');
 }

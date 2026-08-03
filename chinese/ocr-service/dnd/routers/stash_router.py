@@ -108,6 +108,48 @@ def list_characters():
     return {"characters": characters}
 
 
+@router.post("/tabtest")
+def tab_test(body: StashSwitchRequest):
+    """Click every mapped stash tab in turn (~1.5s apart).
+
+    Diagnostic helper: the user opens the in-game stash, triggers this, and
+    watches which stash the game switches to for each click. The returned
+    positions are the exact click coordinates used, in mapping order.
+    """
+    from dnd import uipi
+    from dnd.sort import macros
+    import time as _time
+
+    owned = _owned_stash_ids(body.character_id)
+    mapping = macros.build_dynamic_tab_mapping(owned)
+
+    status = uipi.check_uipi_status()
+    if status["blocked"]:
+        return {"success": False, "reason": "uipi_blocked"}
+
+    if not macros.force_activate_game_window():
+        return {"success": True, "reason": "game_not_found", "positions": []}
+
+    positions = macros.get_stash_tab_positions()
+    clicked = []
+    for i, stash_type in enumerate(mapping):
+        pos = positions[i] if i < len(positions) else None
+        clicked.append({
+            "index": i,
+            "stash_type": stash_type,
+            "label": macros.STASH_TYPE_NAMES.get(stash_type, str(stash_type)),
+            "x": pos.x if pos else 0,
+            "y": pos.y if pos else 0,
+        })
+        try:
+            macros.click_stash_tab(stash_type)
+        except Exception as exc:
+            logger.warning("tabtest click %d failed: %s", i, exc)
+        _time.sleep(1.5)
+
+    return {"success": True, "positions": clicked}
+
+
 @router.post("/switch")
 def switch_stash(body: StashSwitchRequest):
     """Click the corresponding stash tab in the game UI for a stash type.

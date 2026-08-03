@@ -294,6 +294,31 @@ async function resetCalibration () {
   await loadCalibration ();
 }
 
+// ── 标签点测（诊断） ──
+const tabTesting = ref (false);
+const tabTestNote = ref ('');
+
+async function runTabTest () {
+  tabTesting.value = true;
+  tabTestNote.value = '请盯着游戏里的仓库标签栏，程序将每隔 1.5 秒自动点击一个标签…';
+  try {
+    const r = await invoke ('stash:tab-test', props.charId);
+    if (r && r.success) {
+      if (r.reason === 'uipi_blocked') {
+        tabTestNote.value = '鼠标模拟被系统拦截（需管理员权限），点测无法执行';
+      } else if (r.reason === 'game_not_found') {
+        tabTestNote.value = '未检测到游戏窗口，点测未执行';
+      } else {
+        const order = (r.positions || []).map (p => `${p.label}@(${p.x},${p.y})`).join (' → ');
+        tabTestNote.value = `点测完成（${r.positions.length} 格）：${order}。请把游戏里实际打开的仓库顺序告诉我。`;
+      }
+    } else {
+      tabTestNote.value = '点测失败';
+    }
+  } catch (e) { tabTestNote.value = '点测失败'; }
+  tabTesting.value = false;
+}
+
 let unsubs = [];
 onMounted (async () => {
   checkUipi ();
@@ -474,6 +499,10 @@ onBeforeUnmount (() => {
           <button class="btn" @click="resetCalibration">清除校准</button>
           <span v-if="calNote" class="cal-note">{{ calNote }}</span>
         </div>
+        <div class="cal-test">
+          <button class="btn" :disabled="tabTesting" @click="runTabTest">{{ tabTesting ? '点测中…' : '标签点测（诊断）' }}</button>
+          <span v-if="tabTestNote" class="cal-note">{{ tabTestNote }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -510,6 +539,7 @@ onBeforeUnmount (() => {
 .cal-pos { flex: 1; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .cal-btn { min-width: 0; padding: 5px 12px; font-size: 12px; flex: none; }
 .cal-foot { display: flex; align-items: center; gap: 10px; padding: 10px 2px 2px; }
+.cal-test { display: flex; align-items: center; gap: 10px; padding: 8px 2px 2px; border-top: 1px solid var(--line-soft); margin-top: 8px; }
 .cal-note { font-size: 12.5px; color: var(--green); }
 
 .uipi-warn {
