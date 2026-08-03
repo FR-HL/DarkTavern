@@ -98,40 +98,20 @@ html, body, #app {
 .ball:active { transform: scale(.96); }
 .ball.locked { opacity: .75; }
 
-/* ===== 球心两行文字 ===== */
+/* ===== 球心单行绿色文字 ===== */
 .ball-text {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  line-height: 1.15;
+  display: flex; align-items: center; justify-content: center;
   pointer-events: none;
   user-select: none;
 }
 .ball-text .bt-1 {
-  font-size: 17px; font-weight: 800; letter-spacing: 0;
-  font-variant-numeric: tabular-nums;
-}
-.ball-text .bt-2 {
-  margin-top: 2px;
-  font-size: 13px; font-weight: 700;
+  font-size: 20px; font-weight: 800; letter-spacing: 0;
+  color: var(--green);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  max-width: 50px;
+  max-width: 52px;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.ball-text.ok { color: var(--green); }
-.ball-text.warn { color: var(--amber); }
-.ball-text.bad { color: var(--red); }
-.ball-text.busy { color: var(--accent); }
-.ball-text.small .bt-1 { font-size: 13.5px; }
-.ball-text .bt-2.gold {
-  color: #f2c14e;
-  font-size: 15px;
-  font-weight: 800;
-  max-width: 52px;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.35);
-}
-.ball-text .bt-2 .bt-suffix {
-  font-weight: 900;
 }
 
 /* 扫描脉动 */

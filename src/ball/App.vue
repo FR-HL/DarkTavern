@@ -38,33 +38,30 @@ const ring = computed (() => {
 });
 
 const center = computed (() => {
-  if (status.scanning) return { t1: '扫描', t2: '', cls: 'busy' };
+  if (status.scanning) return { t1: '扫描' };
   const t = transient.value;
   if (t && t.until > Date.now ()) {
-    if (t.kind === 'ok') {
-      const p = fmtPrice (t.price);
-      return { t1: '', t2: p.n, t2suffix: p.g, cls: 'ok', gold: true };
-    }
-    if (t.kind === 'fail') return { t1: '✗', t2: t.sub, cls: 'bad' };
-    if (t.kind === 'sortok') return { t1: '✓', t2: '完成', cls: 'ok' };
-    if (t.kind === 'sortfail') return { t1: '✗', t2: '失败', cls: 'bad' };
-    if (t.kind === 'char') return { t1: t.sub, t2: '已更新', cls: 'busy', small: true };
-    if (t.kind === 'stash') return { t1: t.sub, t2: '已切换', cls: 'busy', small: true };
+    if (t.kind === 'ok') return { t1: fmtPrice (t.price).n };
+    if (t.kind === 'fail') return { t1: '未找到' };
+    if (t.kind === 'sortok') return { t1: '完成' };
+    if (t.kind === 'sortfail') return { t1: '失败' };
+    if (t.kind === 'char') return { t1: t.sub };
+    if (t.kind === 'stash') return { t1: t.sub };
   }
-  if (!status.ocr) return { t1: '故障', t2: '', cls: 'bad' };
-  if (status.sortingRunning) return { t1: '整理', t2: '', cls: 'busy' };
-  if (!status.game || !status.apiKey) return { t1: '待机', t2: '', cls: 'warn' };
-  return { t1: '就绪', t2: '', cls: 'ok' };
+  if (!status.ocr) return { t1: '故障' };
+  if (status.sortingRunning) return { t1: '整理' };
+  if (!status.game || !status.apiKey) return { t1: '待机' };
+  return { t1: '就绪' };
 });
 
 function fmtPrice (v) {
-  if (v == null) return { n: '暂无', g: '' };
+  if (v == null) return { n: '暂无' };
   const n = Number (v);
   if (n >= 10000) {
     const w = n / 10000;
-    return { n: (w >= 100 ? Math.round (w) : Math.round (w * 10) / 10) + 'w', g: 'G' };
+    return { n: (w >= 100 ? Math.round (w) : Math.round (w * 10) / 10) + 'w' };
   }
-  return { n: String (Math.round (n)), g: 'G' };
+  return { n: String (Math.round (n)) };
 }
 
 function setTransient (kind, sub, dur, extra) {
@@ -151,9 +148,8 @@ onBeforeUnmount (() => {
     <div class="ball-anchor">
       <div class="ring" :class="ring">
         <div class="ball" :class="{ locked: status.locked }" @mousedown="onBallMouseDown" @mouseup="onBallMouseUp" @click="onBallClick" @contextmenu="onContext">
-          <div class="ball-text" :class="[center.cls, { small: center.small }]">
-            <span v-if="center.t1" class="bt-1" :style="center.t1Color ? { color: center.t1Color } : null">{{ center.t1 }}</span>
-            <span v-if="center.t2" class="bt-2" :class="{ gold: center.gold }">{{ center.t2 }}<span v-if="center.t2suffix" class="bt-suffix">{{ center.t2suffix }}</span></span>
+          <div class="ball-text">
+            <span class="bt-1">{{ center.t1 }}</span>
           </div>
           <span v-if="status.scanning" class="pulse"></span>
         </div>
