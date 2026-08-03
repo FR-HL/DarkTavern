@@ -554,7 +554,7 @@ function openHomeWindow () {
   }
 
   homeWindow = new BrowserWindow ({
-    width: 1120, height: 740, minWidth: 980, minHeight: 660,
+    width: 1280, height: 840, minWidth: 1080, minHeight: 720,
     show: false, title: 'DarkTavern', autoHideMenuBar: true,
     backgroundColor: settings.general.theme === 'dark' ? '#1c1c1f' : '#f4f4f6',
     webPreferences: { sandbox: false, preload: join (SOURCE, 'preload.cjs') },
