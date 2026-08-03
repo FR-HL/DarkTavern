@@ -98,7 +98,7 @@ html, body, #app {
 .ball:active { transform: scale(.96); }
 .ball.locked { opacity: .75; }
 
-/* ===== 球心单行绿色文字 ===== */
+/* ===== 球心单行状态文字 ===== */
 .ball-text {
   display: flex; align-items: center; justify-content: center;
   pointer-events: none;
@@ -106,13 +106,17 @@ html, body, #app {
 }
 .ball-text .bt-1 {
   font-size: 20px; font-weight: 800; letter-spacing: 0;
-  color: var(--green);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   max-width: 52px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.ball-text.ok .bt-1 { color: var(--green); }
+.ball-text.warn .bt-1 { color: var(--amber); }
+.ball-text.bad .bt-1 { color: var(--red); }
+.ball-text.busy .bt-1 { color: var(--accent); }
+.ball-text.gold .bt-1 { color: #f2c14e; }
 
 /* 扫描脉动 */
 .pulse {

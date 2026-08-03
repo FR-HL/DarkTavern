@@ -38,20 +38,20 @@ const ring = computed (() => {
 });
 
 const center = computed (() => {
-  if (status.scanning) return { t1: '扫描' };
+  if (status.scanning) return { t1: '扫描', cls: 'busy' };
   const t = transient.value;
   if (t && t.until > Date.now ()) {
-    if (t.kind === 'ok') return { t1: fmtPrice (t.price).n };
-    if (t.kind === 'fail') return { t1: '未找到' };
-    if (t.kind === 'sortok') return { t1: '完成' };
-    if (t.kind === 'sortfail') return { t1: '失败' };
-    if (t.kind === 'char') return { t1: t.sub };
-    if (t.kind === 'stash') return { t1: t.sub };
+    if (t.kind === 'ok') return { t1: fmtPrice (t.price).n, cls: 'gold' };
+    if (t.kind === 'fail') return { t1: '未找到', cls: 'bad' };
+    if (t.kind === 'sortok') return { t1: '完成', cls: 'ok' };
+    if (t.kind === 'sortfail') return { t1: '失败', cls: 'bad' };
+    if (t.kind === 'char') return { t1: t.sub, cls: 'busy' };
+    if (t.kind === 'stash') return { t1: t.sub, cls: 'busy' };
   }
-  if (!status.ocr) return { t1: '故障' };
-  if (status.sortingRunning) return { t1: '整理' };
-  if (!status.game || !status.apiKey) return { t1: '待机' };
-  return { t1: '就绪' };
+  if (!status.ocr) return { t1: '故障', cls: 'bad' };
+  if (status.sortingRunning) return { t1: '整理', cls: 'busy' };
+  if (!status.game || !status.apiKey) return { t1: '待机', cls: 'warn' };
+  return { t1: '就绪', cls: 'ok' };
 });
 
 function fmtPrice (v) {
@@ -148,7 +148,7 @@ onBeforeUnmount (() => {
     <div class="ball-anchor">
       <div class="ring" :class="ring">
         <div class="ball" :class="{ locked: status.locked }" @mousedown="onBallMouseDown" @mouseup="onBallMouseUp" @click="onBallClick" @contextmenu="onContext">
-          <div class="ball-text">
+          <div class="ball-text" :class="center.cls">
             <span class="bt-1">{{ center.t1 }}</span>
           </div>
           <span v-if="status.scanning" class="pulse"></span>
