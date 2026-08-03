@@ -27,7 +27,6 @@ let ballWindow = null;
 let ballLocked = !!settings.general.ball_locked;
 let ballVisible = !!settings.general.ball_visible;
 let ballScanning = false;
-let ballExpanded = false;
 let ballStatusTimer = null;
 let lastBallStatus = null;
 let lastBallSave = 0;
@@ -37,8 +36,7 @@ let lastCharKey = '';
 let lastSortRunning = false;
 let sessionScanCount = 0;
 let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', pricing: null, attributes: { primary: [], secondary: [] }, reverseAttributes: {}, message: '', ts: 0 };
-const BALL_COLLAPSED = { w: 82, h: 82 };
-const BALL_EXPANDED = { w: 340, h: 590 };
+const BALL_SIZE = { w: 82, h: 82 };
 
 process.on ('uncaughtException', (e) => logger.error ('Uncaught Exception:', e));
 process.on ('unhandledRejection', (r) => logger.error (`Unhandled Rejection: ${r}`));
@@ -152,7 +150,6 @@ app.on ('ready', async () => {
   // ── 悬浮球 IPC ──
 
   ipcMain.handle ('ball:get-status', () => gatherBallStatus ());
-  ipcMain.handle ('ball:resize', (e, data) => setBallExpanded (!!data?.expanded));
   ipcMain.handle ('ball:menu', () => popupBallMenu ());
   ipcMain.handle ('ball:open-home', () => openHomeWindow ());
   ipcMain.handle ('ball:open-settings', () => openSettingsWindow ('settings'));
@@ -517,8 +514,8 @@ function initBallCursor () {
 function defaultBallPos () {
   const wa = screen.getPrimaryDisplay ().workArea;
   return {
-    x: wa.x + wa.width - BALL_COLLAPSED.w - 24,
-    y: wa.y + Math.round ((wa.height - BALL_COLLAPSED.h) / 2),
+    x: wa.x + wa.width - BALL_SIZE.w - 24,
+    y: wa.y + Math.round ((wa.height - BALL_SIZE.h) / 2),
   };
 }
 
@@ -529,8 +526,8 @@ function ballPosFromSettings () {
 
   const wa = screen.getDisplayMatching ({ x, y, width: 20, height: 20 }).workArea;
   return {
-    x: Math.min (Math.max (x, wa.x), wa.x + wa.width - BALL_COLLAPSED.w),
-    y: Math.min (Math.max (y, wa.y), wa.y + wa.height - BALL_COLLAPSED.h),
+    x: Math.min (Math.max (x, wa.x), wa.x + wa.width - BALL_SIZE.w),
+    y: Math.min (Math.max (y, wa.y), wa.y + wa.height - BALL_SIZE.h),
   };
 }
 
@@ -551,8 +548,8 @@ function createBallWindow () {
   const pos = ballPosFromSettings ();
 
   ballWindow = new BrowserWindow ({
-    width: BALL_COLLAPSED.w,
-    height: BALL_COLLAPSED.h,
+    width: BALL_SIZE.w,
+    height: BALL_SIZE.h,
     x: pos.x,
     y: pos.y,
     frame: false,
@@ -577,9 +574,6 @@ function createBallWindow () {
     applyBallLock ();
   });
   ballWindow.on ('move', saveBallPos);
-  ballWindow.on ('blur', () => {
-    if (ballWindow && !ballWindow.isDestroyed ()) ballWindow.webContents.send ('ball:blur');
-  });
   ballWindow.on ('closed', () => {
     ballWindow = null;
     if (ballStatusTimer) { clearInterval (ballStatusTimer); ballStatusTimer = null; }
@@ -593,7 +587,6 @@ function createBallWindow () {
 function applyBallLock () {
   if (!ballWindow) return;
   ballWindow.setIgnoreMouseEvents (ballLocked, { forward: true });
-  if (ballLocked && ballExpanded) setBallExpanded (false);
 }
 
 function setBallLocked (locked) {
@@ -616,23 +609,10 @@ function toggleBallVisible () {
       applyBallLock ();
     } else {
       ballWindow.hide ();
-      if (ballExpanded) setBallExpanded (false);
     }
   }
   pushBallStatus ();
   refreshTrayMenu ();
-}
-
-function setBallExpanded (expanded) {
-  ballExpanded = expanded;
-  if (!ballWindow || ballWindow.isDestroyed ()) return;
-
-  const size = expanded ? BALL_EXPANDED : BALL_COLLAPSED;
-  let [x, y] = ballWindow.getPosition ();
-  const wa = screen.getDisplayMatching ({ x, y, width: 20, height: 20 }).workArea;
-  x = Math.min (Math.max (x, wa.x), wa.x + wa.width - size.w);
-  y = Math.min (Math.max (y, wa.y), wa.y + wa.height - size.h);
-  ballWindow.setBounds ({ x, y, width: size.w, height: size.h });
 }
 
 function popupBallMenu () {

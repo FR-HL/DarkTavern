@@ -1,6 +1,5 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import StatusPanel from './components/StatusPanel.vue';
 import { cnClass } from '@/shared/lib/classes.js';
 import { rarityColor } from '@/shared/lib/rarity.js';
 
@@ -24,7 +23,6 @@ const status = reactive ({
   lastScan: { ok: null, name: '', price: null, market: null, message: '' },
 });
 
-const expanded = ref (false);
 const transient = ref (null);
 
 let dragActive = false;
@@ -93,10 +91,7 @@ function onScanResult (d) {
 }
 
 function onStatus (d) {
-  const wasLocked = status.locked;
   Object.assign (status, d);
-  if (d.locked && wasLocked === false && expanded.value) collapse ();
-
   if (d.charJustUpdated && d.character) {
     const cls = cnClass (d.character.cls) || '角色';
     setTransient ('char', cls, 3000);
@@ -106,18 +101,7 @@ function onStatus (d) {
   }
 }
 
-function toggle () {
-  expanded.value = !expanded.value;
-  invoke ('ball:resize', { expanded: expanded.value });
-}
-function collapse () {
-  if (!expanded.value) return;
-  expanded.value = false;
-  invoke ('ball:resize', { expanded: false });
-}
 function onMenu () { invoke ('ball:menu'); }
-function openHome () { invoke ('ball:open-home'); }
-function openSettings () { invoke ('ball:open-settings'); }
 function onBallMouseDown (e) {
   if (e.button !== 0 || status.locked) return;
   dragActive = true;
@@ -128,9 +112,7 @@ async function onBallMouseUp (e) {
   if (e.button !== 0 || !dragActive) return;
   dragActive = false;
   const r = await invoke ('ball:drag-end').catch (() => ({ moved: false }));
-  if (r && r.moved) { suppressClick = true; return; }
-  if (status.locked) return;
-  toggle ();
+  if (r && r.moved) suppressClick = true;
 }
 function onBallClick () {
   if (suppressClick) suppressClick = false;
@@ -146,12 +128,9 @@ onMounted (async () => {
 
   window.electron.on ('ball:status', onStatus);
   window.electron.on ('ball:scan-result', onScanResult);
-  window.electron.on ('ball:blur', () => collapse ());
   window.electron.on ('ball:drag-ended', (d) => {
     dragActive = false;
-    if (d && d.moved) { suppressClick = true; return; }
-    if (status.locked) return;
-    toggle ();
+    if (d && d.moved) suppressClick = true;
   });
   window.addEventListener ('contextmenu', onContext);
 });
@@ -173,16 +152,6 @@ onBeforeUnmount (() => {
           <span v-if="status.scanning" class="pulse"></span>
         </div>
       </div>
-
-      <Transition name="panel">
-        <StatusPanel
-          v-if="expanded"
-          :status="status"
-          @collapse="collapse"
-          @open-home="openHome"
-          @open-settings="openSettings"
-        />
-      </Transition>
     </div>
   </div>
 </template>
