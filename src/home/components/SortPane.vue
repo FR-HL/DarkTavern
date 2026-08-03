@@ -49,6 +49,53 @@ const sortPreset = ref ('default');
 
 const SORT_HOTKEY = 'Ctrl+F11';
 const CANCEL_HOTKEY = 'Ctrl+F12';
+const RESERVED_HOTKEYS = ['F5', 'F6', 'F7', 'F8'];
+
+const sortHotkey = ref ('Ctrl+F11');
+const cancelHotkey = ref ('Ctrl+F12');
+const listeningFor = ref (null);
+const newHotkey = ref (null);
+
+function hotkeyLabel (target) {
+  if (listeningFor.value === target) return '等待输入…（按 Esc 取消）';
+  return newHotkey.value || '点击此处，然后按下新按键';
+}
+
+function startHotkeyListen (target) {
+  listeningFor.value = target;
+  newHotkey.value = null;
+}
+function stopHotkeyListen () { listeningFor.value = null; newHotkey.value = null; }
+
+function onHotkeyKeyDown (e) {
+  if (!listeningFor.value) return;
+  e.preventDefault ();
+  if (e.key === 'Escape') { stopHotkeyListen (); return; }
+  if (RESERVED_HOTKEYS.includes (e.key)) return;
+  let key = '';
+  if (e.ctrlKey) key += 'Ctrl+';
+  if (e.altKey) key += 'Alt+';
+  if (e.shiftKey) key += 'Shift+';
+  if (e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift') return;
+  const base = e.key.length === 1 ? e.key.toUpperCase () : e.key;
+  key += base;
+  if (['F1', 'F2', 'F3', 'F4', 'F9', 'F10', 'F11', 'F12', 'Home', 'End', 'PageUp', 'PageDown', 'Insert', 'Delete'].includes (base) || key.includes ('+')) {
+    newHotkey.value = key;
+    stopHotkeyListen ();
+  }
+}
+
+async function saveHotkey (target) {
+  if (!newHotkey.value) return;
+  const field = target === 'sort' ? 'sort_hotkey' : 'cancel_hotkey';
+  const r = await invoke ('settings:save', { [field]: newHotkey.value });
+  if (r?.success) {
+    if (target === 'sort') sortHotkey.value = newHotkey.value;
+    else cancelHotkey.value = newHotkey.value;
+    newHotkey.value = null;
+    window.electron.send ('log', { level: 'info', message: `Sort ${target} hotkey saved: ${sortHotkey.value}` });
+  }
+}
 
 const CLASS_CN = {
   Barbarian: '野蛮人',
@@ -197,6 +244,14 @@ async function loadSortSpeed () {
   try {
     const s = await invoke ('dnd:sort-speed-get');
     if (s && s.preset) sortSpeed.value = s.preset;
+  } catch (e) {}
+}
+
+async function loadHotkeys () {
+  try {
+    const d = await invoke ('settings:get');
+    if (d?.sort_hotkey) sortHotkey.value = d.sort_hotkey;
+    if (d?.cancel_hotkey) cancelHotkey.value = d.cancel_hotkey;
   } catch (e) {}
 }
 
@@ -413,11 +468,13 @@ onMounted (async () => {
   checkUipi ();
   loadSortSpeed ();
   loadSortOrder ();
+  loadHotkeys ();
   try { servicePort.value = await invoke ('dnd:service-port'); } catch (e) {}
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
   } catch (e) {}
+  document.addEventListener ('keydown', onHotkeyKeyDown);
   unsubs = [
     window.electron.on ('dnd:sort-started', onSortStarted),
     window.electron.on ('dnd:sort-cancelled', onSortCancelled),
@@ -431,6 +488,7 @@ onBeforeUnmount (() => {
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
   if (poll) clearInterval (poll);
+  document.removeEventListener ('keydown', onHotkeyKeyDown);
   window.removeEventListener ('dnd:characters-refresh', onCharactersRefresh);
   unsubs.forEach (u => u ());
   unsubs = [];
@@ -556,6 +614,28 @@ onBeforeUnmount (() => {
         </div>
         <div class="srow">
           <div class="srow-info">
+            <div class="srow-t">开始整理键</div>
+            <div class="srow-d">全局快捷键，支持 F1–F12 及 Ctrl/Alt/Shift 组合</div>
+          </div>
+          <div class="srow-ctl">
+            <span class="kbd">{{ sortHotkey }}</span>
+            <button class="keybind-btn" :class="{ listening: listeningFor === 'sort' }" @click="startHotkeyListen('sort')">{{ hotkeyLabel('sort') }}</button>
+            <button class="btn primary" @click="saveHotkey('sort')">保存</button>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">取消整理键</div>
+            <div class="srow-d">全局快捷键，随时中断整理</div>
+          </div>
+          <div class="srow-ctl">
+            <span class="kbd">{{ cancelHotkey }}</span>
+            <button class="keybind-btn" :class="{ listening: listeningFor === 'cancel' }" @click="startHotkeyListen('cancel')">{{ hotkeyLabel('cancel') }}</button>
+            <button class="btn primary" @click="saveHotkey('cancel')">保存</button>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
             <div class="srow-t">紧凑模式</div>
             <div class="srow-d">优先把物品摆放得更紧密</div>
           </div>
@@ -593,8 +673,8 @@ onBeforeUnmount (() => {
       <div class="card run-card">
         <div class="run-row">
           <div class="run-hints">
-            <span class="hint"><span class="kbd">{{ SORT_HOTKEY }}</span> 开始整理</span>
-            <span class="hint"><span class="kbd">{{ CANCEL_HOTKEY }}</span> 取消整理</span>
+            <span class="hint"><span class="kbd">{{ sortHotkey }}</span> 开始整理</span>
+            <span class="hint"><span class="kbd">{{ cancelHotkey }}</span> 取消整理</span>
           </div>
           <button v-if="!sorting" class="btn primary lg" :disabled="!canStart" @click="startSort">开始整理</button>
           <button v-else class="btn danger lg" @click="cancelSort">取消整理</button>

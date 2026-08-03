@@ -265,16 +265,27 @@ app.on ('ready', async () => {
     alignment: settings.general.alignment || 'attached',
     scale: settings.general.scale || 1.0,
     launch_on_startup: !!settings.general.launch_on_startup,
+    sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+F11',
+    cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+F12',
   }));
 
   ipcMain.handle ('settings:save', (e, data) => {
     let needReregister = false;
     let needSend = false;
+    let needSortReregister = false;
 
     if (data.api_key !== undefined) settings.general.api_key = data.api_key;
     if (data.scan_key !== undefined && data.scan_key !== settings.hotkeys.run_price_check) {
       settings.hotkeys.run_price_check = data.scan_key;
       needReregister = true;
+    }
+    if (data.sort_hotkey !== undefined && data.sort_hotkey !== settings.dnd.sort_hotkey) {
+      settings.dnd.sort_hotkey = data.sort_hotkey;
+      needSortReregister = true;
+    }
+    if (data.cancel_hotkey !== undefined && data.cancel_hotkey !== settings.dnd.cancel_hotkey) {
+      settings.dnd.cancel_hotkey = data.cancel_hotkey;
+      needSortReregister = true;
     }
     if (data.default_mode !== undefined) { settings.general.default_mode = data.default_mode; needSend = true; }
     if (data.alignment !== undefined) { settings.general.alignment = data.alignment; needSend = true; }
@@ -291,6 +302,7 @@ app.on ('ready', async () => {
     saveSettings ();
     if (needSend) overlay.webContents.send ('settings', settings);
     if (needReregister) registerScanHotkey (overlay);
+    if (needSortReregister) registerSortHotkeys ();
     pushBallStatus ();
     return { success: true };
   });
@@ -354,9 +366,18 @@ function notifyHome (event, data) {
   if (homeWindow && !homeWindow.isDestroyed ()) homeWindow.webContents.send (event, data);
 }
 
+let registeredSortKeys = null;
+
 function registerSortHotkeys () {
   const sortKey = settings.dnd?.sort_hotkey || 'Ctrl+F11';
   const cancelKey = settings.dnd?.cancel_hotkey || 'Ctrl+F12';
+
+  if (registeredSortKeys) {
+    for (const k of registeredSortKeys) {
+      try { globalShortcut.unregister (k); } catch (e) {}
+    }
+    registeredSortKeys = null;
+  }
 
   try {
     globalShortcut.register (sortKey, async () => {
@@ -402,6 +423,8 @@ function registerSortHotkeys () {
   } catch (e) {
     logger.error (`Failed to register cancel hotkey ${cancelKey}: ${e.message}`);
   }
+
+  registeredSortKeys = [sortKey, cancelKey];
 }
 
 function openSettingsWindow (tab) {
