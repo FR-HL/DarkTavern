@@ -1079,7 +1079,62 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="sec">
-          <div class="sec-label">三、快捷键速查</div>
+          <div class="sec-label">三、工作原理 · 技术透明</div>
+          <div class="terms-grid">
+            <div class="card term-card">
+              <div class="term-head">查价原理</div>
+              <div class="term-body">
+                <p>查价本质是<b>「看屏幕 + 查网站」</b>的自动化：</p>
+                <ul>
+                  <li>用 Windows 系统 API 按窗口标题<b>找到</b>游戏窗口（只查询位置，不操作）</li>
+                  <li>用 mss 截取鼠标悬停区域的<b>屏幕像素</b>（和你截图一样，纯读屏）</li>
+                  <li>在本机用 AI 识别：YOLO 模型检测提示框位置 → OCR 识别中文 → 词条映射中译英</li>
+                  <li>把识别结果发往 <b>darkerdb.com</b>（使用你自己填的 API Key）获取价格</li>
+                  <li>结果叠在游戏画面上显示</li>
+                </ul>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">整理原理</div>
+              <div class="term-body">
+                <p>整理本质是<b>「看数据 + 动手拖」</b>的自动化：</p>
+                <ul>
+                  <li>用 tshark 对游戏网络流量做<b>被动监听</b>（只接收、不发任何数据包、不修改任何数据）</li>
+                  <li>本地解码出仓库布局并展示（就是角色仓库页看到的样子）</li>
+                  <li>排序算法在本地算出最佳摆放方案（纯数学计算）</li>
+                  <li>通过 Windows 系统 API（SendInput）<b>模拟真实鼠标移动与拖拽</b>，和你亲手拖动物品的操作一模一样</li>
+                  <li>内置安全监视器：检测到窗口失焦、位置漂移会自动暂停，防止误操作</li>
+                </ul>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">为什么它不是外挂</div>
+              <div class="term-body">
+                <p>外挂（作弊程序）的共同特征是<b>侵入游戏本体</b>：读取/修改游戏内存、注入 DLL、篡改网络数据包、修改游戏文件。DarkTavern 一样都不做：</p>
+                <ul>
+                  <li>全程<b>不碰游戏进程</b>——不注入、不读内存、不写内存</li>
+                  <li>不修改游戏文件、不绕过反作弊、不提供游戏内优势操作</li>
+                  <li>查价的数据完全来自游戏<b>自己显示在屏幕上的内容</b>，不获取任何游戏外信息</li>
+                  <li>整理只做「眼睛看得到、手做得到」的操作：模拟鼠标拖拽</li>
+                </ul>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">数据与隐私</div>
+              <div class="term-body">
+                <ul>
+                  <li>所有识别、计算都在<b>本机</b>完成，不上传截图、不上传仓库数据</li>
+                  <li>网络请求只发往 darkerdb.com（查价）与本地后端（127.0.0.1），不带任何个人身份信息</li>
+                  <li>设置与查价记录仅保存在本机用户目录</li>
+                  <li>是否安装/使用第三方工具，属于各游戏自带的条款约定范围，请自行查阅并判断</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">四、快捷键速查</div>
           <div class="card">
             <div class="term-body">
               <ul>
@@ -1093,7 +1148,7 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="sec">
-          <div class="sec-label">四、常见问题</div>
+          <div class="sec-label">五、常见问题</div>
           <div class="terms-grid">
             <div class="card term-card">
               <div class="term-head">OCR 状态一直「正在唤醒」</div>
@@ -1126,6 +1181,13 @@ onBeforeUnmount (() => {
               </div>
             </div>
             <div class="card term-card">
+              <div class="term-head">这算外挂吗？会不会封号？</div>
+              <div class="term-body">
+                <p>不是外挂：不注入、不读游戏内存、不改数据包，只做「看屏幕 + 看网络 + 模拟鼠标」三件事，详见本页「工作原理 · 技术透明」与「安全说明」。</p>
+                <p>但任何第三方工具都与游戏条款存在约定冲突的可能，使用与否请自行判断，风险条款见「免责声明」页。</p>
+              </div>
+            </div>
+            <div class="card term-card">
               <div class="term-head">其他问题</div>
               <div class="term-body">
                 <p>在交流群提问（侧边栏「交流群」可复制群号），或到 GitHub Issues 反馈；附上日志（用户目录 darktavern/logs）能更快定位。</p>
@@ -1134,8 +1196,27 @@ onBeforeUnmount (() => {
           </div>
         </div>
 
+        <div class="sec">
+          <div class="sec-label">安全说明 · 一句话讲清楚</div>
+          <div class="card">
+            <div class="term-body">
+              <p>DarkTavern <b>不是外挂</b>。它对你的电脑只做四件事，且全部是<b>人类自己也能做</b>的事：</p>
+              <ul>
+                <li><b>看屏幕</b>：截取游戏画面像素，用 OCR 识别物品提示框文字 —— 相当于你用自己的眼睛看</li>
+                <li><b>看网络</b>：被动监听游戏网络数据，解码出仓库布局 —— 相当于你打开仓库看一眼</li>
+                <li><b>动鼠标</b>：用 Windows 系统 API 模拟鼠标移动和拖拽 —— 相当于你亲手拖动物品，游戏完全无法区分</li>
+                <li><b>查网站</b>：把识别出的物品名发往 darkerdb.com 查公开价格 —— 相当于你手动打开网站搜索</li>
+              </ul>
+              <p>它<b>从来不做</b>的：不注入 DLL、不读取或修改游戏内存、不修改游戏文件、不篡改或伪造网络数据包、不读写存档、不提供任何游戏内"优势操作"。整个程序连游戏进程都不会触碰，自然也无法从中获取任何"作弊级"信息。</p>
+            </div>
+            <div class="about-thanks">
+              请记住：任何第三方工具都可能与游戏条款存在约定冲突，使用与否请自行判断。完整责任条款见「免责声明」页。
+            </div>
+          </div>
+        </div>
+
         <div class="about-note">
-          <em>安全说明：</em>本工具查价<b>只读屏幕</b>，整理<b>只模拟鼠标</b>，全程不注入游戏、不读游戏内存。请务必阅读「免责声明」页后再使用。
+          <em>放心使用：</em>查价 = 看屏幕 + 查网站；整理 = 看数据 + 模拟鼠标。全程不注入、不读内存、不碰游戏进程，更不联网上传你的任何游戏数据。
         </div>
       </div>
 
