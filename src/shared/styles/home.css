@@ -568,6 +568,8 @@ input[type="range"]::-moz-range-thumb {
 }
 .step-t { font-size: 13.5px; color: var(--text-2); line-height: 1.55; padding-top: 3px; }
 .step-t b { color: var(--text); font-weight: 650; }
+.card-note { padding: 14px 18px 2px; font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
+.card-note b { color: var(--text); font-weight: 650; }
 
 /* ===== mapping pane ===== */
 .map-toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }

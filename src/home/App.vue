@@ -643,6 +643,10 @@ onBeforeUnmount (() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           设置
         </div>
+        <div class="nav-item" :class="{ active: pane === 'guide' }" @click="showPane('guide')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          使用教程
+        </div>
         <div class="nav-item" :class="{ active: pane === 'about' }" @click="showPane('about')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="0.5" fill="currentColor" stroke="none"/></svg>
           关于酒馆
@@ -1032,6 +1036,106 @@ onBeforeUnmount (() => {
           @update:stack-mode="v => sortStack = v"
           @update:include-inv="v => sortIncludeInv = v"
         />
+      </div>
+
+      <!-- ============ 使用教程 ============ -->
+      <div class="pane" :class="{ active: pane === 'guide' }">
+        <div class="page-title">使用教程</div>
+        <div class="page-sub">查价器与仓库整理的使用方法，按步骤操作即可上手。</div>
+
+        <div class="sec">
+          <div class="sec-label">一、查价器</div>
+          <div class="card">
+            <div class="steps">
+              <div class="step"><div class="step-n">1</div><div class="step-t">启动 DarkTavern，等待主页左栏「OCR 侍者」由灰转金（后端加载模型约数秒，需保持后端在后台运行）</div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">启动游戏 <b>Dark and Darker</b>，把鼠标<b>悬停</b>在任意物品的提示框上</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">按下扫描键（默认 <span class="kbd">{{ scanKey }}</span>，可在查价器页自定义）</div></div>
+              <div class="step"><div class="step-n">4</div><div class="step-t">价格面板浮现在物品提示框旁：中文物品名 + 属性 + <b>市场价 / 商人价 / 每格价值</b></div></div>
+            </div>
+            <div class="about-thanks">
+              提示：填入 <b>DarkerDB API Key</b>（F5 → 查价器页）后才有价格数据；未填也能识别物品名与属性。查过的物品自动记入「查价记录」（保留 3 天）。F8 可随时清除悬浮窗。
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">二、自动整理</div>
+          <div class="card">
+            <div class="card-note">
+              前置条件：已安装 <b>Wireshark</b>（提供 tshark，安装时勾选 "Add tshark to PATH"）；若游戏以管理员权限运行，DarkTavern 也需<b>以管理员身份运行</b>，否则鼠标操作会被 Windows 拦截。
+            </div>
+            <div class="steps">
+              <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>启动抓包</b>；在游戏中打开仓库界面，角色的仓库与背包数据会自动出现</div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">在仓库网格上方选择<b>排序方案</b>（默认整理 / 品质区分 / 装备优先），可先点「排序预览」确认摆放效果</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">进入「仓库配置」页，选择要整理的<b>角色与目标仓库</b>，按需调整整理速度、紧凑模式、堆叠合并、包含背包</div></div>
+              <div class="step"><div class="step-n">4</div><div class="step-t">游戏中确认仓库界面已打开，按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理；整理期间<b>保持游戏窗口在前台、不要移动鼠标</b></div></div>
+              <div class="step"><div class="step-n">5</div><div class="step-t">随时可按 <span class="kbd">{{ cancelHotkey }}</span> 中断；结束后查看整理结果，误放可手动微调</div></div>
+            </div>
+            <div class="about-thanks">
+              提示：整理速度建议先用「中」，出现漏放/串位再降到「慢」；「极速」约 10 倍提速但偶发漏操作。Ctrl+E 可在仓库间循环切换。
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">三、快捷键速查</div>
+          <div class="card">
+            <div class="term-body">
+              <ul>
+                <li><span class="kbd">{{ scanKey }}</span> 扫描悬停物品价格</li>
+                <li><span class="kbd">F5</span> 设置（API Key、扫描键、扫描模式）　<span class="kbd">F6</span> 词条编辑器　<span class="kbd">F7</span> 调试模式　<span class="kbd">F8</span> 清除悬浮窗</li>
+                <li><span class="kbd">{{ sortHotkey }}</span> 开始整理　<span class="kbd">{{ cancelHotkey }}</span> 取消整理　<span class="kbd">Ctrl+E</span> 切换仓库</li>
+                <li><span class="kbd">Ctrl+Alt+B</span> 锁定 / 解锁桌面悬浮球</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">四、常见问题</div>
+          <div class="terms-grid">
+            <div class="card term-card">
+              <div class="term-head">OCR 状态一直「正在唤醒」</div>
+              <div class="term-body">
+                <p>多为代理 / VPN 干扰本地后端通信（127.0.0.1）。关闭 TUN / 全局增强模式后重启一次；或临时关闭代理启动。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">查价没有价格数据</div>
+              <div class="term-body">
+                <p>未填 DarkerDB API Key。F5 → 查价器页填入 Key 并保存（darkerdb.com 免费注册获取）。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">整理时鼠标不动 / 被拦截</div>
+              <div class="term-body">
+                <p>游戏以管理员权限运行时，DarkTavern 也需以管理员身份运行（右键 → 以管理员身份运行），或取消游戏快捷方式的管理员选项。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">角色仓库没有数据</div>
+              <div class="term-body">
+                <p>确认已安装 Wireshark 且 tshark 在 PATH 中；在「角色仓库」页启动抓包后，游戏中重新打开一次仓库界面。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">整理漏放 / 串位</div>
+              <div class="term-body">
+                <p>把整理速度从「极速」降到「中」或「慢」；整理期间保持窗口前台、不要移动鼠标和切窗口。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">其他问题</div>
+              <div class="term-body">
+                <p>在交流群提问（侧边栏「交流群」可复制群号），或到 GitHub Issues 反馈；附上日志（用户目录 darktavern/logs）能更快定位。</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="about-note">
+          <em>安全说明：</em>本工具查价<b>只读屏幕</b>，整理<b>只模拟鼠标</b>，全程不注入游戏、不读游戏内存。请务必阅读「免责声明」页后再使用。
+        </div>
       </div>
 
       <!-- ============ 关于酒馆 ============ -->
