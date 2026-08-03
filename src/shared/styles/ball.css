@@ -117,6 +117,7 @@ html, body, #app {
 .ball-text.bad .bt-1 { color: var(--red); }
 .ball-text.busy .bt-1 { color: var(--accent); }
 .ball-text.gold .bt-1 { color: #f2c14e; }
+.ball-text.small .bt-1 { font-size: 13px; }
 
 /* 扫描脉动 */
 .pulse {

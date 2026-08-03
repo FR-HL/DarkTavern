@@ -46,7 +46,7 @@ const center = computed (() => {
     if (t.kind === 'sortok') return { t1: '完成', cls: 'ok' };
     if (t.kind === 'sortfail') return { t1: '失败', cls: 'bad' };
     if (t.kind === 'char') return { t1: t.sub, cls: 'busy' };
-    if (t.kind === 'stash') return { t1: t.sub, cls: 'busy' };
+    if (t.kind === 'stash') return { t1: t.sub, cls: 'busy', small: true };
   }
   if (!status.ocr) return { t1: '故障', cls: 'bad' };
   if (status.sortingRunning) return { t1: '整理', cls: 'busy' };
@@ -148,7 +148,7 @@ onBeforeUnmount (() => {
     <div class="ball-anchor">
       <div class="ring" :class="ring">
         <div class="ball" :class="{ locked: status.locked }" @mousedown="onBallMouseDown" @mouseup="onBallMouseUp" @click="onBallClick" @contextmenu="onContext">
-          <div class="ball-text" :class="center.cls">
+          <div class="ball-text" :class="[center.cls, { small: center.small }]">
             <span class="bt-1">{{ center.t1 }}</span>
           </div>
           <span v-if="status.scanning" class="pulse"></span>
