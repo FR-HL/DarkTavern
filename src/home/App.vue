@@ -340,7 +340,7 @@ function showMappingStatus (msg, type) {
   mappingTimer = setTimeout (() => { mappingStatus.type = ''; mappingStatus.text = ''; }, 3000);
 }
 
-function copyGroup () { window.electron.clipboardWriteText ('376490002'); showToast ('群号已复制'); }
+function copyGroup () { window.electron.clipboardWriteText ('237874334'); showToast ('群号已复制'); }
 function copyWechat () { window.electron.clipboardWriteText ('ZFZ13434'); showToast ('商务微信已复制'); }
 function openGithub () { window.electron.openExternal ('https://github.com/FR-HL/DarkTavern'); }
 function openLink (url) { window.electron.openExternal (url); }
@@ -665,7 +665,7 @@ onBeforeUnmount (() => {
         <div class="foot-row" title="点击复制群号" @click="copyGroup">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           <span class="foot-k">交流群</span>
-          <span class="foot-v">376490002</span>
+          <span class="foot-v">237874334</span>
         </div>
         <a class="foot-row" href="#" @click.prevent="openGithub">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
@@ -1063,7 +1063,7 @@ onBeforeUnmount (() => {
             </a>
             <a class="contact-chip" href="#" @click.prevent="copyGroup">
               <span class="contact-ic qq">群</span>
-              <span class="contact-txt"><span class="contact-k">德鲁伊的树屋酒馆</span><span class="contact-v">376490002</span></span>
+              <span class="contact-txt"><span class="contact-k">德鲁伊的树屋酒馆</span><span class="contact-v">237874334</span></span>
             </a>
             <a class="contact-chip" href="#" @click.prevent="openLink('mailto:1292517294@qq.com')">
               <span class="contact-ic mail">邮</span>
