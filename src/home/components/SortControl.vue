@@ -41,6 +41,14 @@ const SORT_PRESETS = [
     ],
   },
   {
+    id: 'test', label: '测试',
+    order: [
+      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
+      { field: 'name', direction: 'asc' },
+      { field: 'slot', direction: 'desc' }, { field: 'rarity', direction: 'desc' },
+    ],
+  },
+  {
     id: 'category', label: '宽松',
     groupMode: 'category',
     order: [
