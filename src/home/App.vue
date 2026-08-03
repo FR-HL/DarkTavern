@@ -9,7 +9,6 @@ import donorYuehai from '@assets/images/sponsors/yuehai.webp';
 import donorLidand from '@assets/images/sponsors/lidang.webp';
 import donorMobao from '@assets/images/sponsors/mobao.webp';
 
-import StashPane from './components/StashPane.vue';
 import StashView from './components/StashView.vue';
 import SortControl from './components/SortControl.vue';
 import PacketPane from './components/PacketPane.vue';
