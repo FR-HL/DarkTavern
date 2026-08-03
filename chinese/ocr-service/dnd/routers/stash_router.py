@@ -57,14 +57,13 @@ def _stash_label(stash_id):
 
     fixed = {
         0: "无", 1: "箱子", 2: "背包", 3: "装备", 4: "仓库",
-        20: "赛季共享",
     }
     if sid in fixed:
         return fixed[sid]
     if 5 <= sid <= 9:
         return f"仓库 {sid - 4}"
-    if 21 <= sid <= 29:
-        return f"赛季共享 {sid - 20}"
+    if 20 <= sid <= 29:
+        return f"赛季共享 {sid - 19}"
     if 30 <= sid <= 39:
         return f"共享仓库 {sid - 29}"
     if 100 <= sid <= 102:
