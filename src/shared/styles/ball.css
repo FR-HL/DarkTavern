@@ -125,7 +125,9 @@ html, body, #app {
 .ball-text.small .bt-1 { font-size: 13.5px; }
 .ball-text .bt-2.gold {
   color: #b48109;
+  font-size: 15px;
   font-weight: 800;
+  max-width: 52px;
   text-shadow: 0 1px 0 rgba(255,255,255,0.6);
 }
 .ball-text .bt-2 .bt-suffix {

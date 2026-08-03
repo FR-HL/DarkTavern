@@ -43,7 +43,7 @@ const center = computed (() => {
   if (t && t.until > Date.now ()) {
     if (t.kind === 'ok') {
       const p = fmtPrice (t.price);
-      return { t1: t.name || '✓', t2: p.n, t2suffix: p.g, cls: 'ok', t1Color: t.color, small: true, gold: true };
+      return { t1: '', t2: p.n, t2suffix: p.g, cls: 'ok', gold: true };
     }
     if (t.kind === 'fail') return { t1: '✗', t2: t.sub, cls: 'bad' };
     if (t.kind === 'sortok') return { t1: '✓', t2: '完成', cls: 'ok' };
@@ -161,7 +161,7 @@ onBeforeUnmount (() => {
       <div class="ring" :class="ring">
         <div class="ball" :class="{ locked: status.locked }" @mousedown="onBallMouseDown" @mouseup="onBallMouseUp" @click="onBallClick" @contextmenu="onContext">
           <div class="ball-text" :class="[center.cls, { small: center.small }]">
-            <span class="bt-1" :style="center.t1Color ? { color: center.t1Color } : null">{{ center.t1 }}</span>
+            <span v-if="center.t1" class="bt-1" :style="center.t1Color ? { color: center.t1Color } : null">{{ center.t1 }}</span>
             <span v-if="center.t2" class="bt-2" :class="{ gold: center.gold }">{{ center.t2 }}<span v-if="center.t2suffix" class="bt-suffix">{{ center.t2suffix }}</span></span>
           </div>
           <span v-if="status.scanning" class="pulse"></span>
