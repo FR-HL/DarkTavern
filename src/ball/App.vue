@@ -47,7 +47,6 @@ const center = computed (() => {
   }
   if (!status.ocr) return { t1: '故障', t2: '', cls: 'bad' };
   if (status.sortingRunning) return { t1: '整理', t2: '', cls: 'busy' };
-  if (status.captureRunning) return { t1: '抓包', t2: '', cls: 'busy' };
   if (!status.game || !status.apiKey) return { t1: '待机', t2: '', cls: 'warn' };
   return { t1: '就绪', t2: '', cls: 'ok' };
 });
