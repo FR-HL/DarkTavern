@@ -1050,7 +1050,7 @@ onBeforeUnmount (() => {
           </div>
           <div class="keeper-vision">
             <p class="keeper-lead">和你一样，我也是一名热爱 <em>Dark and Darker</em> 的普通玩家——曾在漆黑的地牢裡，为一件装备到底值不值而反复纠结。于是，我决定自己动手。</p>
-            <p class="keeper-body">DarkTavern 改编自原版查价器 GrimVault 与「7.」大佬的开源中文版 GrimVault-Chinese-Edition。最初我基于中文版延续开发，后来因后续维护问题，不愿再麻烦大佬，便潜心研读源码，将软件<strong>完整重写</strong>。没有团队、没有盈利，只是一个玩家想帮玩家的小小心意——愿它让你的每一次冒险，都心中有数、满载而归。</p>
+            <p class="keeper-body">DarkTavern 改编自原版查价器 GrimVault 与开源中文版 GrimVault-Chinese-Edition。最初我基于中文版延续开发，后来因后续维护问题，不愿再麻烦原作者，便潜心研读源码，将软件<strong>完整重写</strong>。没有团队、没有盈利，只是一个玩家想帮玩家的小小心意——愿它让你的每一次冒险，都心中有数、满载而归。</p>
           </div>
           <div class="about-contacts">
             <a class="contact-chip" href="#" @click.prevent="openLink('https://space.bilibili.com/301927878')">
@@ -1076,8 +1076,8 @@ onBeforeUnmount (() => {
           <div class="sec-label">软件来源 · 致敬</div>
           <div class="card">
             <div class="about-block">
-              <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a> 与 <strong>「7.」</strong>大佬的开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>。最初我基于中文版本延续开发，后来因后续维护问题，不愿再麻烦大佬，便决定潜心研读源码，将软件<strong>完整重写</strong>。</p>
-              <p>遵从前辈们的开源精神，DarkTavern 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢「7.」大佬与 GrimVault 项目铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
+              <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a> 与开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>。最初我基于中文版本延续开发，后来因后续维护问题，不愿再麻烦原作者，便决定潜心研读源码，将软件<strong>完整重写</strong>。</p>
+              <p>遵从前辈们的开源精神，DarkTavern 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢 GrimVault 与 GrimVault-Chinese-Edition 两个项目铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
             </div>
             <div class="src-links">
               <a class="src-card" href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">
@@ -1086,14 +1086,30 @@ onBeforeUnmount (() => {
               </a>
               <a class="src-card" href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">
                 <span class="src-name">GrimVault-Chinese-Edition</span>
-                <span class="src-desc">「7.」大佬中文版 · 传承之基</span>
+                <span class="src-desc">开源中文版 · 传承之基</span>
               </a>
               <a class="src-card" href="#" @click.prevent="openGithub">
                 <span class="src-name">DarkTavern</span>
                 <span class="src-desc">本项目源码 · 开源续写</span>
               </a>
             </div>
-            <div class="about-thanks">感谢「7.」大佬的无私开源，感谢每一位支持与帮助过我的朋友！</div>
+            <div class="about-thanks">感谢所有开源前辈的无私分享，感谢每一位支持与帮助过我的朋友！</div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">背包整理 · 致敬</div>
+          <div class="card">
+            <div class="about-block">
+              <p>DarkTavern 的背包 / 仓库整理功能（数据解析、物品图标、排序算法）参考自开源项目 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>。它把「整理仓库」这件苦差事变成了可视化的优雅工具，给我带来了极大的启发。</p>
+              <p>感谢 DnDTools 项目的无私开源，让玩家社区的工具生态生生不息。</p>
+            </div>
+            <div class="src-links single">
+              <a class="src-card" href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">
+                <span class="src-name">DnDTools</span>
+                <span class="src-desc">背包整理工具 · 排序与数据参考</span>
+              </a>
+            </div>
           </div>
         </div>
 
@@ -1102,7 +1118,7 @@ onBeforeUnmount (() => {
           <div class="card">
             <div class="about-block">
               <p>本工具的市场数据来源于 <a href="#" @click.prevent="openLink('https://darkerdb.com/')">DarkerDB</a>，这是一个优秀的游戏数据平台。感谢 DarkerDB 提供了准确、实时的市场数据，让装备估价与市场价格分析功能得以实现。</p>
-              <p>诚挚地感谢 DarkerDB 及其作者 <strong>ander</strong> 对游戏社区的无私贡献！同时感谢所有为本站提供数据和反馈的玩家社区！</p>
+              <p>诚挚地感谢 DarkerDB 对游戏社区的无私贡献！同时感谢所有为本站提供数据和反馈的玩家社区！</p>
             </div>
             <div class="src-links single">
               <a class="src-card" href="#" @click.prevent="openLink('https://darkerdb.com/')">

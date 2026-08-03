@@ -138,7 +138,7 @@ def get_sort_group_mode():
 @router.post("/group-mode")
 def update_sort_group_mode(body: SortGroupModeUpdate):
     from dnd.settings import settings_manager
-    mode = body.mode if body.mode in ("none", "category") else "none"
+    mode = body.mode if body.mode in ("none", "category", "sized", "neat") else "none"
     settings_manager.update({"sortGroupMode": mode}, persist=True)
     return {"success": True, "mode": mode}
 
@@ -152,3 +152,69 @@ def update_sort_order(body: SortOrderUpdate):
     Item.sort_order = Item.copy_sort_order(normalized)
     settings_manager.update({"stashSortOrder": normalized}, persist=True)
     return {"success": True, "order": normalized}
+
+
+@router.get("/preview")
+def sort_preview(character_id: str, stash_id: str):
+    import json as _json
+    from pathlib import Path as _Path
+    from dnd.items.item import Item
+    from dnd.sort.sorter import LayoutPlanner
+    from dnd.stash.storage import Storage
+    from dnd.settings import settings_manager
+    from dnd.service import get_stash_manager
+    from dnd.appdirs import get_base_path
+
+    mgr = get_stash_manager()
+    char = mgr.characters_cache.get(str(character_id))
+    if not char:
+        return {"error": "Character not found"}
+    stash_raw = char.get('stashes', {}).get(str(stash_id))
+    if stash_raw is None:
+        return {"error": "Stash not found"}
+    stash_obj = stash_raw if isinstance(stash_raw, list) else stash_raw.get('items', [])
+
+    storage = Storage(int(stash_id), stash_obj)
+    items = list(storage.pq)
+    if not items:
+        return {"items": [], "width": 0, "height": 0}
+
+    en_to_cn: dict[str, str] = {}
+    try:
+        mapping_path = _Path(get_base_path()) / "chinese" / "mapping" / "items.json"
+        with open(mapping_path, "r", encoding="utf-8") as f:
+            cn_to_en = _json.load(f)
+        en_to_cn = {v: k for k, v in cn_to_en.items()}
+    except Exception:
+        pass
+
+    group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+
+    comparator = None
+    if Item.sort_order:
+        comparator = Item.build_sort_comparator(Item.sort_order)
+
+    planner = LayoutPlanner(storage.width, storage.height, stash=storage)
+    try:
+        if group_mode == "sized":
+            plan = planner.build_sized_groups(items, comparator=comparator)
+        elif group_mode == "neat":
+            plan = planner.build_neat_groups(items, comparator=comparator)
+        elif group_mode == "category":
+            plan = planner.build_grouped(items, comparator=comparator)
+        else:
+            plan = planner.build(items, comparator=comparator)
+    except Exception:
+        plan = planner.build(items)
+
+    result = []
+    for itm in items:
+        pos = plan.positions.get(id(itm))
+        if pos:
+            cn_name = en_to_cn.get(itm.name, itm.name or "")
+            result.append({
+                "x": pos.x, "y": pos.y,
+                "width": itm.width, "height": itm.height,
+                "name": cn_name,
+            })
+    return {"items": result, "width": storage.width, "height": storage.height}

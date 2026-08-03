@@ -142,6 +142,38 @@ const bgCells = computed (() => {
   return s ? s.width * s.height : 0;
 });
 
+// ── 调试预览 ──
+const debugPreview = ref (false);
+const previewItems = ref ([]);
+const previewLoading = ref (false);
+
+async function togglePreview () {
+  if (debugPreview.value) {
+    debugPreview.value = false;
+    previewItems.value = [];
+    return;
+  }
+  if (!props.charId || !props.stashId) return;
+  previewLoading.value = true;
+  try {
+    const r = await invoke ('dnd:sort-preview', { character_id: props.charId, stash_id: props.stashId });
+    if (r && Array.isArray (r.items)) {
+      previewItems.value = r.items;
+      debugPreview.value = true;
+    }
+  } catch (e) {}
+  previewLoading.value = false;
+}
+
+function previewStyle (it) {
+  return {
+    left: it.x * (CELL + GAP) + 'px',
+    top: it.y * (CELL + GAP) + 'px',
+    width: it.width * CELL + (it.width - 1) * GAP + 'px',
+    height: it.height * CELL + (it.height - 1) * GAP + 'px',
+  };
+}
+
 function rarityOf (it) { return RARITY[it.rarity] || RARITY.Common; }
 
 function iconUrl (it) {
@@ -389,6 +421,9 @@ watch (() => props.stashId, () => reportStashState ());
             <span class="fill-track"><span class="fill-bar" :style="{ width: fillPct + '%' }"></span></span>
             <span class="stash-v">{{ fillPct }}%</span>
           </div>
+          <button v-if="!isEquipment" class="debug-btn" :class="{ on: debugPreview }" :disabled="previewLoading" @click="togglePreview">
+            {{ previewLoading ? '计算中…' : (debugPreview ? '关闭预览' : '排序预览') }}
+          </button>
         </div>
 
         <div class="grid-scroll">
@@ -409,10 +444,17 @@ watch (() => props.stashId, () => reportStashState ());
                     :style="slotStyle (s)" :title="s.name"></span>
             </div>
             <div v-for="(it, i) in currentStash.items" :key="i" class="cell-item"
+                 :class="{ hidden: debugPreview }"
                  :style="itemStyle (it)"
                  :title="`${it.name} · ${it.rarity} · ${it.width}×${it.height}`">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
             </div>
+            <template v-if="debugPreview && previewItems.length">
+              <div v-for="(pi, i) in previewItems" :key="'p'+i" class="preview-item"
+                   :style="previewStyle (pi)">
+                <span class="preview-label">{{ pi.name }}</span>
+              </div>
+            </template>
           </div>
         </div>
         </div>
@@ -539,8 +581,34 @@ watch (() => props.stashId, () => reportStashState ());
   object-fit: cover; object-position: center;
   pointer-events: none;
 }
+.cell-item.hidden { display: none; }
 .cell-item:hover { transform: scale(1.05); box-shadow: 0 3px 10px rgba(0,0,0,0.2); z-index: 5; }
 
 html[data-theme="dark"] .fill-track { background: rgba(255,255,255,0.10); }
 html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
+
+/* debug preview */
+.debug-btn {
+  flex: none; margin-left: auto;
+  padding: 4px 12px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 6px;
+  background: var(--card-2); color: var(--text-2);
+  cursor: pointer; transition: all .15s var(--ease);
+}
+.debug-btn:hover { border-color: var(--accent-soft); }
+.debug-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.debug-btn:disabled { opacity: .5; cursor: default; }
+.preview-item {
+  position: absolute; display: grid; place-items: center;
+  background: rgba(255, 140, 0, 0.22);
+  border: 1.5px dashed rgba(255, 140, 0, 0.7);
+  border-radius: 4px; pointer-events: none; z-index: 10;
+}
+.preview-label {
+  font-size: 10px; font-weight: 700; color: #ff8c00;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  line-height: 1.2; text-align: center;
+  overflow: hidden; word-break: break-all;
+  padding: 2px;
+}
 </style>

@@ -33,7 +33,7 @@ const SPEED_OPTIONS = [
 
 const SORT_PRESETS = [
   {
-    id: 'default', label: '默认',
+    id: 'default', label: '默认整理',
     order: [
       { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
       { field: 'name', direction: 'asc' },
@@ -41,7 +41,7 @@ const SORT_PRESETS = [
     ],
   },
   {
-    id: 'test', label: '测试',
+    id: 'test', label: '品质区分',
     groupMode: 'sized',
     order: [
       { field: 'name', direction: 'asc' },
@@ -50,7 +50,7 @@ const SORT_PRESETS = [
     ],
   },
   {
-    id: 'category', label: '宽松',
+    id: 'category', label: '装备优先',
     groupMode: 'category',
     order: [
       { field: 'category', direction: 'asc' },

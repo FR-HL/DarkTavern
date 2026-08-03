@@ -218,6 +218,11 @@ export async function setSortGroupMode (mode) {
   return await post ('/sort/group-mode', { mode }) || { error: 'Service unavailable' };
 }
 
+export async function sortPreview (params) {
+  const q = new URLSearchParams ({ character_id: params.character_id, stash_id: params.stash_id });
+  return await get (`/sort/preview?${q}`);
+}
+
 // ── DnD Tools: Packets ──
 
 export async function getPackets (page = 0, pageSize = 50) {

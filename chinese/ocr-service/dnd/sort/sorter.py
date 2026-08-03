@@ -372,24 +372,23 @@ class LayoutPlanner:
         return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
 
     def _sized_group_key(self, item: Item) -> Tuple[str, str]:
-        """装备按部位分组；非装备按名称 + 尺寸分组（同名同尺寸一组，稀有度变体相邻）。"""
+        """装备按部位分组；非装备按名称分组（同名物品含不同尺寸/稀有度变体均相邻）。"""
         slot = (getattr(item, "slot_type", "") or "").strip()
         if slot:
             return ("equip", slot)
-        return ("sized", f"{item.name}|{item.width}x{item.height}")
+        return ("sized", item.name or "")
 
     def build_sized_groups(
         self,
         items: List[Item],
         comparator: Optional[Callable[[Item, Item], int]] = None,
     ) -> LayoutPlan:
-        """同款同尺寸分组 + 列式整块填充（大件优先）。
+        """同名分组 + 列式整块填充（大件优先）。
 
         硬性要求：
-        - 同名物品必须相邻（含稀有度变体）；每款独占列，同宽不同款也分列
-        - 大件优先：单件面积大的款先占列；同面积数量多的先
+        - 同名物品必须相邻（含不同尺寸/稀有度变体）；同名内按尺寸分列，大件优先
         - 装备（按部位）置顶沿用贪心放置
-        - 放不下的款整组进底部溢出区（从底向上列式，款保持完整不打散）
+        - 放不下的款整组进底部溢出区（从主区域之后从底向上列式，款保持完整不打散）
         """
         self._reset()
         self._learning_cache = {}
@@ -407,15 +406,17 @@ class LayoutPlanner:
                     idx = 1000
                 return (0, idx, name, 0, 0)
             g = groups[key]
-            itm0 = g[0]
-            # 大件优先（单件面积降序）；同面积时数量多的优先
-            return (1, -(itm0.width * itm0.height), -len(g))
+            max_area = max(itm.width * itm.height for itm in g)
+            # 大件优先（单件最大面积降序）；同面积时数量多的优先
+            return (1, -max_area, -len(g))
 
         group_keys = sorted(groups.keys(), key=group_sort_key)
         positions: Dict[int, Point] = {}
         learning_payload: Dict[int, Dict[str, Any]] = {}
         overflow_groups: List[List[Item]] = []
         anchor = 0
+        non_equip_anchor = 0
+        bottom_row = 0
         x_anchor = 0
 
         def place(itm, pos):
@@ -445,57 +446,278 @@ class LayoutPlanner:
                     if record:
                         learning_payload[id(itm)] = record
                 anchor = group_bottom + 1
+                bottom_row = max(bottom_row, group_bottom)
+                non_equip_anchor = max(non_equip_anchor, anchor)
             else:
-                # 非装备组：列式整块填充，每款独占列（同宽不同款也分列）
-                itm0 = group[0]
-                w, h = itm0.width, itm0.height
-                n = len(group)
-                avail_h = max(1, self.height - anchor)
-                k = max(1, avail_h // h)        # 单列可放件数
-                cols = (n + k - 1) // k          # 占用连续列数
-                if x_anchor + cols * w > self.width:
-                    overflow_groups.append(group)
-                    continue
-                # 列内游标式放置：同列向下找空位，款连续
-                cursor = anchor
+                # 非装备组：按尺寸分列，同名不同尺寸列块相邻（大件优先）
+                size_groups: Dict[Tuple[int, int], List[Item]] = {}
                 for itm in group:
-                    x = x_anchor
-                    while cursor + h <= self.height and not self._fits(itm, x, cursor):
+                    size_groups.setdefault((itm.width, itm.height), []).append(itm)
+                size_keys = sorted(
+                    size_groups.keys(),
+                    key=lambda d: (-(d[0] * d[1]), -d[0]),
+                )
+                group_overflow: List[Item] = []
+                for (w, h) in size_keys:
+                    items_for_size = size_groups[(w, h)]
+                    n = len(items_for_size)
+                    avail_h = max(1, self.height - anchor)
+                    k = max(1, avail_h // h)
+                    cols = (n + k - 1) // k
+                    if x_anchor + cols * w > self.width:
+                        group_overflow.extend(items_for_size)
+                        continue
+                    cursor = anchor
+                    for itm in items_for_size:
+                        x = x_anchor
+                        while cursor + h <= self.height and not self._fits(itm, x, cursor):
+                            cursor += h
+                        if cursor + h > self.height:
+                            group_overflow.extend(
+                                [it for it in items_for_size if id(it) not in positions]
+                            )
+                            break
+                        place(itm, Point(x, cursor))
+                        bottom_row = max(bottom_row, cursor + h - 1)
                         cursor += h
-                    if cursor + h > self.height:
-                        overflow_groups.append([itm for itm in group if id(itm) not in positions])
-                        break
-                    place(itm, Point(x, cursor))
-                    cursor += h
-                x_anchor += cols * w
+                    x_anchor += cols * w
+                non_equip_anchor = max(non_equip_anchor, bottom_row + 1)
+                if group_overflow:
+                    overflow_groups.append(group_overflow)
 
         # 底部溢出区：放不下的款整组从底向上列式（款保持完整，不打散）
         bottom_y = self.height
-        bottom_x = 0
+        bottom_x = x_anchor
         for group in overflow_groups:
             if not group:
                 continue
-            itm0 = group[0]
-            w, h = itm0.width, itm0.height
-            n = len(group)
-            k = max(1, bottom_y // h)
-            cols = (n + k - 1) // k
-            if bottom_x + cols * w > self.width:
-                continue
-            placed_any = False
-            for i, itm in enumerate(group):
-                col = i // k
-                row = i % k
-                x = bottom_x + col * w
-                y = bottom_y - h - row * h
-                if y < anchor or not self._fits(itm, x, y):
+            # 溢出组可能含混合尺寸，需按尺寸再分组
+            ov_size_groups: Dict[Tuple[int, int], List[Item]] = {}
+            for itm in group:
+                if id(itm) not in positions:
+                    ov_size_groups.setdefault((itm.width, itm.height), []).append(itm)
+            for (w, h), ov_items in ov_size_groups.items():
+                n = len(ov_items)
+                k = max(1, bottom_y // h)
+                cols = (n + k - 1) // k
+                if bottom_x + cols * w > self.width:
                     continue
-                place(itm, Point(x, y))
-                placed_any = True
-            if placed_any:
-                bottom_x += cols * w
+                placed_any = False
+                for i, itm in enumerate(ov_items):
+                    col = i // k
+                    row = i % k
+                    x = bottom_x + col * w
+                    y = bottom_y - h - row * h
+                    if y < non_equip_anchor or not self._fits(itm, x, y):
+                        continue
+                    place(itm, Point(x, y))
+                    placed_any = True
+                if placed_any:
+                    bottom_x += cols * w
 
         # 最终兜底（仓库极满时）：逐件从底部向上找位
+        for group in overflow_groups:
+            for itm in group:
+                if id(itm) in positions:
+                    continue
+                self._ensure_learning_cache(itm)
+                slot = self._find_slot_from_bottom(itm)
+                if slot is None:
+                    raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
+                self._mark(slot, itm)
+                positions[id(itm)] = slot
+                record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+                if record:
+                    learning_payload[id(itm)] = record
+
+        execution_order = sorted(
+            [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
+            key=lambda entry: (
+                entry.target.y,
+                entry.target.x,
+                -(entry.item.width * entry.item.height),
+            ),
+        )
+        return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
+
+    def build_neat_groups(
+        self,
+        items: List[Item],
+        comparator: Optional[Callable[[Item, Item], int]] = None,
+    ) -> LayoutPlan:
+        """同名分组 + 行优先填充（大件优先）。
+
+        与 build_sized_groups 的区别：每个名称组的 cursor 严格限制在本组区域内，
+        行优先填充保证同名物品横向相邻、不交错到其他组的列块。
+        """
+        self._reset()
+        self._learning_cache = {}
+        groups: Dict[Tuple[str, str], List[Item]] = {}
+        for itm in items:
+            key = self._sized_group_key(itm)
+            groups.setdefault(key, []).append(itm)
+
+        def group_sort_key(key):
+            kind, name = key
+            if kind == "equip":
+                try:
+                    idx = self.EQUIP_GROUP_ORDER.index(name)
+                except ValueError:
+                    idx = 1000
+                return (0, idx, name, 0, 0)
+            g = groups[key]
+            # 用总占用列数排序：需要更多水平空间的组优先放置，减少溢出
+            total_cols = sum(itm.width for itm in g)
+            return (1, -total_cols, -len(g))
+
+        group_keys = sorted(groups.keys(), key=group_sort_key)
+        positions: Dict[int, Point] = {}
+        learning_payload: Dict[int, Dict[str, Any]] = {}
+        overflow_groups: List[List[Item]] = []
+        anchor = 0
+        non_equip_anchor = 0
+        bottom_row = 0
+        x_anchor = 0
+
+        def place(itm, pos):
+            self._ensure_learning_cache(itm)
+            self._mark(pos, itm)
+            positions[id(itm)] = pos
+            record = self._record_learning_assignment(itm, pos, comparator_used=bool(comparator))
+            if record:
+                learning_payload[id(itm)] = record
+
+        for key in group_keys:
+            kind, name = key
+            group = groups[key]
+            if kind == "equip":
+                ordered = sorted(group, key=cmp_to_key(comparator)) if comparator else group
+                group_bottom = anchor
+                for itm in ordered:
+                    self._ensure_learning_cache(itm)
+                    slot = self._find_slot_for(itm, min_y=anchor)
+                    if slot is None:
+                        overflow_groups.append([itm])
+                        continue
+                    self._mark(slot, itm)
+                    positions[id(itm)] = slot
+                    group_bottom = max(group_bottom, slot.y + itm.height - 1)
+                    record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+                    if record:
+                        learning_payload[id(itm)] = record
+                anchor = group_bottom + 1
+                bottom_row = max(bottom_row, group_bottom)
+                non_equip_anchor = max(non_equip_anchor, anchor)
+            else:
+                # 非装备组：独立列块，cursor 不跨列扫描
+                size_groups: Dict[Tuple[int, int], List[Item]] = {}
+                for itm in group:
+                    size_groups.setdefault((itm.width, itm.height), []).append(itm)
+                size_keys = sorted(
+                    size_groups.keys(),
+                    key=lambda d: (-(d[0] * d[1]), -d[0]),
+                )
+                group_overflow: List[Item] = []
+                for (w, h) in size_keys:
+                    items_for_size = size_groups[(w, h)]
+                    n = len(items_for_size)
+                    # 初始行数：按无阻塞理想容量估算
+                    avail_w = max(1, self.width - x_anchor)
+                    k_row = max(1, avail_w // w)
+                    cur_rows = max(1, (n + k_row - 1) // k_row)
+                    if anchor + cur_rows * h > self.height:
+                        group_overflow.extend(items_for_size)
+                        continue
+                    # 行优先填充：先填满一行再下一行，同名物品横向相邻
+                    idx = 0
+                    row = 0
+                    while idx < n and row < cur_rows:
+                        row_y = anchor + row * h
+                        cur_x = x_anchor
+                        while idx < n and cur_x + w <= self.width:
+                            if self._fits(items_for_size[idx], cur_x, row_y):
+                                place(items_for_size[idx], Point(cur_x, row_y))
+                                bottom_row = max(bottom_row, row_y + h - 1)
+                                idx += 1
+                                cur_x += w
+                            else:
+                                cur_x += 1
+                        # 当前行放满或空间耗尽
+                        if idx < n:
+                            # 当前行满了但还有剩余物品，动态扩展新行
+                            new_rows = cur_rows + 1
+                            if anchor + new_rows * h <= self.height:
+                                cur_rows = new_rows
+                                row += 1
+                            else:
+                                # 垂直空间不足，剩余物品进入溢出
+                                group_overflow.extend(items_for_size[idx:])
+                                break
+                        else:
+                            break
+                    if idx < n and row >= cur_rows:
+                        # 用尽所有行仍未放完
+                        group_overflow.extend(items_for_size[idx:])
+                    # 行优先：本组水平宽度 = 最大 item 右边缘 - x_anchor
+                    group_w = 0
+                    for placed_itm in items_for_size:
+                        pid = id(placed_itm)
+                        if pid in positions:
+                            group_w = max(group_w, positions[pid].x + placed_itm.width - x_anchor)
+                    x_anchor += max(group_w, w) if group_w > 0 else 0
+                non_equip_anchor = max(non_equip_anchor, bottom_row + 1)
+                if group_overflow:
+                    overflow_groups.append(group_overflow)
+
+        # 底部溢出区：保持同名组完整性，按组为单位放置
+        bottom_x = x_anchor
+        for group in overflow_groups:
+            if not group:
+                continue
+            unplaced = [itm for itm in group if id(itm) not in positions]
+            if not unplaced:
+                continue
+            # 按尺寸降序排列（大件优先），然后行优先填充
+            unplaced.sort(key=lambda it: (-(it.width * it.height), -it.width))
+            n = len(unplaced)
+            max_w = max(it.width for it in unplaced)
+            max_h = max(it.height for it in unplaced)
+            # 估算初始行数
+            avail_w = max(1, self.width - bottom_x)
+            k_row = max(1, avail_w // max_w)
+            cur_rows = max(1, (n + k_row - 1) // k_row)
+            if bottom_row + 1 + cur_rows * max_h > self.height:
+                continue
+            idx = 0
+            row = 0
+            while idx < n and row < cur_rows:
+                row_y = bottom_row + 1 + row * max_h
+                cur_x = bottom_x
+                while idx < n and cur_x + max_w <= self.width:
+                    itm = unplaced[idx]
+                    if cur_x + itm.width <= self.width and self._fits(itm, cur_x, row_y):
+                        place(itm, Point(cur_x, row_y))
+                        idx += 1
+                        cur_x += itm.width
+                    else:
+                        cur_x += 1
+                if idx < n:
+                    new_rows = cur_rows + 1
+                    if bottom_row + 1 + new_rows * max_h <= self.height:
+                        cur_rows = new_rows
+                        row += 1
+                    else:
+                        break
+                else:
+                    break
+            # 计算溢出组实际占用的水平宽度
+            ov_group_w = 0
+            for ov_itm in unplaced:
+                if id(ov_itm) in positions:
+                    ov_group_w = max(ov_group_w, positions[id(ov_itm)].x + ov_itm.width - bottom_x)
+            bottom_x += max(ov_group_w, max_w)
+
+        # 最终兜底：逐个放置，尽量靠近组内其他物品
         for group in overflow_groups:
             for itm in group:
                 if id(itm) in positions:
@@ -1600,7 +1822,7 @@ class StashSorter:
         self.cancel_event = None
         self.pack_mode = bool(pack_mode)
         self.stack_mode = bool(stack_mode)
-        self.group_mode = group_mode if group_mode in ("none", "category", "sized") else "none"
+        self.group_mode = group_mode if group_mode in ("none", "category", "sized", "neat") else "none"
         self.character_id = character_id
         self.stash_id = stash_id
         self.overlay_session: Optional[Union[SortOverlaySession, NullOverlaySession]] = None
@@ -2451,6 +2673,8 @@ class StashSorter:
                     plan = planner.build_grouped(items, comparator=comparator)
                 elif self.group_mode == "sized":
                     plan = planner.build_sized_groups(items, comparator=comparator)
+                elif self.group_mode == "neat":
+                    plan = planner.build_neat_groups(items, comparator=comparator)
                 else:
                     plan = planner.build(items, comparator=comparator)
                 if fallback_used and comparator is None:
@@ -2460,7 +2684,7 @@ class StashSorter:
                 break
             except LayoutPlanError as exc:
                 if comparator is None:
-                    if self.group_mode in ("category", "sized"):
+                    if self.group_mode in ("category", "sized", "neat"):
                         logger.warning("Category layout failed; retrying with plain layout: %s", exc)
                         fallback_used = True
                         try:
