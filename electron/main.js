@@ -1,6 +1,9 @@
 import electron, { globalShortcut, Menu, screen, shell, Tray } from 'electron';
 import { basename, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+
+const _require = createRequire (import.meta.url);
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE } from './config.js';
 import { settings, saveSettings } from './settings.js';
@@ -156,44 +159,31 @@ app.on ('ready', async () => {
 
   ipcMain.handle ('ball:drag-start', () => {
     if (!ballWindow || ballWindow.isDestroyed ()) return;
+    const cursor = initBallCursor ();
+    const startPos = cursor ? cursor.pos () : null;
+    if (!startPos) return;
     const [wx, wy] = ballWindow.getPosition ();
-    const c = screen.getCursorScreenPoint ();
-    ballDrag = { wx, wy, cx: c.x, cy: c.y, moved: false, vk: null };
+    ballDrag = { wx, wy, cx: startPos.x, cy: startPos.y, moved: false, cursor };
     if (ballDragTimer) clearInterval (ballDragTimer);
 
-    // 立即启动跟随，koffi 左键检测异步补上（仅作兜底）
     ballDragTimer = setInterval (() => {
       if (!ballDrag || !ballWindow || ballWindow.isDestroyed ()) return;
-      const cur = screen.getCursorScreenPoint ();
+      const cur = ballDrag.cursor ? ballDrag.cursor.pos () : screen.getCursorScreenPoint ();
+      if (!cur) return;
       const dx = cur.x - ballDrag.cx;
       const dy = cur.y - ballDrag.cy;
       if (!ballDrag.moved && Math.abs (dx) + Math.abs (dy) > 3) ballDrag.moved = true;
       if (ballDrag.moved) ballWindow.setPosition (Math.round (ballDrag.wx + dx), Math.round (ballDrag.wy + dy));
 
       // 兜底：左键已松开但 mouseup 事件丢失（拖出窗口/失焦等）→ 远程结束拖拽
-      if (ballDrag.vk) {
-        try {
-          const leftDown = (ballDrag.vk (0x01) & 0x8000) !== 0;
-          if (!leftDown) {
-            const moved = ballDrag.moved;
-            if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
-            ballDrag = null;
-            saveBallPos ();
-            if (ballWindow && !ballWindow.isDestroyed ()) ballWindow.webContents.send ('ball:drag-ended', { moved });
-          }
-        } catch (e) { /* ignore */ }
+      if (ballDrag.cursor && !ballDrag.cursor.leftDown ()) {
+        const moved = ballDrag.moved;
+        if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
+        ballDrag = null;
+        saveBallPos ();
+        if (ballWindow && !ballWindow.isDestroyed ()) ballWindow.webContents.send ('ball:drag-ended', { moved });
       }
     }, 16);
-
-    (async () => {
-      try {
-        const { createRequire } = await import ('node:module');
-        const _require = createRequire (import.meta.url);
-        const koffi = _require ('koffi');
-        const user32 = koffi.load ('user32.dll');
-        if (ballDrag) ballDrag.vk = user32.func ('short __stdcall GetAsyncKeyState(int vKey)');
-      } catch (e) { /* ignore */ }
-    }) ();
   });
   ipcMain.handle ('ball:drag-end', () => {
     const moved = ballDrag?.moved || false;
@@ -497,6 +487,32 @@ function openHomeWindow () {
 }
 
 // ── 悬浮球 ──
+
+// ── 悬浮球拖拽：系统级光标读取（koffi，避免 Electron 光标缓存导致快速移动不跟手） ──
+
+let ballCursor = null;
+
+function initBallCursor () {
+  if (ballCursor) return ballCursor;
+  try {
+    const koffi = _require ('koffi');
+    const user32 = koffi.load ('user32.dll');
+    const POINT = koffi.struct ('POINT', { x: 'long', y: 'long' });
+    const getPos = user32.func ('bool GetCursorPos(_Out_ POINT *lpPoint)');
+    const getKey = user32.func ('short __stdcall GetAsyncKeyState(int vKey)');
+    ballCursor = {
+      pos: () => {
+        const p = {};
+        if (getPos (p)) return { x: p.x, y: p.y };
+        return null;
+      },
+      leftDown: () => (getKey (0x01) & 0x8000) !== 0,
+    };
+  } catch (e) {
+    ballCursor = false;
+  }
+  return ballCursor;
+}
 
 function defaultBallPos () {
   const wa = screen.getPrimaryDisplay ().workArea;
