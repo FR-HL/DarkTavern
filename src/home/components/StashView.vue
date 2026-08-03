@@ -443,4 +443,7 @@ onBeforeUnmount (() => {
   pointer-events: none;
 }
 .cell-item:hover { transform: scale(1.05); box-shadow: 0 3px 10px rgba(0,0,0,0.2); z-index: 5; }
+
+html[data-theme="dark"] .fill-track { background: rgba(255,255,255,0.10); }
+html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 </style>

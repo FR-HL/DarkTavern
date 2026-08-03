@@ -283,6 +283,7 @@ app.on ('ready', async () => {
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+F11',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+F12',
     developer_mode: !!settings.general.developer_mode,
+    theme: settings.general.theme === 'dark' ? 'dark' : 'light',
   }));
 
   ipcMain.handle ('settings:save', (e, data) => {
@@ -305,6 +306,12 @@ app.on ('ready', async () => {
     }
     if (data.developer_mode !== undefined) {
       settings.general.developer_mode = !!data.developer_mode;
+    }
+    if (data.theme !== undefined && (data.theme === 'dark' || data.theme === 'light')) {
+      settings.general.theme = data.theme;
+      if (homeWindow && !homeWindow.isDestroyed ()) {
+        homeWindow.setBackgroundColor (data.theme === 'dark' ? '#1c1c1f' : '#f4f4f6');
+      }
     }
     if (data.default_mode !== undefined) { settings.general.default_mode = data.default_mode; needSend = true; }
     if (data.alignment !== undefined) { settings.general.alignment = data.alignment; needSend = true; }
@@ -469,6 +476,7 @@ function openHomeWindow () {
   homeWindow = new BrowserWindow ({
     width: 1120, height: 740, minWidth: 980, minHeight: 660,
     show: false, title: 'DarkTavern', autoHideMenuBar: true,
+    backgroundColor: settings.general.theme === 'dark' ? '#1c1c1f' : '#f4f4f6',
     webPreferences: { sandbox: false, preload: join (SOURCE, 'preload.cjs') },
   });
 

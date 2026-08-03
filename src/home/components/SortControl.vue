@@ -418,4 +418,11 @@ onBeforeUnmount (() => {
   border-radius: 50%; animation: rot .8s linear infinite;
 }
 @keyframes rot { to { transform: rotate(360deg); } }
+
+html[data-theme="dark"] .uipi-warn {
+  background: #3a2c14;
+  border-color: rgba(240,201,126,0.3);
+  color: #e8c87a;
+}
+html[data-theme="dark"] .uipi-warn b { color: #f2c14e; }
 </style>

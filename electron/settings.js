@@ -21,6 +21,7 @@ const defaults = {
     ball_locked: false,
     ball_visible: true,
     developer_mode: false,
+    theme: 'light',
   },
   hotkeys: {
     run_price_check: 'XButton1',
@@ -67,6 +68,7 @@ settings.general.ball_y = settings.general.ball_y == null ? null : parseInt (set
 settings.general.ball_locked = toBool (settings.general.ball_locked);
 settings.general.ball_visible = toBool (settings.general.ball_visible);
 settings.general.developer_mode = toBool (settings.general.developer_mode);
+settings.general.theme = settings.general.theme === 'dark' ? 'dark' : 'light';
 
 settings.hotkeys.run_price_check = settings.hotkeys.run_price_check || 'XButton1';
 

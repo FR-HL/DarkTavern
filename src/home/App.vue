@@ -88,6 +88,22 @@ const enInput = ref ('');
 // ── 设置页 · 开发者工具 ──
 const developerMode = ref (false);
 const devCard = ref ('');
+const theme = ref ('light');
+
+function applyTheme () {
+  document.documentElement.dataset.theme = theme.value === 'dark' ? 'dark' : 'light';
+}
+
+async function setTheme (t) {
+  if (theme.value === t) return;
+  theme.value = t;
+  applyTheme ();
+  const r = await invoke ('settings:save', { theme: t });
+  if (!r?.success) {
+    theme.value = t === 'dark' ? 'light' : 'dark';
+    applyTheme ();
+  }
+}
 
 // ── 仓库整理 · 共享状态 ──
 const sortCharId = ref ('');
@@ -445,6 +461,8 @@ async function loadSettings () {
     scale.value = d.scale || 1.0;
     launchOnStartup.value = !!d.launch_on_startup;
     developerMode.value = !!d.developer_mode;
+    theme.value = d.theme === 'dark' ? 'dark' : 'light';
+    applyTheme ();
     setRune ('key', 'ok', '已绑定', 'var(--gold)');
     if (d.api_key) setRune ('api', 'ok', '已配置', 'var(--teal)');
     else setRune ('api', 'pending', '未配置', 'var(--ink-faint)');
@@ -889,6 +907,22 @@ onBeforeUnmount (() => {
         <div class="sec">
           <div class="sec-label">通用</div>
           <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">外观</div>
+                <div class="srow-d">切换白天 / 黑夜模式</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="seg">
+                  <button class="seg-opt" :class="{ on: theme === 'light' }" @click="setTheme('light')">
+                    <span class="seg-t">白天</span>
+                  </button>
+                  <button class="seg-opt" :class="{ on: theme === 'dark' }" @click="setTheme('dark')">
+                    <span class="seg-t">黑夜</span>
+                  </button>
+                </div>
+              </div>
+            </div>
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">开发者工具</div>

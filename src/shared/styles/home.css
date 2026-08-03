@@ -1032,3 +1032,73 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ============================================================
+   黑夜模式 — 仅当 html[data-theme="dark"] 时生效，白天模式不受影响
+   ============================================================ */
+
+html[data-theme="dark"] {
+  --bg: #1c1c1f;
+  --bg-wash: linear-gradient(180deg, rgba(74,158,255,0.05) 0%, rgba(74,158,255,0) 220px);
+  --card: #242428;
+  --card-2: #1f1f23;
+  --sidebar: rgba(255,255,255,0.03);
+  --field: #2b2b30;
+  --field-soft: rgba(255,255,255,0.05);
+
+  --line: rgba(255,255,255,0.10);
+  --line-soft: rgba(255,255,255,0.07);
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-pop: 0 4px 14px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-nav: 0 1px 2px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.3);
+
+  --text: #f2f2f4;
+  --text-2: #b8b8be;
+  --text-3: #8b8b93;
+
+  --accent: #4a9eff;
+  --accent-strong: #2f86f0;
+  --accent-soft: rgba(74,158,255,0.16);
+  --accent-softer: rgba(74,158,255,0.10);
+  --green: #4ade80;
+  --green-soft: rgba(74,222,128,0.14);
+  --amber: #fbbf24;
+  --amber-soft: rgba(251,191,36,0.14);
+  --red: #f87171;
+  --red-soft: rgba(248,113,113,0.14);
+}
+
+/* 黑夜模式硬编码覆盖 */
+html[data-theme="dark"] .nav-item:hover { background: rgba(255,255,255,0.06); }
+html[data-theme="dark"] .nav-item:hover svg { color: var(--text-2); }
+html[data-theme="dark"] .foot-row:hover { background: rgba(255,255,255,0.06); }
+html[data-theme="dark"] .foot-row:hover svg { color: var(--accent); }
+html[data-theme="dark"] .foot-row:hover .foot-v { color: var(--accent); }
+html[data-theme="dark"] .btn.subtle:hover { background: rgba(255,255,255,0.10); }
+html[data-theme="dark"] .seg-opt.on { box-shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3); }
+html[data-theme="dark"] .tab.active { box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .align-mini { background: linear-gradient(180deg, #2e2e34, #232327); }
+html[data-theme="dark"] .align-opt:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.4); }
+html[data-theme="dark"] input[type="range"] { background: rgba(255,255,255,0.14); }
+html[data-theme="dark"] .fill-track { background: rgba(255,255,255,0.10); }
+html[data-theme="dark"] .content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border: 3px solid transparent; background-clip: padding-box; }
+html[data-theme="dark"] .content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); border: 3px solid transparent; background-clip: padding-box; }
+html[data-theme="dark"] .table-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border: 2px solid transparent; background-clip: padding-box; }
+html[data-theme="dark"] tbody tr:hover { background: var(--accent-softer); }
+html[data-theme="dark"] .keybind-btn { background: var(--field); }
+
+/* 关于页金色区块适配 */
+html[data-theme="dark"] .keeper {
+  background: linear-gradient(165deg, #26221a 0%, #231f16 55%, #1e1a12 100%);
+  border-color: rgba(242,193,78,0.22);
+}
+html[data-theme="dark"] .keeper-name { color: #f2c14e; }
+html[data-theme="dark"] .keeper-lead { color: #d8b96e; }
+html[data-theme="dark"] .keeper-lead em { color: #f2c14e; border-bottom-color: rgba(242,193,78,0.45); }
+html[data-theme="dark"] .keeper-badge { background: rgba(242,193,78,0.12); border-color: rgba(242,193,78,0.28); color: #e8c87a; }
+html[data-theme="dark"] .keeper-badge.alt { background: var(--accent-softer); border-color: rgba(74,158,255,0.3); color: var(--accent); }
+html[data-theme="dark"] .keeper-open { background: rgba(255,255,255,0.06); border-color: rgba(242,193,78,0.28); color: #e8c87a; }
+html[data-theme="dark"] .keeper-vision { border-top-color: rgba(242,193,78,0.22); }
+html[data-theme="dark"] .contact-chip { background: var(--card-2); }
+html[data-theme="dark"] .pay-qr { background: #1a1a1d; }
+html[data-theme="dark"] .about-note em { color: var(--amber); }
