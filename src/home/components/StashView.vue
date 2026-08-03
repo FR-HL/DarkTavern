@@ -75,20 +75,72 @@ const isEquipment = computed (() => !!currentStash.value && currentStash.value.l
 
 watch (currentStash, (s) => emit ('update:equipment', !!(s && s.layout === 'equipment')), { immediate: true });
 
-const totalItems = computed (() =>
-  currentStash.value ? currentStash.value.items.length : 0
-);
+// ── 排序方案 ──
+const SORT_PRESETS = [
+  {
+    id: 'default', label: '默认整理',
+    order: [
+      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
+      { field: 'name', direction: 'asc' },
+      { field: 'slot', direction: 'desc' }, { field: 'rarity', direction: 'desc' },
+    ],
+  },
+  {
+    id: 'test', label: '品质区分',
+    groupMode: 'sized',
+    order: [
+      { field: 'name', direction: 'asc' },
+      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
+      { field: 'slot', direction: 'desc' }, { field: 'rarity', direction: 'desc' },
+    ],
+  },
+  {
+    id: 'category', label: '装备优先',
+    groupMode: 'category',
+    order: [
+      { field: 'category', direction: 'asc' },
+      { field: 'name', direction: 'asc' },
+      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
+      { field: 'rarity', direction: 'desc' },
+    ],
+  },
+];
 
-const usedCells = computed (() => {
-  if (!currentStash.value) return 0;
-  return currentStash.value.items.reduce ((n, it) => n + it.width * it.height, 0);
-});
+const sortPreset = ref ('default');
 
-const fillPct = computed (() => {
-  const s = currentStash.value;
-  if (!s) return 0;
-  return Math.min (100, Math.round (usedCells.value / (s.width * s.height) * 100));
-});
+function samePreset (a, b) {
+  if (!Array.isArray (a) || !Array.isArray (b)) return false;
+  for (let i = 0; i < b.length; i++) {
+    const x = a[i], y = b[i];
+    if (!x || !y || x.field !== y.field || x.direction !== y.direction) return false;
+  }
+  return true;
+}
+
+async function loadSortOrder () {
+  try {
+    const [d, g] = await Promise.all ([
+      invoke ('dnd:sort-order-get'),
+      invoke ('dnd:sort-group-get'),
+    ]);
+    if (g && g.mode === 'category') { sortPreset.value = 'category'; return; }
+    if (g && g.mode === 'sized') { sortPreset.value = 'test'; return; }
+    if (d && Array.isArray (d.order)) {
+      const hit = SORT_PRESETS.find (p => samePreset (d.order, p.order));
+      sortPreset.value = hit ? hit.id : 'default';
+    }
+  } catch (e) {}
+}
+
+async function changePreset (id) {
+  const p = SORT_PRESETS.find (o => o.id === id);
+  if (!p) return;
+  sortPreset.value = id;
+  try {
+    await invoke ('dnd:sort-order-set', p.order);
+    await invoke ('dnd:sort-group-set', p.groupMode || 'none');
+  } catch (e) {}
+}
 
 const CELL = 34, GAP = 2;
 const bgCells = computed (() => {
@@ -282,6 +334,7 @@ onMounted (async () => {
     selected.value = props.charId;
     await loadCharData (props.charId);
   }
+  loadSortOrder ();
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
   connectEvents ();
   reportStashState ();
@@ -342,17 +395,15 @@ watch (() => props.stashId, () => reportStashState ());
 
         <div class="stash-body card">
         <div class="stash-meta">
-          <div class="stash-stat">
-            <span class="stash-k">物品</span><span class="stash-v">{{ totalItems }}</span>
-          </div>
-          <div class="stash-stat">
-            <span class="stash-k">规格</span>
-            <span class="stash-v mono">{{ currentStash.width }}×{{ currentStash.height }}</span>
-          </div>
-          <div class="stash-stat grow">
-            <span class="stash-k">占用</span>
-            <span class="fill-track"><span class="fill-bar" :style="{ width: fillPct + '%' }"></span></span>
-            <span class="stash-v">{{ fillPct }}%</span>
+          <div class="stash-preset">
+            <span class="stash-k">排序方案</span>
+            <div class="preset-group">
+              <button v-for="o in SORT_PRESETS" :key="o.id"
+                      class="preset-opt" :class="{ active: sortPreset === o.id }"
+                      @click="changePreset(o.id)">
+                {{ o.label }}
+              </button>
+            </div>
           </div>
           <button v-if="!isEquipment" class="debug-btn" :class="{ on: debugPreview }" :disabled="previewLoading" @click="togglePreview">
             {{ previewLoading ? '计算中…' : (debugPreview ? '关闭预览' : '排序预览') }}
@@ -480,8 +531,19 @@ watch (() => props.stashId, () => reportStashState ());
 .stash-stat.grow { flex: 1; }
 .stash-k { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); }
 .stash-v { font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
-.fill-track { flex: 1; max-width: 220px; height: 6px; border-radius: 4px; background: rgba(0,0,0,0.08); overflow: hidden; }
-.fill-bar { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent), #4aa8ff); transition: width .4s var(--ease); }
+.stash-preset { display: flex; align-items: center; gap: 12px; margin-right: auto; min-width: 0; }
+.preset-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.preset-opt {
+  padding: 5px 14px; font-size: 12.5px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card-2); color: var(--text-2);
+  cursor: pointer; transition: all .15s;
+}
+.preset-opt:hover { border-color: var(--accent-soft); }
+.preset-opt.active {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.28);
+}
 
 /* grid */
 .grid-scroll { padding: 20px 18px 24px; overflow-x: auto; }
@@ -517,7 +579,6 @@ watch (() => props.stashId, () => reportStashState ());
 .cell-item.hidden { display: none; }
 .cell-item:hover { transform: scale(1.05); box-shadow: 0 3px 10px rgba(0,0,0,0.2); z-index: 5; }
 
-html[data-theme="dark"] .fill-track { background: rgba(255,255,255,0.10); }
 html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 
 /* debug preview */
