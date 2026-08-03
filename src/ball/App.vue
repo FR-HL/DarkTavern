@@ -90,6 +90,10 @@ function onScanResult (d) {
   }
 }
 
+function shortStash (label) {
+  return String (label).replace ('赛季共享', '赛季').replace ('共享仓库', '共享');
+}
+
 function onStatus (d) {
   Object.assign (status, d);
   if (d.charJustUpdated && d.character) {
@@ -97,7 +101,7 @@ function onStatus (d) {
     setTransient ('char', cls, 3000);
   }
   if (d.stashJustChanged && d.frontStash) {
-    setTransient ('stash', d.frontStash.label || '仓库', 3000);
+    setTransient ('stash', shortStash (d.frontStash.label || '仓库'), 3000);
   }
   if (d.sortJustFinished) {
     setTransient (d.sortOk ? 'sortok' : 'sortfail', '', 3000);
