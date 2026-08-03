@@ -22,6 +22,7 @@ const RESERVED_KEYS = ['F5', 'F6', 'F7', 'F8'];
 // ── 悬浮球状态 ──
 let ballWindow = null;
 let ballLocked = !!settings.general.ball_locked;
+let ballVisible = !!settings.general.ball_visible;
 let ballScanning = false;
 let ballExpanded = false;
 let ballStatusTimer = null;
@@ -480,7 +481,7 @@ function createBallWindow () {
   ballWindow.loadFile (join (ROOT, 'dist', 'ball', 'index.html'));
 
   ballWindow.once ('ready-to-show', () => {
-    ballWindow.show ();
+    if (ballVisible) ballWindow.show ();
     applyBallLock ();
   });
   ballWindow.on ('move', saveBallPos);
@@ -509,6 +510,23 @@ function setBallLocked (locked) {
   settings.general.ball_locked = locked;
   saveSettings ();
   applyBallLock ();
+  pushBallStatus ();
+  refreshTrayMenu ();
+}
+
+function toggleBallVisible () {
+  ballVisible = !ballVisible;
+  settings.general.ball_visible = ballVisible;
+  saveSettings ();
+  if (ballWindow && !ballWindow.isDestroyed ()) {
+    if (ballVisible) {
+      ballWindow.show ();
+      applyBallLock ();
+    } else {
+      ballWindow.hide ();
+      if (ballExpanded) setBallExpanded (false);
+    }
+  }
   pushBallStatus ();
   refreshTrayMenu ();
 }
@@ -663,6 +681,7 @@ async function refreshTrayMenu () {
     { type: 'separator' },
     { label: '主页', click: () => openHomeWindow () },
     { label: `${ballLocked ? '○' : '●'} 悬浮球：${ballLocked ? '已锁定' : '已解锁'}（点击切换）`, click: () => setBallLocked (!ballLocked) },
+    { label: `${ballVisible ? '●' : '○'} 悬浮球：${ballVisible ? '已显示' : '已隐藏'}（点击切换）`, click: () => toggleBallVisible () },
     { type: 'separator' },
     { label: '日志文件夹', click: () => shell.openPath (logPath) },
     { type: 'separator' },

@@ -19,6 +19,7 @@ const defaults = {
     ball_x: null,
     ball_y: null,
     ball_locked: false,
+    ball_visible: true,
   },
   hotkeys: {
     run_price_check: 'XButton1',
@@ -63,6 +64,7 @@ settings.general.api_key = settings.general.api_key || '';
 settings.general.ball_x = settings.general.ball_x == null ? null : parseInt (settings.general.ball_x) || null;
 settings.general.ball_y = settings.general.ball_y == null ? null : parseInt (settings.general.ball_y) || null;
 settings.general.ball_locked = toBool (settings.general.ball_locked);
+settings.general.ball_visible = toBool (settings.general.ball_visible);
 
 settings.hotkeys.run_price_check = settings.hotkeys.run_price_check || 'XButton1';
 
