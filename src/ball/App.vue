@@ -74,10 +74,16 @@ function setTransient (kind, sub, dur, extra) {
 
 function onScanResult (d) {
   if (!d || d.ok == null) return;
+  const t = transient.value;
+  const isLiveUpdate = !d.name && !d.zhName && d.price !== undefined && t && t.kind === 'ok' && t.until > Date.now ();
+  if (isLiveUpdate) {
+    transient.value = { ...t, price: d.price ?? t.price };
+    return;
+  }
   if (d.ok) {
     const price = d.price ?? d.market;
     setTransient ('ok', '', 3000, {
-      name: d.name || '',
+      name: d.zhName || d.name || '',
       price,
       color: rarityColor (d.rarity),
     });
@@ -96,7 +102,7 @@ function onStatus (d) {
     setTransient ('char', cls, 3000);
   }
   if (d.sortJustFinished) {
-    setTransient (d.sortOk ? 'sortok' : 'sortfail', '', 5000);
+    setTransient (d.sortOk ? 'sortok' : 'sortfail', '', 3000);
   }
 }
 

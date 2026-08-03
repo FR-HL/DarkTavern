@@ -1,5 +1,6 @@
 import electron, { globalShortcut, Menu, screen, shell, Tray } from 'electron';
 import { basename, join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE } from './config.js';
 import { settings, saveSettings } from './settings.js';
@@ -30,7 +31,7 @@ let ballDrag = null;
 let ballDragTimer = null;
 let lastCharKey = '';
 let lastSortRunning = false;
-let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', message: '', ts: 0 };
+let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', message: '', ts: 0 };
 const BALL_COLLAPSED = { w: 82, h: 82 };
 const BALL_EXPANDED = { w: 340, h: 530 };
 
@@ -110,15 +111,15 @@ app.on ('ready', async () => {
     }
     if (data?.scanResult) {
       const r = data.scanResult;
-      lastScan = {
-        ok: !!r.ok,
-        name: r.name || '',
-        price: r.live ?? null,
-        market: r.market ?? null,
-        rarity: r.rarity || '',
-        message: r.message || '',
-        ts: Date.now (),
-      };
+      lastScan.ok = !!r.ok;
+      if (r.name !== undefined) lastScan.name = r.name;
+      if (r.live !== undefined) lastScan.price = r.live;
+      if (r.market !== undefined) lastScan.market = r.market;
+      if (r.rarity !== undefined) lastScan.rarity = r.rarity;
+      if (r.id !== undefined) lastScan.id = r.id;
+      if (r.message !== undefined) lastScan.message = r.message;
+      lastScan.zhName = findZhName (lastScan.id);
+      lastScan.ts = Date.now ();
       sendBallScanResult ();
     }
   });
@@ -599,6 +600,35 @@ async function gatherBallStatus () {
 function sendBallScanResult () {
   if (!ballWindow || ballWindow.isDestroyed ()) return;
   ballWindow.webContents.send ('ball:scan-result', { ...lastScan });
+}
+
+// ── 物品中文名（assets/items.json，惰性加载缓存） ──
+
+let itemsDb = null;
+
+function loadItemsDb () {
+  if (itemsDb) return itemsDb;
+  try {
+    itemsDb = JSON.parse (readFileSync (join (ROOT, 'assets', 'items.json'), 'utf-8'));
+  } catch (e) {
+    logger.error (`Failed to load items.json: ${e.message}`);
+    itemsDb = {};
+  }
+  return itemsDb;
+}
+
+function findZhName (rawId) {
+  if (!rawId) return '';
+  const db = loadItemsDb ();
+  const direct = db[rawId];
+  if (direct && direct.name_zh) return direct.name_zh;
+  for (const key of Object.keys (db)) {
+    const it = db[key];
+    if ((it.origin_id && it.origin_id === rawId) || (it.archetype && it.archetype === rawId)) {
+      if (it.name_zh) return it.name_zh;
+    }
+  }
+  return '';
 }
 
 async function pushBallStatus () {

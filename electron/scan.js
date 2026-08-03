@@ -83,6 +83,7 @@ export function wire (overlay, sendBall = null) {
         name: result.data?.item?.name || '',
         market: result.data?.pricing?.market ?? null,
         rarity: result.data?.item?.rarity || '',
+        id: result.data?.item?.id || result.data?.item?.item_id || '',
       });
       queryMarketLive (result.data, scanId, (msg, payload) => {
         send (msg, payload);

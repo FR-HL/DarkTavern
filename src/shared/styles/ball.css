@@ -111,7 +111,7 @@ html, body, #app {
 }
 .ball-text .bt-2 {
   margin-top: 2px;
-  font-size: 12px; font-weight: 700;
+  font-size: 13px; font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   max-width: 50px;
