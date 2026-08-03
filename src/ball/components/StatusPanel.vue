@@ -1,23 +1,11 @@
 <script setup>
 import { computed } from 'vue';
+import { cnClass } from '@/shared/lib/classes.js';
 
 const props = defineProps ({
   status: { type: Object, required: true },
 });
 const emit = defineEmits ([ 'collapse', 'open-home', 'open-settings' ]);
-
-const CLASS_CN = {
-  Barbarian: '野蛮人',
-  Bard: '吟游诗人',
-  Cleric: '牧师',
-  Druid: '德鲁伊',
-  Fighter: '战士',
-  Ranger: '游侠',
-  Rogue: '潜行者',
-  Sorcerer: '术士',
-  Warlock: '邪术师',
-  Wizard: '法师',
-};
 
 const classIcons = import.meta.glob ('@assets/classes/*.avif', { eager: true, import: 'default' });
 function classIcon (cls) {
@@ -49,7 +37,7 @@ const charRow = computed (() => {
   const c = char.value;
   return {
     state: 'ok',
-    v: `${c.nickname} · ${CLASS_CN[c.cls] || c.cls} Lv${c.level}`,
+    v: `${c.nickname} · ${cnClass (c.cls)} Lv${c.level}`,
     icon: classIcon (c.cls),
   };
 });

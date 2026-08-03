@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import StatusPanel from './components/StatusPanel.vue';
+import { cnClass } from '@/shared/lib/classes.js';
 
 const invoke = (channel, data) => window.electron.invoke (channel, data);
 
@@ -83,7 +84,7 @@ function onStatus (d) {
   if (d.locked && wasLocked === false && expanded.value) collapse ();
 
   if (d.charJustUpdated && d.character) {
-    const cls = d.character.cls || '角色';
+    const cls = cnClass (d.character.cls) || '角色';
     setTransient ('char', cls, 3000);
   }
   if (d.sortJustFinished) {

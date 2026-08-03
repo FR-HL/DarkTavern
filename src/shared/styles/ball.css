@@ -66,7 +66,7 @@ html, body, #app {
 
 .ring {
   position: relative;
-  width: 48px; height: 48px;
+  width: 54px; height: 54px;
   border-radius: 50%;
 }
 .ring::before {
@@ -83,7 +83,7 @@ html, body, #app {
 
 .ball {
   position: relative;
-  width: 48px; height: 48px;
+  width: 54px; height: 54px;
   border-radius: 50%;
   background: rgba(255,255,255,0.78);
   -webkit-backdrop-filter: blur(16px) saturate(1.5);
@@ -106,15 +106,15 @@ html, body, #app {
   user-select: none;
 }
 .ball-text .bt-1 {
-  font-size: 16px; font-weight: 800; letter-spacing: 0;
+  font-size: 17px; font-weight: 800; letter-spacing: 0;
   font-variant-numeric: tabular-nums;
 }
 .ball-text .bt-2 {
   margin-top: 2px;
-  font-size: 11px; font-weight: 700;
+  font-size: 12px; font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  max-width: 46px;
+  max-width: 50px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -139,7 +139,7 @@ html, body, #app {
 
 /* ===== 展开面板 ===== */
 .panel {
-  position: absolute; top: 66px; left: 0;
+  position: absolute; top: 70px; left: 0;
   width: 312px;
   background: rgba(255,255,255,0.82);
   -webkit-backdrop-filter: blur(20px) saturate(1.6);

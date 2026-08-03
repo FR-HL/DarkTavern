@@ -31,7 +31,7 @@ let ballDragTimer = null;
 let lastCharKey = '';
 let lastSortRunning = false;
 let lastScan = { ok: null, name: '', price: null, market: null, message: '', ts: 0 };
-const BALL_COLLAPSED = { w: 76, h: 76 };
+const BALL_COLLAPSED = { w: 82, h: 82 };
 const BALL_EXPANDED = { w: 340, h: 530 };
 
 process.on ('uncaughtException', (e) => logger.error ('Uncaught Exception:', e));
