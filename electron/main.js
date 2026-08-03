@@ -33,7 +33,7 @@ let lastCharKey = '';
 let lastSortRunning = false;
 let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', message: '', ts: 0 };
 const BALL_COLLAPSED = { w: 82, h: 82 };
-const BALL_EXPANDED = { w: 340, h: 530 };
+const BALL_EXPANDED = { w: 340, h: 590 };
 
 process.on ('uncaughtException', (e) => logger.error ('Uncaught Exception:', e));
 process.on ('unhandledRejection', (r) => logger.error (`Unhandled Rejection: ${r}`));
