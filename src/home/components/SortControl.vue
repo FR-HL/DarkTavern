@@ -22,6 +22,7 @@ const sortSpeed = ref ('medium');
 const sortPreset = ref ('default');
 const sortHotkey = ref ('Ctrl+R');
 const cancelHotkey = ref ('Ctrl+T');
+const stashNextKey = ref ('Ctrl+E');
 const listeningFor = ref (null);
 const newHotkey = ref (null);
 
@@ -100,11 +101,12 @@ function onHotkeyKeyDown (e) {
 
 async function saveHotkey (target) {
   if (!newHotkey.value) return;
-  const field = target === 'sort' ? 'sort_hotkey' : 'cancel_hotkey';
+  const field = target === 'sort' ? 'sort_hotkey' : target === 'cancel' ? 'cancel_hotkey' : 'stash_next_key';
   const r = await invoke ('settings:save', { [field]: newHotkey.value });
   if (r?.success) {
     if (target === 'sort') sortHotkey.value = newHotkey.value;
-    else cancelHotkey.value = newHotkey.value;
+    else if (target === 'cancel') cancelHotkey.value = newHotkey.value;
+    else stashNextKey.value = newHotkey.value;
     newHotkey.value = null;
   }
 }
@@ -127,6 +129,7 @@ async function loadHotkeys () {
     const d = await invoke ('settings:get');
     if (d?.sort_hotkey) sortHotkey.value = d.sort_hotkey;
     if (d?.cancel_hotkey) cancelHotkey.value = d.cancel_hotkey;
+    if (d?.stash_next_key) stashNextKey.value = d.stash_next_key;
   } catch (e) {}
 }
 
@@ -338,6 +341,7 @@ onBeforeUnmount (() => {
           <div class="run-hints">
             <span class="hint"><span class="kbd">{{ sortHotkey }}</span> 开始整理</span>
             <span class="hint"><span class="kbd">{{ cancelHotkey }}</span> 取消整理</span>
+            <span class="hint"><span class="kbd">{{ stashNextKey }}</span> 切换仓库</span>
           </div>
           <button v-if="!sorting" class="btn primary lg" :disabled="!canStart" @click="startSort">开始整理</button>
           <button v-else class="btn danger lg" @click="cancelSort">取消整理</button>
@@ -364,6 +368,17 @@ onBeforeUnmount (() => {
               <span class="kbd">{{ cancelHotkey }}</span>
               <button class="keybind-btn" :class="{ listening: listeningFor === 'cancel' }" @click="startHotkeyListen('cancel')">{{ hotkeyLabel('cancel') }}</button>
               <button class="btn primary" @click="saveHotkey('cancel')">保存</button>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="srow-info">
+              <div class="srow-t">仓库切换键</div>
+              <div class="srow-d">全局快捷键，在仓库列表中循环切换下一个仓库</div>
+            </div>
+            <div class="srow-ctl">
+              <span class="kbd">{{ stashNextKey }}</span>
+              <button class="keybind-btn" :class="{ listening: listeningFor === 'stash' }" @click="startHotkeyListen('stash')">{{ hotkeyLabel('stash') }}</button>
+              <button class="btn primary" @click="saveHotkey('stash')">保存</button>
             </div>
           </div>
         </div>

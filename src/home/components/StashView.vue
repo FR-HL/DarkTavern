@@ -10,52 +10,6 @@ const emit = defineEmits ([ 'update:charId', 'update:stashId', 'update:equipment
 
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
-// ── 仓库切换快捷键 ──
-const stashNextKey = ref ('Ctrl+E');
-const listeningKey = ref (null);
-const newKey = ref (null);
-
-function keyLabel () {
-  if (listeningKey.value) return '等待输入…（按 Esc 取消）';
-  return '点击此处，然后按下新按键';
-}
-
-function startKeyListen () { listeningKey.value = true; newKey.value = null; }
-
-function onKeyDown (e) {
-  if (!listeningKey.value) return;
-  e.preventDefault ();
-  if (e.key === 'Escape') { listeningKey.value = null; newKey.value = null; return; }
-  if (['F5', 'F6', 'F7', 'F8'].includes (e.key)) return;
-  let key = '';
-  if (e.ctrlKey) key += 'Ctrl+';
-  if (e.altKey) key += 'Alt+';
-  if (e.shiftKey) key += 'Shift+';
-  if (e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift') return;
-  const base = e.key.length === 1 ? e.key.toUpperCase () : e.key;
-  key += base;
-  if (['F1', 'F2', 'F3', 'F4', 'F9', 'F10', 'F11', 'F12', 'Home', 'End', 'PageUp', 'PageDown', 'Insert', 'Delete'].includes (base) || key.includes ('+')) {
-    newKey.value = key;
-    listeningKey.value = null;
-  }
-}
-
-async function saveKey () {
-  if (!newKey.value) return;
-  const r = await invoke ('settings:save', { stash_next_key: newKey.value });
-  if (r?.success) {
-    stashNextKey.value = newKey.value;
-    newKey.value = null;
-  }
-}
-
-async function loadKeys () {
-  try {
-    const d = await invoke ('settings:get');
-    if (d?.stash_next_key) stashNextKey.value = d.stash_next_key;
-  } catch (e) {}
-}
-
 // ── 仓库状态上报（悬浮球同步） ──
 function reportStashState () {
   const list = stashList.value.map (s => ({ id: s.id, label: s.label }));
@@ -328,8 +282,6 @@ onMounted (async () => {
     selected.value = props.charId;
     await loadCharData (props.charId);
   }
-  loadKeys ();
-  document.addEventListener ('keydown', onKeyDown);
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
   connectEvents ();
   reportStashState ();
@@ -339,7 +291,6 @@ onBeforeUnmount (() => {
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
-  document.removeEventListener ('keydown', onKeyDown);
   window.removeEventListener ('dnd:characters-refresh', onCharactersRefresh);
 });
 
@@ -350,24 +301,6 @@ watch (() => props.stashId, () => reportStashState ());
 <template>
   <div>
     <StashPane />
-
-    <!-- 仓库切换快捷键 -->
-    <div class="sec">
-      <div class="sec-label">仓库切换快捷键</div>
-      <div class="card">
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">循环切换仓库</div>
-            <div class="srow-d">在仓库列表中循环切换下一个仓库</div>
-          </div>
-          <div class="srow-ctl">
-            <span class="kbd">{{ stashNextKey }}</span>
-            <button class="keybind-btn" :class="{ listening: listeningKey }" @click="startKeyListen">{{ keyLabel() }}</button>
-            <button class="btn primary" @click="saveKey">保存</button>
-          </div>
-        </div>
-      </div>
-    </div>
 
     <!-- 角色选择 -->
     <div class="sec" v-if="characters.length">
