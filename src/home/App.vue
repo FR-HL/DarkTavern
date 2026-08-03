@@ -792,8 +792,10 @@ onBeforeUnmount (() => {
           <div class="sec">
             <div class="dev-card-head" :class="{ open: devCard === 'mapping' }" @click="toggleDevCard('mapping')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
-              <span class="dev-card-title">数据汉化</span>
-              <span class="dev-card-desc">中文 ↔ 英文翻译映射</span>
+              <div class="srow-info">
+                <div class="srow-t">数据汉化</div>
+                <div class="srow-d">中文 ↔ 英文翻译映射，由 DarkerDB API 同步生成，自定义条目可手动维护</div>
+              </div>
               <svg class="dev-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
             <div v-if="devCard === 'mapping'" class="dev-card-body">
@@ -835,8 +837,10 @@ onBeforeUnmount (() => {
           <div class="sec">
             <div class="dev-card-head" :class="{ open: devCard === 'packets' }" @click="toggleDevCard('packets')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-              <span class="dev-card-title">数据包</span>
-              <span class="dev-card-desc">抓包捕获的原始游戏数据包与解码结果</span>
+              <div class="srow-info">
+                <div class="srow-t">数据包</div>
+                <div class="srow-d">查看抓包捕获的原始游戏数据包与解码结果</div>
+              </div>
               <svg class="dev-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
             <div v-if="devCard === 'packets'" class="dev-card-body">
