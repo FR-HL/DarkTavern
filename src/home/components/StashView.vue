@@ -80,7 +80,7 @@ function selectTab (s) {
   emit ('update:stashId', s.id);
   const id = parseInt (s.id) || 0;
   if (id === 2 || id === 3) return;
-  invoke ('stash:switch-in-game', { stash_id: s.id });
+  invoke ('stash:switch-in-game', { stash_id: s.id, character_id: props.charId });
 }
 
 // ── 排序方案 ──

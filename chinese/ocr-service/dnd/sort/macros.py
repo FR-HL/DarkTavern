@@ -82,25 +82,53 @@ BASE_LAYOUT = {
 }
 
 # Number of stash tab selectors in the game UI (Storage, Purchased 0-4,
-# Shared Stash, Shared Stash Seasonal).
-STASH_TAB_COUNT = 8
+# Shared Stash, Shared Stash Seasonal). Purchased slots only appear in the
+# UI when bought, so the *active* tab count is derived from owned stashes
+# via build_dynamic_tab_mapping(); this is only the upper bound.
+STASH_TAB_COUNT = 9
 
 # Human-readable name for each StashType integer value.
 STASH_TYPE_NAMES = {
     4: 'Storage', 5: 'Purchased 1', 6: 'Purchased 2',
     7: 'Purchased 3', 8: 'Purchased 4', 9: 'Purchased 5',
-    20: 'Shared Seasonal', 30: 'Shared Stash',
+    20: 'Shared Seasonal 1', 21: 'Shared Seasonal 2', 30: 'Shared Stash',
 }
 
-# Default mapping: box index (0-7) → StashType int.
-# Box 0 = Storage, Box 1 = Shared Stash, Boxes 2-7 = Purchased 1-5 + Seasonal.
-# NOTE: upstream swapped stash IDs 20/30 (20=Seasonal, 30=Shared) but forgot
-# to update this list — the comment above reflects the real in-game order.
-DEFAULT_STASH_TAB_MAPPING = [4, 30, 5, 6, 7, 8, 9, 20]
+# In-game tab order of StashType values (top → bottom). The game shows tabs
+# for *owned* stashes only, in this fixed type order: Storage, Purchased 1-5,
+# Seasonal 1-2, Shared Stash.
+TAB_TYPE_ORDER = [4, 5, 6, 7, 8, 9, 20, 21, 30]
 
-# These module-level globals are rebuilt by load_tab_mapping().
+# Fallback mapping (full owned set, in in-game order) used when no character
+# context is available. The per-character dynamic mapping replaces this.
+DEFAULT_STASH_TAB_MAPPING = list(TAB_TYPE_ORDER)
+
+# These module-level globals are rebuilt by load_tab_mapping() /
+# build_dynamic_tab_mapping().
 STASH_TAB_LABELS: list = [STASH_TYPE_NAMES.get(v, 'Not set') if v else 'Not set' for v in DEFAULT_STASH_TAB_MAPPING]
 STASH_TYPE_TO_TAB_INDEX: dict = {v: i for i, v in enumerate(DEFAULT_STASH_TAB_MAPPING) if v}
+
+
+def build_dynamic_tab_mapping(owned_types):
+    """Rebuild STASH_TYPE_TO_TAB_INDEX / STASH_TAB_LABELS from the stash
+    types a character actually owns.
+
+    The game only shows tabs for owned stashes, arranged in the fixed
+    in-game type order (TAB_TYPE_ORDER). ``owned_types`` may be any iterable
+    of stash ids (e.g. keys of the character stash dict); non-tab stash
+    types (bag/equipment) are filtered out by the order list itself.
+    """
+    global STASH_TYPE_TO_TAB_INDEX, STASH_TAB_LABELS
+    owned = set()
+    try:
+        for v in owned_types:
+            owned.add(int(v))
+    except (TypeError, ValueError):
+        pass
+    mapping = [t for t in TAB_TYPE_ORDER if t in owned] or list(DEFAULT_STASH_TAB_MAPPING)
+    STASH_TAB_LABELS = [STASH_TYPE_NAMES.get(v, 'Not set') if v else 'Not set' for v in mapping]
+    STASH_TYPE_TO_TAB_INDEX = {v: i for i, v in enumerate(mapping) if v}
+    return mapping
 
 
 def load_tab_mapping():
@@ -593,10 +621,11 @@ def has_calibration_saved() -> bool:
 
 
 def get_stash_tab_positions():
-    """Return a list of *STASH_TAB_COUNT* Points — one per stash tab selector.
+    """Return one Point per stash tab selector currently mapped.
 
-    If individual tab positions were saved during calibration they are used
-    directly.  Otherwise falls back to computing ``origin + index * spacing``.
+    Tab count follows the *active* mapping (owned stashes in in-game order),
+    so tab ``i`` is clicked at ``origin + i * spacing``.  If individual tab
+    positions were saved during calibration they are used directly.
     Calls :func:`get_screen_positions` to ensure the latest calibration data
     is used (including any overrides saved after module import).
     """
@@ -615,7 +644,7 @@ def get_stash_tab_positions():
     spacing = float(positions['stash_tab_spacing'])
     return [
         Point(int(round(origin.x)), int(round(origin.y + i * spacing)))
-        for i in range(STASH_TAB_COUNT)
+        for i in range(len(STASH_TYPE_TO_TAB_INDEX))
     ]
 
 

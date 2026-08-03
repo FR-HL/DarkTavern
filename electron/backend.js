@@ -176,8 +176,8 @@ export async function clearCharacters () {
   return await post ('/stash/clear') || { error: 'Service unavailable' };
 }
 
-export async function switchStash (stashId) {
-  return await post ('/stash/switch', { stash_id: String (stashId) }) || { error: 'Service unavailable' };
+export async function switchStash (stashId, characterId = '') {
+  return await post ('/stash/switch', { stash_id: String (stashId), character_id: String (characterId) }) || { error: 'Service unavailable' };
 }
 
 // ── DnD Tools: Sort ──

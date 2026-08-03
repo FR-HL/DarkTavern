@@ -1010,31 +1010,31 @@ class StashManager:
         # ── Auto-select the correct stash tab ──
         stash_type_int = int(stash_id)
         auto_stash = macros.settings_manager.get('autoStashSelection', True)
-        mapping_configured = bool(macros.STASH_TYPE_TO_TAB_INDEX)
-        calibrated = macros.has_calibration_saved()
 
         if not auto_stash:
             session.add_log("Auto stash selection is disabled — skipping tab click.")
-        elif not calibrated:
-            session.add_log("Calibration not saved — skipping automatic tab selection.")
-        elif not mapping_configured:
-            session.add_log("Stash tab mapping not configured — skipping automatic tab selection.")
         else:
-            session.update_status("Selecting stash tab...", status="info")
-            if macros.click_stash_tab(stash_type_int):
-                tab_idx = macros.STASH_TYPE_TO_TAB_INDEX.get(stash_type_int)
-                if tab_idx is not None and tab_idx < len(macros.STASH_TAB_LABELS):
-                    tab_label = macros.STASH_TAB_LABELS[tab_idx]
-                    session.add_log(f"Selected stash tab: {tab_label}")
-                else:
-                    session.add_log(f"Selected stash tab for type {stash_type_int}")
+            # Rebuild the tab mapping from the character's owned stashes so
+            # the clicked tab matches the dynamic in-game tab list.
+            macros.build_dynamic_tab_mapping(stashes.keys())
+            if stash_type_int not in macros.STASH_TYPE_TO_TAB_INDEX:
+                session.add_log("Stash tab mapping not configured — skipping automatic tab selection.")
             else:
-                session.add_log(f"No tab mapping found for stash type {stash_type_int} — please select the tab manually.")
+                session.update_status("Selecting stash tab...", status="info")
+                if macros.click_stash_tab(stash_type_int):
+                    tab_idx = macros.STASH_TYPE_TO_TAB_INDEX.get(stash_type_int)
+                    if tab_idx is not None and tab_idx < len(macros.STASH_TAB_LABELS):
+                        tab_label = macros.STASH_TAB_LABELS[tab_idx]
+                        session.add_log(f"Selected stash tab: {tab_label}")
+                    else:
+                        session.add_log(f"Selected stash tab for type {stash_type_int}")
+                else:
+                    session.add_log(f"No tab mapping found for stash type {stash_type_int} — please select the tab manually.")
 
         # ── Clear inventory items to other stashes for workspace ──
         # This requires automatic tab switching, so skip when auto stash
-        # selection is disabled or not properly calibrated/configured.
-        can_switch_tabs = auto_stash and calibrated and mapping_configured
+        # selection is disabled or the target has no tab mapping.
+        can_switch_tabs = auto_stash and stash_type_int in macros.STASH_TYPE_TO_TAB_INDEX
         if can_switch_tabs and not include_inventory and inventory and inventory.pq:
             cleared_slots = self._clear_inventory_to_stashes(
                 inventory, inv_items, stash_type_int, stashes,

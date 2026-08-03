@@ -14,6 +14,7 @@ _EQUIPMENT_SLOTS = None
 
 class StashSwitchRequest(BaseModel):
     stash_id: str
+    character_id: str = ""
 
 
 def _load_equipment_slots():
@@ -111,6 +112,11 @@ def list_characters():
 def switch_stash(body: StashSwitchRequest):
     """Click the corresponding stash tab in the game UI for a stash type.
 
+    The in-game tab list only shows *owned* stashes, arranged in the fixed
+    in-game type order (Storage, Purchased 1-5, Seasonal 1-2, Shared Stash),
+    so the tab mapping is rebuilt dynamically from the character's owned
+    stashes before clicking.
+
     Best-effort in-game tab switch: when the game window is missing, the
     tab mapping is unconfigured, or the stash type has no tab of its own
     (bag / equipment), the request is *skipped* — the caller should still
@@ -128,6 +134,11 @@ def switch_stash(body: StashSwitchRequest):
     if stash_type in (2, 3):
         return {"success": True, "switched": False, "reason": "no_tab"}
 
+    # Rebuild the tab mapping for the character's owned stashes so the
+    # clicked tab index matches the dynamic in-game tab list.
+    owned = _owned_stash_ids(body.character_id)
+    macros.build_dynamic_tab_mapping(owned)
+
     status = uipi.check_uipi_status()
     if status["blocked"]:
         return {
@@ -137,8 +148,6 @@ def switch_stash(body: StashSwitchRequest):
             "uipi": status,
         }
 
-    # Rebuild the tab mapping so edits to settings take effect without a restart.
-    macros.load_tab_mapping()
     if stash_type not in macros.STASH_TYPE_TO_TAB_INDEX:
         return {"success": True, "switched": False, "reason": "mapping_not_configured"}
 
@@ -153,6 +162,28 @@ def switch_stash(body: StashSwitchRequest):
         return {"success": False, "switched": False, "reason": "click_failed"}
 
     return {"success": True, "switched": True, "reason": ""}
+
+
+def _owned_stash_ids(character_id: str):
+    """Return the stash ids the given character actually owns.
+
+    Falls back to the last captured character when no character_id is given.
+    Returns an empty list when no character data is available — the caller
+    then falls back to the default tab mapping.
+    """
+    try:
+        from dnd import service
+        if not character_id:
+            character_id = service.last_snapshot_character_id or ""
+        if not character_id:
+            return []
+        mgr = service.get_stash_manager()
+        char_data = mgr.characters_cache.get(character_id)
+        if not char_data:
+            return []
+        return list(char_data.get("stashes", {}).keys())
+    except Exception:
+        return []
 
 
 @router.get("/current")

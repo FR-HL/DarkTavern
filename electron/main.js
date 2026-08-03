@@ -219,7 +219,7 @@ app.on ('ready', async () => {
   ipcMain.handle ('stash:get-state', () => ({ current: frontStash, list: frontStashList }));
   ipcMain.handle ('stash:switch-in-game', async (e, data = {}) => {
     if (data.stash_id == null) return { success: false, switched: false, reason: 'invalid_stash_id' };
-    return await switchInGameStash (String (data.stash_id));
+    return await switchInGameStash (String (data.stash_id), data.character_id ? String (data.character_id) : '');
   });
 
   registerStashHotkeys ();
@@ -433,9 +433,9 @@ let registeredStashKeys = null;
 
 // 联动游戏内切换：点击游戏内对应仓库标签（尽力而为）。
 // 游戏未开 / 标签映射未配置 / 背包装备页等场景直接跳过，仅提示。
-async function switchInGameStash (stashId) {
+async function switchInGameStash (stashId, characterId = '') {
   try {
-    const r = await backend.switchStash (stashId);
+    const r = await backend.switchStash (stashId, characterId);
     if (r && r.switched === true) {
       logger.info (`In-game stash switched to ${stashId}`);
       return r;
