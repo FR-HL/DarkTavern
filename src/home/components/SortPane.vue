@@ -614,28 +614,6 @@ onBeforeUnmount (() => {
         </div>
         <div class="srow">
           <div class="srow-info">
-            <div class="srow-t">开始整理键</div>
-            <div class="srow-d">全局快捷键，支持 F1–F12 及 Ctrl/Alt/Shift 组合</div>
-          </div>
-          <div class="srow-ctl">
-            <span class="kbd">{{ sortHotkey }}</span>
-            <button class="keybind-btn" :class="{ listening: listeningFor === 'sort' }" @click="startHotkeyListen('sort')">{{ hotkeyLabel('sort') }}</button>
-            <button class="btn primary" @click="saveHotkey('sort')">保存</button>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">取消整理键</div>
-            <div class="srow-d">全局快捷键，随时中断整理</div>
-          </div>
-          <div class="srow-ctl">
-            <span class="kbd">{{ cancelHotkey }}</span>
-            <button class="keybind-btn" :class="{ listening: listeningFor === 'cancel' }" @click="startHotkeyListen('cancel')">{{ hotkeyLabel('cancel') }}</button>
-            <button class="btn primary" @click="saveHotkey('cancel')">保存</button>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
             <div class="srow-t">紧凑模式</div>
             <div class="srow-d">优先把物品摆放得更紧密</div>
           </div>
@@ -678,6 +656,31 @@ onBeforeUnmount (() => {
           </div>
           <button v-if="!sorting" class="btn primary lg" :disabled="!canStart" @click="startSort">开始整理</button>
           <button v-else class="btn danger lg" @click="cancelSort">取消整理</button>
+        </div>
+
+        <div class="run-keys">
+          <div class="srow">
+            <div class="srow-info">
+              <div class="srow-t">开始整理键</div>
+              <div class="srow-d">全局快捷键，支持 F1–F12 及 Ctrl/Alt/Shift 组合</div>
+            </div>
+            <div class="srow-ctl">
+              <span class="kbd">{{ sortHotkey }}</span>
+              <button class="keybind-btn" :class="{ listening: listeningFor === 'sort' }" @click="startHotkeyListen('sort')">{{ hotkeyLabel('sort') }}</button>
+              <button class="btn primary" @click="saveHotkey('sort')">保存</button>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="srow-info">
+              <div class="srow-t">取消整理键</div>
+              <div class="srow-d">全局快捷键，随时中断整理</div>
+            </div>
+            <div class="srow-ctl">
+              <span class="kbd">{{ cancelHotkey }}</span>
+              <button class="keybind-btn" :class="{ listening: listeningFor === 'cancel' }" @click="startHotkeyListen('cancel')">{{ hotkeyLabel('cancel') }}</button>
+              <button class="btn primary" @click="saveHotkey('cancel')">保存</button>
+            </div>
+          </div>
         </div>
 
         <div v-if="sorting" class="run-progress">
