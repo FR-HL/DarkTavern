@@ -409,13 +409,15 @@ class LayoutPlanner:
                 return (0, idx, name, 0, 0)
             g = groups[key]
             itm0 = g[0]
-            return (1, 0, "", -len(g), -(itm0.width * itm0.height * len(g)))
+            # 数量多的优先；同数量时大件（单件面积大）优先
+            return (1, 0, "", -len(g), -(itm0.width * itm0.height))
 
         group_keys = sorted(groups.keys(), key=group_sort_key)
         positions: Dict[int, Point] = {}
         learning_payload: Dict[int, Dict[str, Any]] = {}
         overflow: List[Item] = []
         anchor = 0
+        x_anchor = 0
 
         for key in group_keys:
             kind, name = key
@@ -437,45 +439,42 @@ class LayoutPlanner:
                         learning_payload[id(itm)] = record
                 anchor = group_bottom + 1
             else:
-                # 非装备组：行式整块填充，一行只属于一种款
+                # 非装备组：列式整块填充，每款独占列（同宽不同款也分列）
                 itm0 = group[0]
                 w, h = itm0.width, itm0.height
                 n = len(group)
-                per_row = max(1, self.width // w)
-                rows_needed = (n + per_row - 1) // per_row
+                avail_h = max(1, self.height - anchor)
+                k = max(1, avail_h // h)        # 单列可放件数
+                cols = (n + k - 1) // k          # 占用连续列数
+                if x_anchor + cols * w > self.width:
+                    overflow.extend(group)
+                    continue
                 for i, itm in enumerate(group):
                     self._ensure_learning_cache(itm)
-                    row = i // per_row
-                    col = i % per_row
+                    col = i // k
+                    row = i % k
                     y = anchor + row * h
-                    x = col * w
-                    # 本行内顺移找位（保持同款同一行的硬性相邻）
+                    x = x_anchor + col * w
+                    pos = Point(x, y)
                     if not self._fits(itm, x, y):
-                        xx = x + 1
-                        while xx + w <= self.width and not self._fits(itm, xx, y):
-                            xx += 1
-                        if xx + w <= self.width:
-                            x = xx
-                    if self._fits(itm, x, y):
-                        pos = Point(x, y)
-                        self._mark(pos, itm)
-                        positions[id(itm)] = pos
-                        record = self._record_learning_assignment(itm, pos, comparator_used=bool(comparator))
-                        if record:
-                            learning_payload[id(itm)] = record
-                    else:
-                        # 本行被碎片占满 → 整组从锚点起找最近空位（保底）
-                        slot = self._find_slot_for(itm, min_y=anchor)
-                        if slot is None:
-                            overflow.append(itm)
-                            continue
-                        self._mark(slot, itm)
-                        positions[id(itm)] = slot
-                        record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
-                        if record:
-                            learning_payload[id(itm)] = record
-                # 硬性：组占整行块（余数行空位不留给其他款），锚点整块推进
-                anchor = anchor + rows_needed * h
+                        # 同列向下顺移找空位（保持列归属）
+                        yy = y + h
+                        while yy + h <= self.height and not self._fits(itm, x, yy):
+                            yy += h
+                        if yy + h <= self.height and self._fits(itm, x, yy):
+                            pos = Point(x, yy)
+                        else:
+                            slot = self._find_slot_for(itm, min_y=anchor)
+                            if slot is None:
+                                overflow.append(itm)
+                                continue
+                            pos = slot
+                    self._mark(pos, itm)
+                    positions[id(itm)] = pos
+                    record = self._record_learning_assignment(itm, pos, comparator_used=bool(comparator))
+                    if record:
+                        learning_payload[id(itm)] = record
+                x_anchor += cols * w
 
         # Overflow band：放不下的组进底部溢出区（与 build_grouped 同款机制）
         for itm in overflow:
