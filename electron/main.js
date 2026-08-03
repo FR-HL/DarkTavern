@@ -267,6 +267,7 @@ app.on ('ready', async () => {
     launch_on_startup: !!settings.general.launch_on_startup,
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+F11',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+F12',
+    developer_mode: !!settings.general.developer_mode,
   }));
 
   ipcMain.handle ('settings:save', (e, data) => {
@@ -286,6 +287,9 @@ app.on ('ready', async () => {
     if (data.cancel_hotkey !== undefined && data.cancel_hotkey !== settings.dnd.cancel_hotkey) {
       settings.dnd.cancel_hotkey = data.cancel_hotkey;
       needSortReregister = true;
+    }
+    if (data.developer_mode !== undefined) {
+      settings.general.developer_mode = !!data.developer_mode;
     }
     if (data.default_mode !== undefined) { settings.general.default_mode = data.default_mode; needSend = true; }
     if (data.alignment !== undefined) { settings.general.alignment = data.alignment; needSend = true; }
@@ -428,14 +432,15 @@ function registerSortHotkeys () {
 }
 
 function openSettingsWindow (tab) {
-  const paneMap = { settings: 'settings', mapping: 'mapping' };
+  const paneMap = { settings: 'settings', mapping: 'config' };
   const pane = paneMap[tab] || 'settings';
 
   if (!homeWindow) { pendingPane = pane; openHomeWindow (); return; }
   if (homeWindow.isMinimized ()) homeWindow.restore ();
   homeWindow.show ();
   homeWindow.focus ();
-  homeWindow.webContents.send ('navigate', pane);
+  if (tab === 'mapping') homeWindow.webContents.send ('navigate', { pane: 'config', devCard: 'mapping' });
+  else homeWindow.webContents.send ('navigate', pane);
 }
 
 function openHomeWindow () {

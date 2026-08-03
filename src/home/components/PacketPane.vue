@@ -1,6 +1,10 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 
+const props = defineProps ({
+  bare: { type: Boolean, default: false },
+});
+
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
 const packets = ref ([]);
@@ -55,8 +59,8 @@ onBeforeUnmount (() => { if (timer) clearInterval (timer); });
 
 <template>
   <div>
-    <div class="page-title">数据包</div>
-    <div class="page-sub">开发者工具：查看抓包捕获的原始游戏数据包与解码结果。</div>
+    <div v-if="!bare" class="page-title">数据包</div>
+    <div v-if="!bare" class="page-sub">开发者工具：查看抓包捕获的原始游戏数据包与解码结果。</div>
 
     <div class="pkt-toolbar">
       <div class="pkt-count">共 <b>{{ total }}</b> 个包</div>

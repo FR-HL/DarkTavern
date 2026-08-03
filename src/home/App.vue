@@ -74,6 +74,10 @@ const mappingsLoaded = ref (false);
 const cnInput = ref ('');
 const enInput = ref ('');
 
+// ── 设置页 · 开发者工具 ──
+const developerMode = ref (false);
+const devCard = ref ('');
+
 let lastMappings = -1;
 let toastTimer = null;
 let settingsTimer = null;
@@ -359,6 +363,7 @@ async function loadSettings () {
     alignment.value = d.alignment || 'attached';
     scale.value = d.scale || 1.0;
     launchOnStartup.value = !!d.launch_on_startup;
+    developerMode.value = !!d.developer_mode;
     setRune ('key', 'ok', '已绑定', 'var(--gold)');
     if (d.api_key) setRune ('api', 'ok', '已配置', 'var(--teal)');
     else setRune ('api', 'pending', '未配置', 'var(--ink-faint)');
@@ -375,6 +380,19 @@ async function saveApiKey () {
 }
 function toggleApiKeyVisibility () { apiKeyVisible.value = !apiKeyVisible.value; }
 async function saveLaunch () { const r = await invoke ('settings:save', { launch_on_startup: launchOnStartup.value }); if (r.success) showToast ('已保存'); }
+
+async function toggleDeveloperMode () {
+  developerMode.value = !developerMode.value;
+  if (!developerMode.value) devCard.value = '';
+  const r = await invoke ('settings:save', { developer_mode: developerMode.value });
+  if (r.success) showToast (developerMode.value ? '开发者工具已开启' : '开发者工具已关闭');
+  else developerMode.value = !developerMode.value;
+}
+
+function toggleDevCard (name) {
+  devCard.value = devCard.value === name ? '' : name;
+  if (devCard.value === 'mapping' && !mappingsLoaded.value) loadMappings ();
+}
 
 function startListening () { isListening.value = true; newKeybind.value = null; }
 function stopListening () { isListening.value = false; }
@@ -448,7 +466,16 @@ async function removeMapping (idx) {
 }
 
 onMounted (() => {
-  window.electron.on ('navigate', (p) => { if (p) showPane (p); });
+  window.electron.on ('navigate', (p) => {
+    if (!p) return;
+    if (typeof p === 'object') {
+      showPane (p.pane || 'config');
+      if (p.devCard) devCard.value = p.devCard;
+      if (p.pane === 'config' && p.devCard === 'mapping' && !mappingsLoaded.value) loadMappings ();
+    } else {
+      showPane (p);
+    }
+  });
   window.electron.on ('ocr:status', onOcrStatus);
   window.electron.on ('game:status', onGameStatus);
   window.electron.on ('dnd:sort-notify', (d) => {
@@ -494,20 +521,16 @@ onBeforeUnmount (() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
           查价记录
         </div>
-        <div class="nav-item" :class="{ active: pane === 'mapping' }" @click="showPane('mapping')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
-          数据汉化
-        </div>
         <div class="nav-cap">仓库工具</div>
         <div class="nav-item" :class="{ active: pane === 'stash' }" @click="showPane('stash')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
           仓库整理
         </div>
-        <div class="nav-item" :class="{ active: pane === 'packets' }" @click="showPane('packets')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-          数据包
-        </div>
         <div class="nav-cap">更多</div>
+        <div class="nav-item" :class="{ active: pane === 'config' }" @click="showPane('config')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          设置
+        </div>
         <div class="nav-item" :class="{ active: pane === 'about' }" @click="showPane('about')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="0.5" fill="currentColor" stroke="none"/></svg>
           关于酒馆
@@ -745,54 +768,88 @@ onBeforeUnmount (() => {
         </div>
       </div>
 
-      <!-- ============ 数据汉化 ============ -->
-      <div class="pane" :class="{ active: pane === 'mapping' }">
-        <div class="page-title">数据汉化</div>
-        <div class="page-sub">中文 ↔ 英文翻译映射，由 DarkerDB API 同步生成，自定义条目可手动维护。</div>
+      <!-- ============ 设置 ============ -->
+      <div class="pane" :class="{ active: pane === 'config' }">
+        <div class="page-title">设置</div>
+        <div class="page-sub">通用选项与开发者工具。</div>
 
-        <div class="add-form" v-if="currentTab === 'custom'">
-          <input type="text" v-model="cnInput" placeholder="中文（如：长剑）">
-          <input type="text" v-model="enInput" placeholder="英文（如：Longsword）">
-          <button class="btn primary" @click="addMapping">添加</button>
-        </div>
-        <div class="status" :class="mappingStatus.type">{{ mappingStatus.text }}</div>
-
-        <div class="map-toolbar">
-          <div class="search">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
-            <input type="text" v-model="search" placeholder="搜索汉化数据…">
+        <div class="sec">
+          <div class="sec-label">通用</div>
+          <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">开发者工具</div>
+                <div class="srow-d">显示数据汉化、数据包等开发者功能卡片</div>
+              </div>
+              <div class="srow-ctl">
+                <label class="switch"><input type="checkbox" :checked="developerMode" @change="toggleDeveloperMode"><span class="track"></span></label>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="tab-bar">
-          <button v-for="t in TABS" :key="t.key" class="tab" :class="{ active: currentTab === t.key }" @click="switchTab(t.key)">{{ t.label }}<span class="count">{{ counts[t.key] }}</span></button>
-        </div>
+        <template v-if="developerMode">
+          <div class="sec">
+            <div class="dev-card-head" :class="{ open: devCard === 'mapping' }" @click="toggleDevCard('mapping')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
+              <span class="dev-card-title">数据汉化</span>
+              <span class="dev-card-desc">中文 ↔ 英文翻译映射</span>
+              <svg class="dev-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div v-if="devCard === 'mapping'" class="dev-card-body">
+              <div class="add-form" v-if="currentTab === 'custom'">
+                <input type="text" v-model="cnInput" placeholder="中文（如：长剑）">
+                <input type="text" v-model="enInput" placeholder="英文（如：Longsword）">
+                <button class="btn primary" @click="addMapping">添加</button>
+              </div>
+              <div class="status" :class="mappingStatus.type">{{ mappingStatus.text }}</div>
 
-        <div class="table-wrap"><div class="table-scroll">
-          <table>
-            <thead><tr><th style="width:34%">中文</th><th style="width:38%">英文</th><th>来源</th><th v-if="currentTab === 'custom'" style="width:84px">操作</th></tr></thead>
-            <tbody>
-              <tr v-for="(entry, idx) in currentEntries" :key="idx">
-                <td class="cn">{{ entry.cn }}</td>
-                <td class="en">{{ entry.en }}</td>
-                <td class="src">{{ SRC[currentTab] }}</td>
-                <td v-if="currentTab === 'custom'"><button class="btn danger sm" @click="removeMapping(idx)">删除</button></td>
-              </tr>
-              <tr v-if="!currentEntries.length"><td :colspan="currentTab === 'custom' ? 4 : 3" class="empty">暂无汉化数据</td></tr>
-            </tbody>
-          </table>
-        </div></div>
+              <div class="map-toolbar">
+                <div class="search">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
+                  <input type="text" v-model="search" placeholder="搜索汉化数据…">
+                </div>
+              </div>
+
+              <div class="tab-bar">
+                <button v-for="t in TABS" :key="t.key" class="tab" :class="{ active: currentTab === t.key }" @click="switchTab(t.key)">{{ t.label }}<span class="count">{{ counts[t.key] }}</span></button>
+              </div>
+
+              <div class="table-wrap"><div class="table-scroll">
+                <table>
+                  <thead><tr><th style="width:34%">中文</th><th style="width:38%">英文</th><th>来源</th><th v-if="currentTab === 'custom'" style="width:84px">操作</th></tr></thead>
+                  <tbody>
+                    <tr v-for="(entry, idx) in currentEntries" :key="idx">
+                      <td class="cn">{{ entry.cn }}</td>
+                      <td class="en">{{ entry.en }}</td>
+                      <td class="src">{{ SRC[currentTab] }}</td>
+                      <td v-if="currentTab === 'custom'"><button class="btn danger sm" @click="removeMapping(idx)">删除</button></td>
+                    </tr>
+                    <tr v-if="!currentEntries.length"><td :colspan="currentTab === 'custom' ? 4 : 3" class="empty">暂无汉化数据</td></tr>
+                  </tbody>
+                </table>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="dev-card-head" :class="{ open: devCard === 'packets' }" @click="toggleDevCard('packets')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              <span class="dev-card-title">数据包</span>
+              <span class="dev-card-desc">抓包捕获的原始游戏数据包与解码结果</span>
+              <svg class="dev-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div v-if="devCard === 'packets'" class="dev-card-body">
+              <PacketPane bare />
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- ============ 仓库整理 ============ -->
       <div class="pane" :class="{ active: pane === 'stash' }" v-if="pane === 'stash'">
         <StashPane />
         <SortPane />
-      </div>
-
-      <!-- ============ 数据包 ============ -->
-      <div class="pane" :class="{ active: pane === 'packets' }" v-if="pane === 'packets'">
-        <PacketPane />
       </div>
 
       <!-- ============ 关于酒馆 ============ -->
