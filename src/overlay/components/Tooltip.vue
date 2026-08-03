@@ -760,11 +760,11 @@ function getGradeColor(grade) {
                 <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
                 <span v-else class="ml-2" :class="item.prices.vendor !== null ? 'gold' : 'price-empty'">{{ item.prices.vendor !== null ? item.prices.vendor : '暂无' }}</span>
               </div>
-              <div class="flex items-center justify-center">
+              <!-- <div class="flex items-center justify-center">
                 <span>每格价值:</span>
                 <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
                 <span v-else class="ml-2" :class="item.prices.density !== null ? 'gold' : 'price-empty'">{{ item.prices.density !== null ? item.prices.density : '暂无' }}</span>
-              </div>
+              </div> -->
             </div>
 
             <div class="tooltip-separator"></div>
