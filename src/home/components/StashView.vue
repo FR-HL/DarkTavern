@@ -172,7 +172,7 @@ function slotStyle (s) {
 
 function tabIconType (label) {
   if (label.startsWith ('仓库')) return 'chest';
-  if (label.startsWith ('赛季共享')) return 'star';
+  if (label.startsWith ('赛季共享') || label.startsWith ('共享仓库')) return 'star';
   return '';
 }
 
