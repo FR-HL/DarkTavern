@@ -510,6 +510,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* ===== overview grid ===== */
 .ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+.ov-grid .card.wide { grid-column: 1 / -1; }
 
 .card-head {
   display: flex; align-items: center; gap: 9px;

@@ -47,8 +47,6 @@ const mappingCount = ref ('—');
 const overviewCapture = ref (false);
 const overviewSorting = ref (false);
 const overviewSortText = ref ('');
-const ballLocked = ref (false);
-const ballVisible = ref (true);
 const sessionScans = ref (0);
 const historyCount = ref (0);
 const charCount = ref (0);
@@ -362,8 +360,6 @@ async function refreshOverview () {
       overviewCapture.value = !!s.captureRunning;
       overviewSorting.value = !!s.sortingRunning;
       overviewSortText.value = s.lastSortText || '';
-      ballLocked.value = !!s.locked;
-      ballVisible.value = s.ballVisible !== false;
       sessionScans.value = s.sessionScans || 0;
     }
   } catch (e) {}
@@ -692,7 +688,6 @@ onBeforeUnmount (() => {
             <div class="stat-row"><span class="sdot" :class="runes.ocr.state"></span><span class="stat-k">OCR 引擎</span><span class="stat-v" :class="runes.ocr.state">{{ runes.ocr.text }}</span></div>
             <div class="stat-row"><span class="sdot" :class="runes.game.state"></span><span class="stat-k">游戏窗口</span><span class="stat-v" :class="runes.game.state">{{ runes.game.text }}</span></div>
             <div class="stat-row"><span class="sdot" :class="runes.key.state"></span><span class="stat-k">扫描热键</span><span class="stat-v" :class="runes.key.state">{{ runes.key.text }}</span></div>
-            <div class="stat-row"><span class="sdot" :class="runes.api.state"></span><span class="stat-k">DarkerDB API</span><span class="stat-v" :class="runes.api.state">{{ runes.api.text }}</span></div>
             <div class="card-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>不读取游戏内存 · 仅屏幕识别<span class="foot-ver">v{{ version }}</span></div>
           </section>
 
@@ -704,14 +699,7 @@ onBeforeUnmount (() => {
             <div class="card-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 9 6"/><polyline points="3 12 15 12"/><polyline points="3 18 21 18"/></svg>抓包 → 角色仓库 → 一键整理</div>
           </section>
 
-          <section class="card">
-            <div class="card-head"><span class="card-title">悬浮球状态</span></div>
-            <div class="stat-row"><span class="sdot" :class="ballVisible ? 'ok' : 'pending'"></span><span class="stat-k">悬浮球</span><span class="stat-v" :class="ballVisible ? 'ok' : 'pending'">{{ ballVisible ? '已显示' : '已隐藏' }}</span></div>
-            <div class="stat-row"><span class="sdot" :class="ballLocked ? 'ok' : 'pending'"></span><span class="stat-k">位置锁定</span><span class="stat-v" :class="ballLocked ? 'ok' : 'pending'">{{ ballLocked ? '已锁定' : '未锁定' }}</span></div>
-            <div class="card-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>托盘菜单或 Ctrl+Alt+B 切换</div>
-          </section>
-
-          <section class="card">
+          <section class="card wide">
             <div class="card-head"><span class="card-title">上手引导</span></div>
             <div class="steps two-col">
               <div class="step-col">
