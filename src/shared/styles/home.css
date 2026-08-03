@@ -875,6 +875,7 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
   border-radius: 10px;
   font-size: 12.5px; line-height: 1.65; color: var(--amber);
 }
+.about-note.note-lead { margin: 0 0 22px; }
 .about-note em { font-style: normal; font-weight: 700; }
 
 /* ===== sponsor pane ===== */
