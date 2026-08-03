@@ -509,4 +509,10 @@ if __name__ == "__main__":
     logger.info(f"Health check: http://localhost:{PORT}/health")
     logger.info(f"API docs:     http://localhost:{PORT}/docs")
 
-    uvicorn.run(app, host="127.0.0.1", port=PORT, log_level="info")
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=PORT,
+        log_level="info",
+        access_log=False,
+    )
