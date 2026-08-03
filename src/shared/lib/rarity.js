@@ -9,6 +9,17 @@ export const RARITY_COLORS = {
   Artifact: '#d92d20',
 };
 
+export const RARITY_CN = {
+  Poor: '粗糙',
+  Common: '普通',
+  Uncommon: '非凡',
+  Rare: '稀有',
+  Epic: '史诗',
+  Legendary: '传说',
+  Unique: '独特',
+  Artifact: '神器',
+};
+
 export function rarityColor (rarity) {
   return RARITY_COLORS[rarity] || RARITY_COLORS.Common;
 }

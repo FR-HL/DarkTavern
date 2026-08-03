@@ -1,6 +1,6 @@
 import electron, { globalShortcut, Menu, screen, shell, Tray } from 'electron';
 import { basename, join } from 'node:path';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE } from './config.js';
 import { settings, saveSettings } from './settings.js';
@@ -32,7 +32,7 @@ let ballDrag = null;
 let ballDragTimer = null;
 let lastCharKey = '';
 let lastSortRunning = false;
-let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', message: '', ts: 0 };
+let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', pricing: null, message: '', ts: 0 };
 const BALL_COLLAPSED = { w: 82, h: 82 };
 const BALL_EXPANDED = { w: 340, h: 590 };
 
@@ -112,15 +112,20 @@ app.on ('ready', async () => {
     }
     if (data?.scanResult) {
       const r = data.scanResult;
+      const isNewScan = r.id !== undefined;
       lastScan.ok = !!r.ok;
       if (r.name !== undefined) lastScan.name = r.name;
       if (r.live !== undefined) lastScan.price = r.live;
       if (r.market !== undefined) lastScan.market = r.market;
       if (r.rarity !== undefined) lastScan.rarity = r.rarity;
-      if (r.id !== undefined) lastScan.id = r.id;
+      if (r.pricing !== undefined) lastScan.pricing = r.pricing;
       if (r.message !== undefined) lastScan.message = r.message;
+      if (isNewScan) {
+        lastScan.id = r.id;
+        lastScan.ts = Date.now ();
+      }
       lastScan.zhName = findZhName (lastScan.id);
-      lastScan.ts = Date.now ();
+      if (lastScan.ok && lastScan.id) upsertHistoryRecord ();
       sendBallScanResult ();
     }
   });
@@ -174,6 +179,19 @@ app.on ('ready', async () => {
   } catch (e) {
     logger.error (`Failed to register ball lock hotkey: ${e.message}`);
   }
+
+  // ── 查价记录 IPC ──
+
+  ipcMain.handle ('history:list', () => {
+    loadHistory ();
+    return { records: [...priceHistory].reverse () };
+  });
+  ipcMain.handle ('history:clear', () => {
+    priceHistory = [];
+    saveHistory ();
+    notifyHome ('history:updated', {});
+    return { success: true };
+  });
 
   // ── DnD Tools IPC handlers ──
 
@@ -647,6 +665,61 @@ function findZhName (rawId) {
     }
   }
   return '';
+}
+
+// ── 查价记录（保存 3 天内查过的物品） ──
+
+const HISTORY_TTL = 3 * 24 * 3600 * 1000;
+const HISTORY_MAX = 1000;
+let priceHistory = null;
+
+function historyPath () {
+  return join (app.getPath ('userData'), 'price_history.json');
+}
+
+function loadHistory () {
+  if (priceHistory) return priceHistory;
+  try {
+    const d = JSON.parse (readFileSync (historyPath (), 'utf-8'));
+    priceHistory = Array.isArray (d.records) ? d.records : [];
+  } catch (e) {
+    priceHistory = [];
+  }
+  return priceHistory;
+}
+
+function saveHistory () {
+  try {
+    writeFileSync (historyPath (), JSON.stringify ({ records: priceHistory }, null, 2));
+  } catch (e) {
+    logger.error (`Failed to save price history: ${e.message}`);
+  }
+}
+
+function upsertHistoryRecord () {
+  loadHistory ();
+  const rec = {
+    ts: lastScan.ts,
+    id: lastScan.id,
+    name: lastScan.name,
+    zhName: lastScan.zhName,
+    rarity: lastScan.rarity,
+    price: lastScan.price,
+    market: lastScan.market,
+    vendor: lastScan.pricing?.vendor ?? null,
+    density: lastScan.pricing?.density ?? null,
+  };
+  const last = priceHistory[priceHistory.length - 1];
+  if (last && last.id === rec.id && last.ts === rec.ts) {
+    Object.assign (last, rec);
+  } else {
+    priceHistory.push (rec);
+  }
+  const cutoff = Date.now () - HISTORY_TTL;
+  priceHistory = priceHistory.filter ((r) => r.ts >= cutoff);
+  if (priceHistory.length > HISTORY_MAX) priceHistory = priceHistory.slice (-HISTORY_MAX);
+  saveHistory ();
+  notifyHome ('history:updated', {});
 }
 
 async function pushBallStatus () {

@@ -84,6 +84,7 @@ export function wire (overlay, sendBall = null) {
         market: result.data?.pricing?.market ?? null,
         rarity: result.data?.item?.rarity || '',
         id: result.data?.item?.id || result.data?.item?.item_id || '',
+        pricing: result.data?.pricing || null,
       });
       queryMarketLive (result.data, scanId, (msg, payload) => {
         send (msg, payload);

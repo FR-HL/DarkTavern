@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { RARITY_CN, rarityColor } from '@/shared/lib/rarity.js';
 
 import donorKk from '@assets/images/sponsors/donor_kk.webp';
 import donorYueliang from '@assets/images/sponsors/yueliang.webp';
@@ -190,7 +191,41 @@ function donorInitial (name) {
   return clean.charAt (0).toUpperCase () || '?';
 }
 
-function showPane (name) { pane.value = name; }
+function showPane (name) {
+  pane.value = name;
+  if (name === 'history') loadHistory ();
+}
+
+// ── 查价记录 ──
+
+const historyRecords = ref ([]);
+
+async function loadHistory () {
+  try {
+    const r = await invoke ('history:list');
+    historyRecords.value = r?.records || [];
+  } catch (e) { /* ignore */ }
+}
+
+async function clearHistory () {
+  if (!confirm ('确定清空全部查价记录吗？')) return;
+  try {
+    await invoke ('history:clear');
+    historyRecords.value = [];
+    showToast ('已清空');
+  } catch (e) { /* ignore */ }
+}
+
+function fmtHistoryTime (ts) {
+  const d = new Date (ts);
+  const pad = (x) => String (x).padStart (2, '0');
+  return `${pad (d.getMonth () + 1)}-${pad (d.getDate ())} ${pad (d.getHours ())}:${pad (d.getMinutes ())}`;
+}
+
+function fmtG (v) {
+  if (v == null) return '—';
+  return Number (v).toLocaleString () + ' G';
+}
 
 function showToast (msg) {
   toastMsg.value = msg;
@@ -396,6 +431,9 @@ onMounted (() => {
   window.electron.on ('dnd:sort-notify', (d) => {
     if (d?.message) showToast (d.message);
   });
+  window.electron.on ('history:updated', () => {
+    if (pane.value === 'history') loadHistory ();
+  });
   document.addEventListener ('keydown', onKeyDown);
   document.addEventListener ('mousedown', onMouseDown);
   uptimeTimer = setInterval (tick, 1000);
@@ -428,6 +466,10 @@ onBeforeUnmount (() => {
         <div class="nav-item" :class="{ active: pane === 'settings' }" @click="showPane('settings')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
           查价器
+        </div>
+        <div class="nav-item" :class="{ active: pane === 'history' }" @click="showPane('history')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          查价记录
         </div>
         <div class="nav-item" :class="{ active: pane === 'mapping' }" @click="showPane('mapping')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
@@ -609,6 +651,54 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="status" :class="settingsStatus.type">{{ settingsStatus.text }}</div>
+      </div>
+
+      <!-- ============ 查价记录 ============ -->
+      <div class="pane" :class="{ active: pane === 'history' }">
+        <div class="page-title">查价记录</div>
+        <div class="page-sub">最近 3 天内查询过的物品，自动保存；每次查价的价格数据完整记录。</div>
+
+        <div class="map-toolbar">
+          <div class="hist-count" v-if="historyRecords.length">共 <b>{{ historyRecords.length }}</b> 条记录</div>
+          <div class="map-toolbar-spacer"></div>
+          <button class="btn subtle sm" @click="loadHistory">刷新</button>
+          <button class="btn danger sm" @click="clearHistory">清空记录</button>
+        </div>
+
+        <div class="table-wrap" v-if="historyRecords.length"><div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th style="width:104px">时间</th>
+              <th style="width:34%">物品</th>
+              <th style="width:88px">稀有度</th>
+              <th style="width:96px">实时价</th>
+              <th style="width:96px">市场价</th>
+              <th style="width:96px">商人价</th>
+              <th style="width:80px">密度</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="(rec, idx) in historyRecords" :key="rec.ts + '-' + idx">
+                <td class="hist-time mono dim">{{ fmtHistoryTime (rec.ts) }}</td>
+                <td>
+                  <div class="hist-item">
+                    <span class="hist-zh" :style="{ color: rarityColor (rec.rarity) }">{{ rec.zhName || rec.name || '—' }}</span>
+                    <span class="hist-en" v-if="rec.zhName && rec.name && rec.zhName !== rec.name">{{ rec.name }}</span>
+                  </div>
+                </td>
+                <td><span class="hist-rarity" :style="{ color: rarityColor (rec.rarity) }">●</span> <span class="hist-rarity-name">{{ RARITY_CN[rec.rarity] || rec.rarity }}</span></td>
+                <td class="hist-price">{{ fmtG (rec.price) }}</td>
+                <td class="hist-price">{{ fmtG (rec.market) }}</td>
+                <td>{{ fmtG (rec.vendor) }}</td>
+                <td class="mono dim">{{ rec.density ?? '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div></div>
+
+        <div v-else class="empty-hint">
+          <div class="empty-t">暂无查价记录</div>
+          <div class="empty-d">在游戏中悬停物品并按下扫描键，记录会自动出现在这里。</div>
+        </div>
       </div>
 
       <!-- ============ 数据汉化 ============ -->
