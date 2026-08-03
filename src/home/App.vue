@@ -581,6 +581,9 @@ onMounted (() => {
   window.electron.on ('dnd:sort-notify', (d) => {
     if (d?.message) showToast (d.message);
   });
+  window.electron.on ('stash:notify', (d) => {
+    if (d?.message) showToast (d.message);
+  });
   window.electron.on ('history:updated', () => {
     if (pane.value === 'history') loadHistory ();
   });
@@ -1267,7 +1270,7 @@ onBeforeUnmount (() => {
           <div class="sec-label">软件来源 · 致敬</div>
           <div class="card">
             <div class="about-block">
-              <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a>、开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>，仓库整理功能则参考了 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>。最初我基于中文版延续开发，后来因后续维护问题，不愿再麻烦原作者，便决定潜心研读源码，将软件<strong>完整重写</strong>。</p>
+              <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a>、开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>，仓库整理功能则参考了 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>。</p>
               <p>遵从前辈们的开源精神，DarkTavern 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢 GrimVault、GrimVault-Chinese-Edition 与 DnDTools 铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
             </div>
             <div class="src-links">
@@ -1293,7 +1296,7 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="sec">
-          <div class="sec-label">仓库整理 · 致敬</div>
+          <div class="sec-label">仓库整理 · 致谢</div>
           <div class="card">
             <div class="about-block">
               <p>DarkTavern 的<b>角色仓库与自动整理</b>功能参考自开源项目 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>——它用网络抓包把仓库可视化的思路给了我极大的启发：抓包解析物品数据、仓库布局可视化、排序算法与整理执行，均在此基础上移植与重写。</p>
