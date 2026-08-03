@@ -45,7 +45,7 @@ const center = computed (() => {
     if (t.kind === 'fail') return { t1: '未找到', cls: 'bad' };
     if (t.kind === 'sortok') return { t1: '完成', cls: 'ok' };
     if (t.kind === 'sortfail') return { t1: '失败', cls: 'bad' };
-    if (t.kind === 'char') return { t1: t.sub, cls: 'busy' };
+    if (t.kind === 'char') return { t1: t.sub, cls: 'busy', small: true };
     if (t.kind === 'stash') return { t1: t.sub, cls: 'busy', small: true };
   }
   if (!status.ocr) return { t1: '故障', cls: 'bad' };
