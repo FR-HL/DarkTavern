@@ -65,12 +65,13 @@ function startHotkeyListen (target) {
   listeningFor.value = target;
   newHotkey.value = null;
 }
-function stopHotkeyListen () { listeningFor.value = null; newHotkey.value = null; }
+function stopHotkeyListen () { listeningFor.value = null; }
+function cancelHotkeyListen () { listeningFor.value = null; newHotkey.value = null; }
 
 function onHotkeyKeyDown (e) {
   if (!listeningFor.value) return;
   e.preventDefault ();
-  if (e.key === 'Escape') { stopHotkeyListen (); return; }
+  if (e.key === 'Escape') { cancelHotkeyListen (); return; }
   if (RESERVED_HOTKEYS.includes (e.key)) return;
   let key = '';
   if (e.ctrlKey) key += 'Ctrl+';
