@@ -170,6 +170,12 @@ function slotStyle (s) {
   };
 }
 
+function tabIconType (label) {
+  if (label.startsWith ('仓库')) return 'chest';
+  if (label.startsWith ('赛季共享')) return 'star';
+  return '';
+}
+
 async function loadCharData (id, silent = false) {
   if (!silent) { loading.value = true; error.value = ''; charData.value = null; }
   try {
@@ -360,7 +366,12 @@ watch (() => props.stashId, () => reportStashState ());
           <button v-for="s in stashList" :key="s.id" class="side-tab"
                   :class="{ active: props.stashId === s.id }" @click="emit('update:stashId', s.id)"
                   :title="`${s.items.length} 件物品`">
-            {{ s.label }}<span class="count">{{ s.items.length }}</span>
+            <span class="tab-ic">
+              <svg v-if="tabIconType(s.label) === 'chest'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M3 12h18"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/><circle cx="12" cy="15" r="1" fill="currentColor" stroke="none"/></svg>
+              <svg v-else-if="tabIconType(s.label) === 'star'" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+            </span>
+            <span class="tab-label">{{ s.label }}</span>
+            <span class="count">{{ s.items.length }}</span>
           </button>
         </div>
 
@@ -465,7 +476,7 @@ watch (() => props.stashId, () => reportStashState ());
   display: flex; flex-direction: column; gap: 8px;
 }
 .side-tab {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 7px;
   padding: 9px 12px;
   border: 1px solid var(--line); border-radius: 8px;
   background: var(--card-2);
@@ -478,8 +489,12 @@ watch (() => props.stashId, () => reportStashState ());
   background: var(--accent); border-color: var(--accent);
   color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.28);
 }
-.side-tab .count { color: var(--text-3); font-size: 14px; font-variant-numeric: tabular-nums; }
+.tab-ic { display: inline-flex; flex: none; }
+.tab-ic svg { width: 14px; height: 14px; }
+.tab-label { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-tab .count { color: var(--text-3); font-size: 14px; font-variant-numeric: tabular-nums; flex: none; }
 .side-tab.active .count { color: rgba(255,255,255,0.85); }
+.side-tab.active .tab-ic { color: rgba(255,255,255,0.9); }
 .stash-body { padding: 0; flex: 1; min-width: 0; }
 .stash-meta {
   display: flex; align-items: center; gap: 22px;
