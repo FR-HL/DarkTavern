@@ -372,25 +372,24 @@ class LayoutPlanner:
         return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
 
     def _sized_group_key(self, item: Item) -> Tuple[str, str]:
-        """装备按部位分组；非装备按 item_id + 尺寸分组（同款同尺寸一组）。"""
+        """装备按部位分组；非装备按名称 + 尺寸分组（同名同尺寸一组，稀有度变体相邻）。"""
         slot = (getattr(item, "slot_type", "") or "").strip()
         if slot:
             return ("equip", slot)
-        iid = getattr(item, "item_id", "") or ""
-        return ("sized", f"{iid}|{item.width}x{item.height}")
+        return ("sized", f"{item.name}|{item.width}x{item.height}")
 
     def build_sized_groups(
         self,
         items: List[Item],
         comparator: Optional[Callable[[Item, Item], int]] = None,
     ) -> LayoutPlan:
-        """同款同尺寸分组 + 行式整块填充。
+        """同款同尺寸分组 + 列式整块填充（大件优先）。
 
         硬性要求：
-        - 同款物品必须相邻；一行只属于一种款（行满才换款）
-        - 组内整行连续铺（每行 per_row 件），余数行的空位不留给其他款
-        - 装备（按部位）置顶沿用贪心放置；非装备组按数量降序先占位
-        - 放不下的组进底部溢出区（现有机制）
+        - 同名物品必须相邻（含稀有度变体）；每款独占列，同宽不同款也分列
+        - 大件优先：单件面积大的款先占列；同面积数量多的先
+        - 装备（按部位）置顶沿用贪心放置
+        - 放不下的款整组进底部溢出区（从底向上列式，款保持完整不打散）
         """
         self._reset()
         self._learning_cache = {}
@@ -409,15 +408,23 @@ class LayoutPlanner:
                 return (0, idx, name, 0, 0)
             g = groups[key]
             itm0 = g[0]
-            # 数量多的优先；同数量时大件（单件面积大）优先
-            return (1, 0, "", -len(g), -(itm0.width * itm0.height))
+            # 大件优先（单件面积降序）；同面积时数量多的优先
+            return (1, -(itm0.width * itm0.height), -len(g))
 
         group_keys = sorted(groups.keys(), key=group_sort_key)
         positions: Dict[int, Point] = {}
         learning_payload: Dict[int, Dict[str, Any]] = {}
-        overflow: List[Item] = []
+        overflow_groups: List[List[Item]] = []
         anchor = 0
         x_anchor = 0
+
+        def place(itm, pos):
+            self._ensure_learning_cache(itm)
+            self._mark(pos, itm)
+            positions[id(itm)] = pos
+            record = self._record_learning_assignment(itm, pos, comparator_used=bool(comparator))
+            if record:
+                learning_payload[id(itm)] = record
 
         for key in group_keys:
             kind, name = key
@@ -429,7 +436,7 @@ class LayoutPlanner:
                     self._ensure_learning_cache(itm)
                     slot = self._find_slot_for(itm, min_y=anchor)
                     if slot is None:
-                        overflow.append(itm)
+                        overflow_groups.append([itm])
                         continue
                     self._mark(slot, itm)
                     positions[id(itm)] = slot
@@ -447,49 +454,61 @@ class LayoutPlanner:
                 k = max(1, avail_h // h)        # 单列可放件数
                 cols = (n + k - 1) // k          # 占用连续列数
                 if x_anchor + cols * w > self.width:
-                    overflow.extend(group)
+                    overflow_groups.append(group)
                     continue
-                for i, itm in enumerate(group):
-                    self._ensure_learning_cache(itm)
-                    col = i // k
-                    row = i % k
-                    y = anchor + row * h
-                    x = x_anchor + col * w
-                    pos = Point(x, y)
-                    if not self._fits(itm, x, y):
-                        # 同列向下顺移找空位（保持列归属）
-                        yy = y + h
-                        while yy + h <= self.height and not self._fits(itm, x, yy):
-                            yy += h
-                        if yy + h <= self.height and self._fits(itm, x, yy):
-                            pos = Point(x, yy)
-                        else:
-                            slot = self._find_slot_for(itm, min_y=anchor)
-                            if slot is None:
-                                overflow.append(itm)
-                                continue
-                            pos = slot
-                    self._mark(pos, itm)
-                    positions[id(itm)] = pos
-                    record = self._record_learning_assignment(itm, pos, comparator_used=bool(comparator))
-                    if record:
-                        learning_payload[id(itm)] = record
+                # 列内游标式放置：同列向下找空位，款连续
+                cursor = anchor
+                for itm in group:
+                    x = x_anchor
+                    while cursor + h <= self.height and not self._fits(itm, x, cursor):
+                        cursor += h
+                    if cursor + h > self.height:
+                        overflow_groups.append([itm for itm in group if id(itm) not in positions])
+                        break
+                    place(itm, Point(x, cursor))
+                    cursor += h
                 x_anchor += cols * w
 
-        # Overflow band：放不下的组进底部溢出区（与 build_grouped 同款机制）
-        for itm in overflow:
-            self._ensure_learning_cache(itm)
-            slot = self._find_slot_for(itm, min_y=anchor)
-            if slot is None:
+        # 底部溢出区：放不下的款整组从底向上列式（款保持完整，不打散）
+        bottom_y = self.height
+        bottom_x = 0
+        for group in overflow_groups:
+            if not group:
+                continue
+            itm0 = group[0]
+            w, h = itm0.width, itm0.height
+            n = len(group)
+            k = max(1, bottom_y // h)
+            cols = (n + k - 1) // k
+            if bottom_x + cols * w > self.width:
+                continue
+            placed_any = False
+            for i, itm in enumerate(group):
+                col = i // k
+                row = i % k
+                x = bottom_x + col * w
+                y = bottom_y - h - row * h
+                if y < anchor or not self._fits(itm, x, y):
+                    continue
+                place(itm, Point(x, y))
+                placed_any = True
+            if placed_any:
+                bottom_x += cols * w
+
+        # 最终兜底（仓库极满时）：逐件从底部向上找位
+        for group in overflow_groups:
+            for itm in group:
+                if id(itm) in positions:
+                    continue
+                self._ensure_learning_cache(itm)
                 slot = self._find_slot_from_bottom(itm)
-            if slot is None:
-                raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
-            self._mark(slot, itm)
-            positions[id(itm)] = slot
-            anchor = max(anchor, slot.y + itm.height)
-            record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
-            if record:
-                learning_payload[id(itm)] = record
+                if slot is None:
+                    raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
+                self._mark(slot, itm)
+                positions[id(itm)] = slot
+                record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+                if record:
+                    learning_payload[id(itm)] = record
 
         execution_order = sorted(
             [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
