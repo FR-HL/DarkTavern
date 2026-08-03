@@ -49,16 +49,6 @@ def _stash_dimensions(stash_id):
     return 12, 20
 
 
-def _to_roman(n):
-    pairs = [(10, 'X'), (9, 'IX'), (5, 'V'), (4, 'IV'), (1, 'I')]
-    out = ''
-    for v, s in pairs:
-        while n >= v:
-            out += s
-            n -= v
-    return out
-
-
 def _stash_label(stash_id):
     try:
         sid = int(stash_id)
@@ -72,11 +62,11 @@ def _stash_label(stash_id):
     if sid in fixed:
         return fixed[sid]
     if 5 <= sid <= 9:
-        return f"仓库 {_to_roman(sid - 4)}"
+        return f"仓库 {sid - 5}"
     if 21 <= sid <= 29:
-        return f"赛季共享 {_to_roman(sid - 20)}"
+        return f"赛季共享 {sid - 20}"
     if 31 <= sid <= 39:
-        return f"共享仓库 {_to_roman(sid - 30)}"
+        return f"共享仓库 {sid - 30}"
     if 100 <= sid <= 102:
         return f"装备方案 {sid - 99}"
     return f"仓库 {sid}"
