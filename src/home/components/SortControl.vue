@@ -254,7 +254,7 @@ onBeforeUnmount (() => {
 
 <template>
   <div>
-    <div class="page-title">整理</div>
+    <div class="page-title">配置</div>
     <div class="page-sub"><b>请先在游戏中打开要整理的仓库界面</b>（能看到物品格子），再开始整理；整理期间保持游戏窗口在前台。</div>
 
     <div v-if="uipiBlocked" class="uipi-warn">

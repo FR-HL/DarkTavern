@@ -115,8 +115,8 @@ onMounted (() => {
 
 <template>
   <div>
-    <div class="page-title">仓库</div>
-    <div class="page-sub">捕获游戏网络数据，可视化角色仓库与背包，为自动整理提供数据。</div>
+    <div class="page-title">角色仓库</div>
+    <div class="page-sub">捕获游戏网络数据，可视化各职业角色的仓库与背包，为自动整理提供数据。</div>
 
     <!-- 抓包控制 -->
     <div class="cap-card card">
