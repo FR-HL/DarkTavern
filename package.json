@@ -2,7 +2,12 @@
   "name": "darktavern",
   "version": "1.0.0",
   "description": "DarkTavern - Dark and Darker 中文查价工具",
-  "author": "DarkerDB",
+  "author": "FY",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FR-HL/DarkTavern.git"
+  },
   "type": "module",
   "main": "electron/main.js",
   "scripts": {

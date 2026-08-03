@@ -1098,27 +1098,11 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="sec">
-          <div class="sec-label">背包整理 · 致敬</div>
-          <div class="card">
-            <div class="about-block">
-              <p>DarkTavern 的背包 / 仓库整理功能（数据解析、物品图标、排序算法）参考自开源项目 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>。它把「整理仓库」这件苦差事变成了可视化的优雅工具，给我带来了极大的启发。</p>
-              <p>感谢 DnDTools 项目的无私开源，让玩家社区的工具生态生生不息。</p>
-            </div>
-            <div class="src-links single">
-              <a class="src-card" href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">
-                <span class="src-name">DnDTools</span>
-                <span class="src-desc">背包整理工具 · 排序与数据参考</span>
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
           <div class="sec-label">数据来源 · 致谢</div>
           <div class="card">
             <div class="about-block">
               <p>本工具的市场数据来源于 <a href="#" @click.prevent="openLink('https://darkerdb.com/')">DarkerDB</a>，这是一个优秀的游戏数据平台。感谢 DarkerDB 提供了准确、实时的市场数据，让装备估价与市场价格分析功能得以实现。</p>
-              <p>诚挚地感谢 DarkerDB 对游戏社区的无私贡献！同时感谢所有为本站提供数据和反馈的玩家社区！</p>
+              <p>诚挚地感谢 DarkerDB 及其作者 <strong>ander</strong> 对游戏社区的无私贡献！同时感谢所有为本站提供数据和反馈的玩家社区！</p>
             </div>
             <div class="src-links single">
               <a class="src-card" href="#" @click.prevent="openLink('https://darkerdb.com/')">

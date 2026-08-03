@@ -134,10 +134,17 @@ npx vite build                 # 编译悬浮窗前端
 npx electron-builder --win     # 打包为安装程序
 ```
 
+## 使用声明
+
+- **仅供个人学习与娱乐**：本工具与本作《Dark and Darker》无官方关联，也不支持作弊（不注入、不读内存、仅读屏）。游戏内的使用合规性请自行判断。
+- **禁止转卖**：禁止将本软件（或其修改版、构建产物）作为商品二次销售、捆绑销售或任何形式收费。发现倒卖/滥用，请在 [GitHub Issues](https://github.com/FR-HL/DarkTavern/issues) 举报。
+- **商标**：「DarkTavern」名称与图标为本项目品牌标识，不得用于任何衍生品或商业产品，详见 [LICENSE](LICENSE) 附加条款。
+- **免责声明**：本项目按 MIT 许可证「AS IS」提供，作者不对任何使用后果负责。
+
 ## 致谢
 
 - [DarkerDB](https://darkerdb.com/) — 原版 GrimVault 与查价 API
-- [Songyt1110](https://github.com/Songyt1110/GrimVault-Chinese-Edition) — GrimVault 中文版（本项目直接 fork 源）
+- [GrimVault-Chinese-Edition](https://github.com/Songyt1110/GrimVault-Chinese-Edition) — GrimVault 开源中文版（本项目 fork 源，已完整重写）
 - [DarkerDB/GrimVault](https://github.com/DarkerDB/GrimVault) — 行分割 + 单行识别算法移植来源
 - [Ironmace](https://www.ironmace.com/) — Dark and Darker
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) — PP-OCRv5 识别模型
