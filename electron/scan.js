@@ -78,7 +78,12 @@ export function wire (overlay, sendBall = null) {
 
     if (result.success) {
       send ('hover:item', { scanId, ...tooltip, ...result.data });
-      markResult ({ ok: true, name: result.data?.item?.name || '', market: result.data?.pricing?.market ?? null });
+      markResult ({
+        ok: true,
+        name: result.data?.item?.name || '',
+        market: result.data?.pricing?.market ?? null,
+        rarity: result.data?.item?.rarity || '',
+      });
       queryMarketLive (result.data, scanId, (msg, payload) => {
         send (msg, payload);
         if (msg === 'hover:live-price') markResult ({ ok: true, live: payload?.price ?? null });

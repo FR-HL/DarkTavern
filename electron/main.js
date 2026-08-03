@@ -30,7 +30,7 @@ let ballDrag = null;
 let ballDragTimer = null;
 let lastCharKey = '';
 let lastSortRunning = false;
-let lastScan = { ok: null, name: '', price: null, market: null, message: '', ts: 0 };
+let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', message: '', ts: 0 };
 const BALL_COLLAPSED = { w: 82, h: 82 };
 const BALL_EXPANDED = { w: 340, h: 530 };
 
@@ -115,6 +115,7 @@ app.on ('ready', async () => {
         name: r.name || '',
         price: r.live ?? null,
         market: r.market ?? null,
+        rarity: r.rarity || '',
         message: r.message || '',
         ts: Date.now (),
       };

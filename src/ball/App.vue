@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import StatusPanel from './components/StatusPanel.vue';
 import { cnClass } from '@/shared/lib/classes.js';
+import { rarityColor } from '@/shared/lib/rarity.js';
 
 const invoke = (channel, data) => window.electron.invoke (channel, data);
 
@@ -40,10 +41,10 @@ const center = computed (() => {
   if (status.scanning) return { t1: '扫描', t2: '', cls: 'busy' };
   const t = transient.value;
   if (t && t.until > Date.now ()) {
-    if (t.kind === 'ok') return { t1: '✓', t2: t.sub, cls: 'ok' };
+    if (t.kind === 'ok') return { t1: t.name || '✓', t2: fmtG (t.price), cls: 'ok', t1Color: t.color, small: true, gold: true };
     if (t.kind === 'fail') return { t1: '✗', t2: t.sub, cls: 'bad' };
-    if (t.kind === 'sortok') return { t1: '成', t2: '完成', cls: 'ok' };
-    if (t.kind === 'sortfail') return { t1: '败', t2: '失败', cls: 'bad' };
+    if (t.kind === 'sortok') return { t1: '✓', t2: '完成', cls: 'ok' };
+    if (t.kind === 'sortfail') return { t1: '✗', t2: '失败', cls: 'bad' };
     if (t.kind === 'char') return { t1: t.sub, t2: '已更新', cls: 'busy', small: true };
   }
   if (!status.ocr) return { t1: '故障', t2: '', cls: 'bad' };
@@ -52,9 +53,9 @@ const center = computed (() => {
   return { t1: '就绪', t2: '', cls: 'ok' };
 });
 
-function setTransient (kind, sub, dur) {
+function setTransient (kind, sub, dur, extra) {
   clearTimeout (transientTimer);
-  transient.value = { kind, sub, until: Date.now () + dur };
+  transient.value = { kind, sub, until: Date.now () + dur, ...extra };
   transientTimer = setTimeout (() => { transient.value = null; }, dur + 50);
 }
 
@@ -72,7 +73,11 @@ function onScanResult (d) {
   if (!d || d.ok == null) return;
   if (d.ok) {
     const price = d.price ?? d.market;
-    setTransient ('ok', fmtG (price), 3000);
+    setTransient ('ok', '', 3000, {
+      name: d.name || '',
+      price,
+      color: rarityColor (d.rarity),
+    });
   } else {
     setTransient ('fail', '未找到', 3000);
   }
@@ -147,8 +152,8 @@ onBeforeUnmount (() => {
       <div class="ring" :class="ring">
         <div class="ball" :class="{ locked: status.locked }" @mousedown="onBallMouseDown" @mouseup="onBallMouseUp" @click="onBallClick" @contextmenu="onContext">
           <div class="ball-text" :class="[center.cls, { small: center.small }]">
-            <span class="bt-1">{{ center.t1 }}</span>
-            <span v-if="center.t2" class="bt-2">{{ center.t2 }}</span>
+            <span class="bt-1" :style="center.t1Color ? { color: center.t1Color } : null">{{ center.t1 }}</span>
+            <span v-if="center.t2" class="bt-2" :class="{ gold: center.gold }">{{ center.t2 }}</span>
           </div>
           <span v-if="status.scanning" class="pulse"></span>
         </div>

@@ -123,6 +123,11 @@ html, body, #app {
 .ball-text.bad { color: var(--red); }
 .ball-text.busy { color: var(--accent); }
 .ball-text.small .bt-1 { font-size: 13.5px; }
+.ball-text .bt-2.gold {
+  color: #b48109;
+  font-weight: 800;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+}
 
 /* 扫描脉动 */
 .pulse {
