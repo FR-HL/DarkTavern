@@ -128,6 +128,9 @@ html, body, #app {
   font-weight: 800;
   text-shadow: 0 1px 0 rgba(255,255,255,0.6);
 }
+.ball-text .bt-2 .bt-suffix {
+  font-weight: 900;
+}
 
 /* 扫描脉动 */
 .pulse {
