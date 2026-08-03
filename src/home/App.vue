@@ -199,6 +199,7 @@ function showPane (name) {
 // ── 查价记录 ──
 
 const historyRecords = ref ([]);
+const expandedHistory = ref (null);
 
 async function loadHistory () {
   try {
@@ -226,6 +227,28 @@ function fmtG (v) {
   if (v == null) return '—';
   return Number (v).toLocaleString () + ' G';
 }
+
+function toggleHistoryRow (idx) {
+  const rec = historyRecords.value[idx];
+  if (!rec) return;
+  expandedHistory.value = expandedHistory.value === rec.ts ? null : rec.ts;
+}
+
+function attrZh (rec, display) {
+  const zh = rec.reverseAttributes?.[display];
+  return zh || display;
+}
+
+function attrVal (a) {
+  if (a.min != null) return `${a.min} - ${a.max}`;
+  if (a.value != null) return a.value;
+  return '';
+}
+
+const gradeCls = (g) => {
+  const map = { S: 'gS', A: 'gA', B: 'gB', C: 'gC', D: 'gD', F: 'gF' };
+  return map[g] || 'gN';
+};
 
 function showToast (msg) {
   toastMsg.value = msg;
@@ -669,28 +692,51 @@ onBeforeUnmount (() => {
           <table>
             <thead><tr>
               <th style="width:104px">时间</th>
-              <th style="width:34%">物品</th>
+              <th style="width:30%">物品</th>
               <th style="width:88px">稀有度</th>
-              <th style="width:96px">实时价</th>
-              <th style="width:96px">市场价</th>
-              <th style="width:96px">商人价</th>
-              <th style="width:80px">密度</th>
+              <th style="width:96px">市场现价</th>
+              <th style="width:96px">市场均价</th>
+              <th style="width:96px">商人回收</th>
+              <th style="width:88px">每格价值</th>
             </tr></thead>
             <tbody>
-              <tr v-for="(rec, idx) in historyRecords" :key="rec.ts + '-' + idx">
-                <td class="hist-time mono dim">{{ fmtHistoryTime (rec.ts) }}</td>
-                <td>
-                  <div class="hist-item">
-                    <span class="hist-zh" :style="{ color: rarityColor (rec.rarity) }">{{ rec.zhName || rec.name || '—' }}</span>
-                    <span class="hist-en" v-if="rec.zhName && rec.name && rec.zhName !== rec.name">{{ rec.name }}</span>
-                  </div>
-                </td>
-                <td><span class="hist-rarity" :style="{ color: rarityColor (rec.rarity) }">●</span> <span class="hist-rarity-name">{{ RARITY_CN[rec.rarity] || rec.rarity }}</span></td>
-                <td class="hist-price">{{ fmtG (rec.price) }}</td>
-                <td class="hist-price">{{ fmtG (rec.market) }}</td>
-                <td>{{ fmtG (rec.vendor) }}</td>
-                <td class="mono dim">{{ rec.density ?? '—' }}</td>
-              </tr>
+              <template v-for="(rec, idx) in historyRecords" :key="rec.ts + '-' + idx">
+                <tr class="hist-row" :class="{ open: expandedHistory === rec.ts }" @click="toggleHistoryRow(idx)">
+                  <td class="hist-time mono dim">{{ fmtHistoryTime (rec.ts) }}</td>
+                  <td>
+                    <div class="hist-item">
+                      <span class="hist-zh" :style="{ color: rarityColor (rec.rarity) }">{{ rec.zhName || rec.name || '—' }}</span>
+                      <span class="hist-en" v-if="rec.zhName && rec.name && rec.zhName !== rec.name">{{ rec.name }}</span>
+                    </div>
+                  </td>
+                  <td><span class="hist-rarity" :style="{ color: rarityColor (rec.rarity) }">●</span> <span class="hist-rarity-name">{{ RARITY_CN[rec.rarity] || rec.rarity }}</span></td>
+                  <td class="hist-price">{{ fmtG (rec.price) }}</td>
+                  <td>{{ fmtG (rec.market) }}</td>
+                  <td>{{ fmtG (rec.vendor) }}</td>
+                  <td class="mono dim">{{ rec.density ?? '—' }}</td>
+                </tr>
+                <tr v-if="expandedHistory === rec.ts" class="hist-detail-row">
+                  <td colspan="7">
+                    <div class="hist-detail">
+                      <div v-if="rec.attributes?.primary?.length" class="attr-group">
+                        <div class="attr-group-title">主属性</div>
+                        <div class="attr-list">
+                          <span v-for="(a, i) in rec.attributes.primary" :key="'p'+i" class="attr-chip">{{ attrZh (rec, a.display) }}：{{ attrVal (a) }}</span>
+                        </div>
+                      </div>
+                      <div v-if="rec.attributes?.secondary?.length" class="attr-group">
+                        <div class="attr-group-title">副属性</div>
+                        <div class="attr-list">
+                          <span v-for="(a, i) in rec.attributes.secondary" :key="'s'+i" class="attr-chip">
+                            {{ attrZh (rec, a.display) }}：{{ attrVal (a) }}<em v-if="a.grade" class="attr-grade" :class="gradeCls (a.grade)">{{ a.grade }}</em>
+                          </span>
+                        </div>
+                      </div>
+                      <div v-if="!rec.attributes?.primary?.length && !rec.attributes?.secondary?.length" class="attr-empty">无属性数据</div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div></div>

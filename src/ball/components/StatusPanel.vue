@@ -62,9 +62,8 @@ const scanRow = computed (() => {
   const s = props.status.lastScan || {};
   if (s.ok == null) return { state: 'pending', v: '—' };
   if (!s.ok) return { state: 'bad', v: s.message || '未找到' };
-  const price = s.price ?? s.market;
   const name = s.zhName || s.name || '—';
-  return { state: 'ok', v: `${name} · ${fmtG (price)}` };
+  return { state: 'ok', v: `${name} · ${fmtG (s.price)}` };
 });
 
 function relTime (iso) {

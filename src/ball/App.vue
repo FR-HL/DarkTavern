@@ -81,7 +81,7 @@ function onScanResult (d) {
     return;
   }
   if (d.ok) {
-    const price = d.price ?? d.market;
+    const price = d.price ?? null;
     setTransient ('ok', '', 3000, {
       name: d.zhName || d.name || '',
       price,

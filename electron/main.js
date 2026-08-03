@@ -32,7 +32,7 @@ let ballDrag = null;
 let ballDragTimer = null;
 let lastCharKey = '';
 let lastSortRunning = false;
-let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', pricing: null, message: '', ts: 0 };
+let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', pricing: null, attributes: { primary: [], secondary: [] }, reverseAttributes: {}, message: '', ts: 0 };
 const BALL_COLLAPSED = { w: 82, h: 82 };
 const BALL_EXPANDED = { w: 340, h: 590 };
 
@@ -119,6 +119,8 @@ app.on ('ready', async () => {
       if (r.market !== undefined) lastScan.market = r.market;
       if (r.rarity !== undefined) lastScan.rarity = r.rarity;
       if (r.pricing !== undefined) lastScan.pricing = r.pricing;
+      if (r.attributes !== undefined) lastScan.attributes = r.attributes;
+      if (r.reverseAttributes !== undefined) lastScan.reverseAttributes = r.reverseAttributes;
       if (r.message !== undefined) lastScan.message = r.message;
       if (isNewScan) {
         lastScan.id = r.id;
@@ -708,6 +710,8 @@ function upsertHistoryRecord () {
     market: lastScan.market,
     vendor: lastScan.pricing?.vendor ?? null,
     density: lastScan.pricing?.density ?? null,
+    attributes: lastScan.attributes,
+    reverseAttributes: lastScan.reverseAttributes,
   };
   const last = priceHistory[priceHistory.length - 1];
   if (last && last.id === rec.id && last.ts === rec.ts) {

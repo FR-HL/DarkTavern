@@ -85,6 +85,11 @@ export function wire (overlay, sendBall = null) {
         rarity: result.data?.item?.rarity || '',
         id: result.data?.item?.id || result.data?.item?.item_id || '',
         pricing: result.data?.pricing || null,
+        attributes: {
+          primary: result.data?.item?.primary || [],
+          secondary: result.data?.item?.secondary || [],
+        },
+        reverseAttributes: result.data?.reverse_attributes || {},
       });
       queryMarketLive (result.data, scanId, (msg, payload) => {
         send (msg, payload);
