@@ -371,6 +371,137 @@ class LayoutPlanner:
         )
         return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
 
+    def _sized_group_key(self, item: Item) -> Tuple[str, str]:
+        """装备按部位分组；非装备按 item_id + 尺寸分组（同款同尺寸一组）。"""
+        slot = (getattr(item, "slot_type", "") or "").strip()
+        if slot:
+            return ("equip", slot)
+        iid = getattr(item, "item_id", "") or ""
+        return ("sized", f"{iid}|{item.width}x{item.height}")
+
+    def build_sized_groups(
+        self,
+        items: List[Item],
+        comparator: Optional[Callable[[Item, Item], int]] = None,
+    ) -> LayoutPlan:
+        """同款同尺寸分组 + 行式整块填充。
+
+        硬性要求：
+        - 同款物品必须相邻；一行只属于一种款（行满才换款）
+        - 组内整行连续铺（每行 per_row 件），余数行的空位不留给其他款
+        - 装备（按部位）置顶沿用贪心放置；非装备组按数量降序先占位
+        - 放不下的组进底部溢出区（现有机制）
+        """
+        self._reset()
+        self._learning_cache = {}
+        groups: Dict[Tuple[str, str], List[Item]] = {}
+        for itm in items:
+            key = self._sized_group_key(itm)
+            groups.setdefault(key, []).append(itm)
+
+        def group_sort_key(key):
+            kind, name = key
+            if kind == "equip":
+                try:
+                    idx = self.EQUIP_GROUP_ORDER.index(name)
+                except ValueError:
+                    idx = 1000
+                return (0, idx, name, 0, 0)
+            g = groups[key]
+            itm0 = g[0]
+            return (1, 0, "", -len(g), -(itm0.width * itm0.height * len(g)))
+
+        group_keys = sorted(groups.keys(), key=group_sort_key)
+        positions: Dict[int, Point] = {}
+        learning_payload: Dict[int, Dict[str, Any]] = {}
+        overflow: List[Item] = []
+        anchor = 0
+
+        for key in group_keys:
+            kind, name = key
+            group = groups[key]
+            if kind == "equip":
+                ordered = sorted(group, key=cmp_to_key(comparator)) if comparator else group
+                group_bottom = anchor
+                for itm in ordered:
+                    self._ensure_learning_cache(itm)
+                    slot = self._find_slot_for(itm, min_y=anchor)
+                    if slot is None:
+                        overflow.append(itm)
+                        continue
+                    self._mark(slot, itm)
+                    positions[id(itm)] = slot
+                    group_bottom = max(group_bottom, slot.y + itm.height - 1)
+                    record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+                    if record:
+                        learning_payload[id(itm)] = record
+                anchor = group_bottom + 1
+            else:
+                # 非装备组：行式整块填充，一行只属于一种款
+                itm0 = group[0]
+                w, h = itm0.width, itm0.height
+                n = len(group)
+                per_row = max(1, self.width // w)
+                rows_needed = (n + per_row - 1) // per_row
+                for i, itm in enumerate(group):
+                    self._ensure_learning_cache(itm)
+                    row = i // per_row
+                    col = i % per_row
+                    y = anchor + row * h
+                    x = col * w
+                    # 本行内顺移找位（保持同款同一行的硬性相邻）
+                    if not self._fits(itm, x, y):
+                        xx = x + 1
+                        while xx + w <= self.width and not self._fits(itm, xx, y):
+                            xx += 1
+                        if xx + w <= self.width:
+                            x = xx
+                    if self._fits(itm, x, y):
+                        pos = Point(x, y)
+                        self._mark(pos, itm)
+                        positions[id(itm)] = pos
+                        record = self._record_learning_assignment(itm, pos, comparator_used=bool(comparator))
+                        if record:
+                            learning_payload[id(itm)] = record
+                    else:
+                        # 本行被碎片占满 → 整组从锚点起找最近空位（保底）
+                        slot = self._find_slot_for(itm, min_y=anchor)
+                        if slot is None:
+                            overflow.append(itm)
+                            continue
+                        self._mark(slot, itm)
+                        positions[id(itm)] = slot
+                        record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+                        if record:
+                            learning_payload[id(itm)] = record
+                # 硬性：组占整行块（余数行空位不留给其他款），锚点整块推进
+                anchor = anchor + rows_needed * h
+
+        # Overflow band：放不下的组进底部溢出区（与 build_grouped 同款机制）
+        for itm in overflow:
+            self._ensure_learning_cache(itm)
+            slot = self._find_slot_for(itm, min_y=anchor)
+            if slot is None:
+                slot = self._find_slot_from_bottom(itm)
+            if slot is None:
+                raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
+            self._mark(slot, itm)
+            positions[id(itm)] = slot
+            anchor = max(anchor, slot.y + itm.height)
+            record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+            if record:
+                learning_payload[id(itm)] = record
+
+        execution_order = sorted(
+            [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
+            key=lambda entry: (
+                entry.target.y,
+                entry.target.x,
+                -(entry.item.width * entry.item.height),
+            ),
+        )
+        return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
+
     def _priority_key(self, item: Item) -> Tuple[int, int, int, int, str]:
         area = item.width * item.height
         rarity = getattr(item, "rarity", 0) or 0
@@ -1451,7 +1582,7 @@ class StashSorter:
         self.cancel_event = None
         self.pack_mode = bool(pack_mode)
         self.stack_mode = bool(stack_mode)
-        self.group_mode = group_mode if group_mode in ("none", "category") else "none"
+        self.group_mode = group_mode if group_mode in ("none", "category", "sized") else "none"
         self.character_id = character_id
         self.stash_id = stash_id
         self.overlay_session: Optional[Union[SortOverlaySession, NullOverlaySession]] = None
@@ -2300,6 +2431,8 @@ class StashSorter:
             try:
                 if self.group_mode == "category":
                     plan = planner.build_grouped(items, comparator=comparator)
+                elif self.group_mode == "sized":
+                    plan = planner.build_sized_groups(items, comparator=comparator)
                 else:
                     plan = planner.build(items, comparator=comparator)
                 if fallback_used and comparator is None:
@@ -2309,7 +2442,7 @@ class StashSorter:
                 break
             except LayoutPlanError as exc:
                 if comparator is None:
-                    if self.group_mode == "category":
+                    if self.group_mode in ("category", "sized"):
                         logger.warning("Category layout failed; retrying with plain layout: %s", exc)
                         fallback_used = True
                         try:

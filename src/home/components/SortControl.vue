@@ -42,6 +42,7 @@ const SORT_PRESETS = [
   },
   {
     id: 'test', label: '测试',
+    groupMode: 'sized',
     order: [
       { field: 'name', direction: 'asc' },
       { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
@@ -145,6 +146,7 @@ async function loadSortOrder () {
       invoke ('dnd:sort-group-get'),
     ]);
     if (g && g.mode === 'category') { sortPreset.value = 'category'; return; }
+    if (g && g.mode === 'sized') { sortPreset.value = 'test'; return; }
     if (d && Array.isArray (d.order)) {
       const hit = SORT_PRESETS.find (p => samePreset (d.order, p.order));
       sortPreset.value = hit ? hit.id : 'default';
