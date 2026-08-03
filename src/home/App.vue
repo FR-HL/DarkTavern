@@ -10,7 +10,8 @@ import donorLidand from '@assets/images/sponsors/lidang.webp';
 import donorMobao from '@assets/images/sponsors/mobao.webp';
 
 import StashPane from './components/StashPane.vue';
-import SortPane from './components/SortPane.vue';
+import StashView from './components/StashView.vue';
+import SortControl from './components/SortControl.vue';
 import PacketPane from './components/PacketPane.vue';
 
 const invoke = (channel, data) => window.electron.invoke (channel, data);
@@ -77,6 +78,41 @@ const enInput = ref ('');
 // ── 设置页 · 开发者工具 ──
 const developerMode = ref (false);
 const devCard = ref ('');
+
+// ── 仓库整理 · 共享状态 ──
+const sortCharId = ref ('');
+const sortStashId = ref ('');
+const sortEquipment = ref (false);
+const sortActiveCharId = ref ('');
+const sortPack = ref (true);
+const sortStack = ref (true);
+const sortIncludeInv = ref (true);
+
+async function saveSortConfig () {
+  try {
+    await invoke ('dnd:sort-config-save', {
+      character_id: sortCharId.value,
+      stash_id: sortStashId.value,
+      pack_mode: sortPack.value,
+      stack_mode: sortStack.value,
+      include_inventory: sortIncludeInv.value,
+    });
+  } catch (e) {}
+}
+
+async function restoreSortConfig () {
+  try {
+    const cfg = await invoke ('dnd:sort-config-get');
+    if (!cfg) return;
+    if (cfg.character_id) sortCharId.value = cfg.character_id;
+    if (cfg.stash_id) sortStashId.value = cfg.stash_id;
+    sortPack.value = !!cfg.pack_mode;
+    sortStack.value = !!cfg.stack_mode;
+    sortIncludeInv.value = !!cfg.include_inventory;
+  } catch (e) {}
+}
+
+watch ([sortCharId, sortStashId, sortPack, sortStack, sortIncludeInv], saveSortConfig);
 
 let lastMappings = -1;
 let toastTimer = null;
@@ -490,6 +526,7 @@ onMounted (() => {
   fetchHealth ();
   fetchGameState ();
   loadSettings ();
+  restoreSortConfig ();
 });
 
 onBeforeUnmount (() => {
@@ -524,6 +561,10 @@ onBeforeUnmount (() => {
         <div class="nav-cap">仓库工具</div>
         <div class="nav-item" :class="{ active: pane === 'stash' }" @click="showPane('stash')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+          仓库管理
+        </div>
+        <div class="nav-item" :class="{ active: pane === 'sort' }" @click="showPane('sort')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 9 6"/><polyline points="3 12 15 12"/><polyline points="3 18 21 18"/></svg>
           仓库整理
         </div>
         <div class="nav-cap">更多</div>
@@ -850,10 +891,32 @@ onBeforeUnmount (() => {
         </template>
       </div>
 
-      <!-- ============ 仓库整理 ============ -->
+      <!-- ============ 仓库管理 ============ -->
       <div class="pane" :class="{ active: pane === 'stash' }" v-if="pane === 'stash'">
-        <StashPane />
-        <SortPane />
+        <StashView
+          :char-id="sortCharId"
+          :stash-id="sortStashId"
+          @update:char-id="v => sortCharId = v"
+          @update:stash-id="v => sortStashId = v"
+          @update:equipment="v => sortEquipment = v"
+          @update:active="v => sortActiveCharId = v"
+        />
+      </div>
+
+      <!-- ============ 仓库整理 ============ -->
+      <div class="pane" :class="{ active: pane === 'sort' }" v-if="pane === 'sort'">
+        <SortControl
+          :char-id="sortCharId"
+          :stash-id="sortStashId"
+          :equipment="sortEquipment"
+          :active-char-id="sortActiveCharId"
+          :pack-mode="sortPack"
+          :stack-mode="sortStack"
+          :include-inv="sortIncludeInv"
+          @update:pack-mode="v => sortPack = v"
+          @update:stack-mode="v => sortStack = v"
+          @update:include-inv="v => sortIncludeInv = v"
+        />
       </div>
 
       <!-- ============ 关于酒馆 ============ -->
