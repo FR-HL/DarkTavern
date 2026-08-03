@@ -20,6 +20,8 @@ const status = reactive ({
   sortOk: false,
   charJustUpdated: false,
   character: null,
+  frontStash: null,
+  stashJustChanged: false,
   lastScan: { ok: null, name: '', price: null, market: null, message: '' },
 });
 
@@ -47,6 +49,7 @@ const center = computed (() => {
     if (t.kind === 'sortok') return { t1: '✓', t2: '完成', cls: 'ok' };
     if (t.kind === 'sortfail') return { t1: '✗', t2: '失败', cls: 'bad' };
     if (t.kind === 'char') return { t1: t.sub, t2: '已更新', cls: 'busy', small: true };
+    if (t.kind === 'stash') return { t1: t.sub, t2: '已切换', cls: 'busy', small: true };
   }
   if (!status.ocr) return { t1: '故障', t2: '', cls: 'bad' };
   if (status.sortingRunning) return { t1: '整理', t2: '', cls: 'busy' };
@@ -95,6 +98,9 @@ function onStatus (d) {
   if (d.charJustUpdated && d.character) {
     const cls = cnClass (d.character.cls) || '角色';
     setTransient ('char', cls, 3000);
+  }
+  if (d.stashJustChanged && d.frontStash) {
+    setTransient ('stash', d.frontStash.label || '仓库', 3000);
   }
   if (d.sortJustFinished) {
     setTransient (d.sortOk ? 'sortok' : 'sortfail', '', 3000);

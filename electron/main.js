@@ -35,6 +35,10 @@ let ballDragTimer = null;
 let lastCharKey = '';
 let lastSortRunning = false;
 let sessionScanCount = 0;
+let lastStashKey = '';
+let frontStash = null;
+let frontStashList = [];
+let stashJustChanged = false;
 let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', pricing: null, attributes: { primary: [], secondary: [] }, reverseAttributes: {}, message: '', ts: 0 };
 const BALL_SIZE = { w: 82, h: 82 };
 
@@ -197,6 +201,25 @@ app.on ('ready', async () => {
     logger.error (`Failed to register ball lock hotkey: ${e.message}`);
   }
 
+  // ── 前端仓库页状态与切换 ──
+
+  ipcMain.handle ('stash:set-current', (e, data = {}) => {
+    if (data.list && Array.isArray (data.list)) frontStashList = data.list;
+    if (data.id != null) {
+      const label = data.label || '';
+      const changed = !frontStash || frontStash.id !== data.id;
+      frontStash = { id: String (data.id), label };
+      if (changed) {
+        stashJustChanged = true;
+        pushBallStatus ();
+      }
+    }
+    return { success: true };
+  });
+  ipcMain.handle ('stash:get-state', () => ({ current: frontStash, list: frontStashList }));
+
+  registerStashHotkeys ();
+
   // ── 查价记录 IPC ──
 
   ipcMain.handle ('history:list', () => {
@@ -282,6 +305,8 @@ app.on ('ready', async () => {
     launch_on_startup: !!settings.general.launch_on_startup,
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+F11',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+F12',
+    stash_next_key: settings.dnd?.stash_next_key || 'Ctrl+Tab',
+    stash_default_key: settings.dnd?.stash_default_key || 'Ctrl+E',
     developer_mode: !!settings.general.developer_mode,
     theme: settings.general.theme === 'dark' ? 'dark' : 'light',
   }));
@@ -303,6 +328,15 @@ app.on ('ready', async () => {
     if (data.cancel_hotkey !== undefined && data.cancel_hotkey !== settings.dnd.cancel_hotkey) {
       settings.dnd.cancel_hotkey = data.cancel_hotkey;
       needSortReregister = true;
+    }
+    let needStashReregister = false;
+    if (data.stash_next_key !== undefined && data.stash_next_key !== settings.dnd.stash_next_key) {
+      settings.dnd.stash_next_key = data.stash_next_key;
+      needStashReregister = true;
+    }
+    if (data.stash_default_key !== undefined && data.stash_default_key !== settings.dnd.stash_default_key) {
+      settings.dnd.stash_default_key = data.stash_default_key;
+      needStashReregister = true;
     }
     if (data.developer_mode !== undefined) {
       settings.general.developer_mode = !!data.developer_mode;
@@ -329,6 +363,7 @@ app.on ('ready', async () => {
     if (needSend) overlay.webContents.send ('settings', settings);
     if (needReregister) registerScanHotkey (overlay);
     if (needSortReregister) registerSortHotkeys ();
+    if (needStashReregister) registerStashHotkeys ();
     pushBallStatus ();
     return { success: true };
   });
@@ -390,6 +425,77 @@ async function registerScanHotkey (overlay) {
 
 function notifyHome (event, data) {
   if (homeWindow && !homeWindow.isDestroyed ()) homeWindow.webContents.send (event, data);
+}
+
+// ── 前端仓库页切换快捷键 ──
+
+let registeredStashKeys = null;
+
+function switchFrontStash (targetId, label) {
+  if (targetId == null) {
+    notifyHome ('stash:notify', { type: 'error', message: '没有可切换的仓库（请先在角色仓库页加载角色）' });
+    return;
+  }
+  notifyHome ('stash:switch-to', { stash_id: String (targetId), label: label || '' });
+  // 回传状态（不依赖仓库页是否打开）：主进程直接更新 frontStash 并推送悬浮球
+  const changed = !frontStash || frontStash.id !== String (targetId);
+  frontStash = { id: String (targetId), label: label || '' };
+  if (changed) {
+    stashJustChanged = true;
+    pushBallStatus ();
+  }
+}
+
+function registerStashHotkeys () {
+  const nextKey = settings.dnd?.stash_next_key || 'Ctrl+Tab';
+  const defaultKey = settings.dnd?.stash_default_key || 'Ctrl+E';
+
+  if (registeredStashKeys) {
+    for (const k of registeredStashKeys) {
+      try { globalShortcut.unregister (k); } catch (e) {}
+    }
+    registeredStashKeys = null;
+  }
+  const registered = [];
+
+  const register = (accel, cb) => {
+    try {
+      globalShortcut.register (accel, cb);
+      registered.push (accel);
+    } catch (e) {
+      logger.error (`Failed to register stash hotkey ${accel}: ${e.message}`);
+    }
+  };
+
+  // 循环切换：列表中当前页 → 下一个
+  register (nextKey, () => {
+    const list = frontStashList;
+    if (!list.length) { switchFrontStash (null); return; }
+    const cur = frontStash?.id != null ? String (frontStash.id) : null;
+    const idx = cur ? list.findIndex (s => String (s.id) === cur) : -1;
+    const next = list[(idx + 1) % list.length];
+    switchFrontStash (next.id, next.label);
+  });
+  logger.info (`Stash next hotkey: ${nextKey}`);
+
+  // 切默认：列表第一个
+  register (defaultKey, () => {
+    if (!frontStashList.length) { switchFrontStash (null); return; }
+    const first = frontStashList[0];
+    switchFrontStash (first.id, first.label);
+  });
+  logger.info (`Stash default hotkey: ${defaultKey}`);
+
+  // 直达：Alt+1..8（固定）
+  for (let i = 0; i < 8; i++) {
+    register (`Alt+${i + 1}`, () => {
+      const item = frontStashList[i];
+      if (!item) { switchFrontStash (null); return; }
+      switchFrontStash (item.id, item.label);
+    });
+  }
+
+  registeredStashKeys = registered;
 }
 
 let registeredSortKeys = null;
@@ -661,6 +767,10 @@ async function gatherBallStatus () {
   const sortJustFinished = lastSortRunning && !sorting.running && (!!sorting.result || !!sorting.error);
   lastSortRunning = !!sorting.running;
 
+  // 前端仓库页变化标记（一次性，推送后清除）
+  const stashChanged = stashJustChanged;
+  stashJustChanged = false;
+
   let lastSortText = '';
   if (sorting.result) {
     lastSortText = sorting.result.success ? '成功 ✓' : ('失败：' + (sorting.result.message || ''));
@@ -684,6 +794,8 @@ async function gatherBallStatus () {
     sortJustFinished,
     sortOk: !!sorting.result?.success,
     lastSortText,
+    frontStash,
+    stashJustChanged: stashChanged,
     character: current ? {
       nickname: current.nickname,
       cls: current.class,

@@ -29,6 +29,8 @@ const defaults = {
   dnd: {
     sort_hotkey: 'Ctrl+F11',
     cancel_hotkey: 'Ctrl+F12',
+    stash_next_key: 'Ctrl+Tab',
+    stash_default_key: 'Ctrl+E',
     capture_interface: 'Ethernet',
     capture_port_low: 20200,
     capture_port_high: 20300,
@@ -74,6 +76,8 @@ settings.hotkeys.run_price_check = settings.hotkeys.run_price_check || 'XButton1
 
 settings.dnd.sort_hotkey = settings.dnd.sort_hotkey || 'Ctrl+F11';
 settings.dnd.cancel_hotkey = settings.dnd.cancel_hotkey || 'Ctrl+F12';
+settings.dnd.stash_next_key = settings.dnd.stash_next_key || 'Ctrl+Tab';
+settings.dnd.stash_default_key = settings.dnd.stash_default_key || 'Ctrl+E';
 settings.dnd.capture_interface = settings.dnd.capture_interface || 'Ethernet';
 settings.dnd.capture_port_low = parseInt (settings.dnd.capture_port_low) || 20200;
 settings.dnd.capture_port_high = parseInt (settings.dnd.capture_port_high) || 20300;

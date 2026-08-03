@@ -10,6 +10,67 @@ const emit = defineEmits ([ 'update:charId', 'update:stashId', 'update:equipment
 
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
+// ── 仓库切换快捷键 ──
+const stashNextKey = ref ('Ctrl+Tab');
+const stashDefaultKey = ref ('Ctrl+E');
+const listeningKey = ref (null);
+const newKey = ref (null);
+
+function keyLabel () {
+  if (listeningKey.value) return '等待输入…（按 Esc 取消）';
+  return newKey.value || '点击此处，然后按下新按键';
+}
+
+function startKeyListen (target) { listeningKey.value = target; newKey.value = null; }
+function stopKeyListen () { listeningKey.value = null; }
+
+function onKeyDown (e) {
+  if (!listeningKey.value) return;
+  e.preventDefault ();
+  if (e.key === 'Escape') { listeningKey.value = null; newKey.value = null; return; }
+  if (['F5', 'F6', 'F7', 'F8'].includes (e.key)) return;
+  let key = '';
+  if (e.ctrlKey) key += 'Ctrl+';
+  if (e.altKey) key += 'Alt+';
+  if (e.shiftKey) key += 'Shift+';
+  if (e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift') return;
+  const base = e.key.length === 1 ? e.key.toUpperCase () : e.key;
+  key += base;
+  if (['F1', 'F2', 'F3', 'F4', 'F9', 'F10', 'F11', 'F12', 'Home', 'End', 'PageUp', 'PageDown', 'Insert', 'Delete'].includes (base) || key.includes ('+')) {
+    newKey.value = key;
+    listeningKey.value = null;
+  }
+}
+
+async function saveKey (field, target) {
+  if (!newKey.value) return;
+  const r = await invoke ('settings:save', { [field]: newKey.value });
+  if (r?.success) {
+    if (target === 'next') stashNextKey.value = newKey.value;
+    else stashDefaultKey.value = newKey.value;
+    newKey.value = null;
+  }
+}
+
+async function loadKeys () {
+  try {
+    const d = await invoke ('settings:get');
+    if (d?.stash_next_key) stashNextKey.value = d.stash_next_key;
+    if (d?.stash_default_key) stashDefaultKey.value = d.stash_default_key;
+  } catch (e) {}
+}
+
+// ── 仓库状态上报（悬浮球同步） ──
+function reportStashState () {
+  const list = stashList.value.map (s => ({ id: s.id, label: s.label }));
+  const cur = list.find (s => s.id === props.stashId) || list[0] || null;
+  invoke ('stash:set-current', {
+    list,
+    id: cur ? cur.id : null,
+    label: cur ? cur.label : '',
+  });
+}
+
 const characters = ref ([]);
 const selected = ref (null);
 const charData = ref (null);
@@ -233,21 +294,63 @@ onMounted (async () => {
     selected.value = props.charId;
     await loadCharData (props.charId);
   }
+  loadKeys ();
+  document.addEventListener ('keydown', onKeyDown);
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
   connectEvents ();
+  reportStashState ();
 });
 
 onBeforeUnmount (() => {
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
+  document.removeEventListener ('keydown', onKeyDown);
   window.removeEventListener ('dnd:characters-refresh', onCharactersRefresh);
 });
+
+watch (stashList, () => reportStashState ());
+watch (() => props.stashId, () => reportStashState ());
 </script>
 
 <template>
   <div>
     <StashPane />
+
+    <!-- 仓库切换快捷键 -->
+    <div class="sec">
+      <div class="sec-label">仓库切换快捷键</div>
+      <div class="card">
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">循环切换仓库</div>
+            <div class="srow-d">在仓库列表中循环切换下一个仓库</div>
+          </div>
+          <div class="srow-ctl">
+            <span class="kbd">{{ stashNextKey }}</span>
+            <button class="keybind-btn" :class="{ listening: listeningKey === 'next' }" @click="startKeyListen('next')">{{ keyLabel() }}</button>
+            <button class="btn primary" @click="saveKey('stash_next_key', 'next')">保存</button>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">切默认仓库</div>
+            <div class="srow-d">切换到仓库列表第一个仓库</div>
+          </div>
+          <div class="srow-ctl">
+            <span class="kbd">{{ stashDefaultKey }}</span>
+            <button class="keybind-btn" :class="{ listening: listeningKey === 'default' }" @click="startKeyListen('default')">{{ keyLabel() }}</button>
+            <button class="btn primary" @click="saveKey('stash_default_key', 'default')">保存</button>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">直达仓库页</div>
+            <div class="srow-d">Alt+1–8 直达仓库列表第 1–8 个仓库（固定）</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- 角色选择 -->
     <div class="sec" v-if="characters.length">

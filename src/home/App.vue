@@ -583,6 +583,11 @@ onMounted (() => {
   window.electron.on ('history:updated', () => {
     if (pane.value === 'history') loadHistory ();
   });
+  window.electron.on ('stash:switch-to', (d) => {
+    if (!d?.stash_id) return;
+    sortStashId.value = String (d.stash_id);
+    invoke ('stash:set-current', { id: String (d.stash_id), label: d.label || '' });
+  });
   document.addEventListener ('keydown', onKeyDown);
   document.addEventListener ('mousedown', onMouseDown);
   uptimeTimer = setInterval (tick, 1000);
