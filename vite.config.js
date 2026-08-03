@@ -18,6 +18,7 @@ export default defineConfig ({
       input: {
         home: resolve (__dirname, 'src/home/index.html'),
         overlay: resolve (__dirname, 'src/overlay/index.html'),
+        ball: resolve (__dirname, 'src/ball/index.html'),
       }
     },
     outDir: resolve (__dirname, 'dist'),

@@ -1,4 +1,4 @@
-import electron, { globalShortcut, Menu, shell, Tray } from 'electron';
+import electron, { globalShortcut, Menu, screen, shell, Tray } from 'electron';
 import { basename, join } from 'node:path';
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE } from './config.js';
@@ -17,6 +17,19 @@ let pendingPane = null;
 let previousScanAccelerator = null;
 let ocrStatus = false;
 const RESERVED_KEYS = ['F5', 'F6', 'F7', 'F8'];
+
+// ── 悬浮球状态 ──
+let ballWindow = null;
+let ballLocked = !!settings.general.ball_locked;
+let ballScanning = false;
+let ballExpanded = false;
+let ballStatusTimer = null;
+let lastBallStatus = null;
+let lastBallSave = 0;
+let ballDrag = null;
+let ballDragTimer = null;
+const BALL_COLLAPSED = { w: 76, h: 76 };
+const BALL_EXPANDED = { w: 340, h: 470 };
 
 process.on ('uncaughtException', (e) => logger.error ('Uncaught Exception:', e));
 process.on ('unhandledRejection', (r) => logger.error (`Unhandled Rejection: ${r}`));
@@ -44,6 +57,8 @@ app.on ('second-instance', () => {});
 app.on ('before-quit', () => {
   globalShortcut.unregisterAll ();
   if (healthTimer) { clearInterval (healthTimer); healthTimer = null; }
+  if (ballStatusTimer) { clearInterval (ballStatusTimer); ballStatusTimer = null; }
+  if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
   backend.stopService ();
   stopTracking ();
 });
@@ -62,6 +77,7 @@ app.on ('ready', async () => {
   setOnStateChange ((gameOk) => {
     refreshTrayMenu ();
     if (homeWindow) homeWindow.webContents.send ('game:status', { found: gameOk });
+    pushBallStatus ();
   });
 
   let overlay = new BrowserWindow ({
@@ -84,7 +100,10 @@ app.on ('ready', async () => {
   overlay.loadFile (join (ROOT, 'dist', 'overlay', 'index.html'));
 
   startTracking (overlay);
-  wire (overlay);
+  wire (overlay, (data) => {
+    ballScanning = !!data?.active;
+    pushBallStatus ();
+  });
 
   globalShortcut.register ('F5', () => openSettingsWindow ('settings'));
   globalShortcut.register ('F6', () => openSettingsWindow ('mapping'));
@@ -97,6 +116,44 @@ app.on ('ready', async () => {
 
   registerScanHotkey (overlay);
   registerSortHotkeys ();
+
+  // ── 悬浮球 IPC ──
+
+  ipcMain.handle ('ball:get-status', () => gatherBallStatus ());
+  ipcMain.handle ('ball:resize', (e, data) => setBallExpanded (!!data?.expanded));
+  ipcMain.handle ('ball:menu', () => popupBallMenu ());
+  ipcMain.handle ('ball:open-home', () => openHomeWindow ());
+  ipcMain.handle ('ball:open-settings', () => openSettingsWindow ('settings'));
+
+  ipcMain.handle ('ball:drag-start', () => {
+    if (!ballWindow || ballWindow.isDestroyed ()) return;
+    const [wx, wy] = ballWindow.getPosition ();
+    const c = screen.getCursorScreenPoint ();
+    ballDrag = { wx, wy, cx: c.x, cy: c.y, moved: false };
+    if (ballDragTimer) clearInterval (ballDragTimer);
+    ballDragTimer = setInterval (() => {
+      if (!ballDrag || !ballWindow || ballWindow.isDestroyed ()) return;
+      const cur = screen.getCursorScreenPoint ();
+      const dx = cur.x - ballDrag.cx;
+      const dy = cur.y - ballDrag.cy;
+      if (!ballDrag.moved && Math.abs (dx) + Math.abs (dy) > 3) ballDrag.moved = true;
+      if (ballDrag.moved) ballWindow.setPosition (Math.round (ballDrag.wx + dx), Math.round (ballDrag.wy + dy));
+    }, 16);
+  });
+  ipcMain.handle ('ball:drag-end', () => {
+    const moved = ballDrag?.moved || false;
+    if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
+    ballDrag = null;
+    saveBallPos ();
+    return { moved };
+  });
+
+  try {
+    globalShortcut.register ('CommandOrControl+Alt+B', () => setBallLocked (!ballLocked));
+    logger.info ('Ball lock hotkey: Ctrl+Alt+B');
+  } catch (e) {
+    logger.error (`Failed to register ball lock hotkey: ${e.message}`);
+  }
 
   // ── DnD Tools IPC handlers ──
 
@@ -194,10 +251,12 @@ app.on ('ready', async () => {
     saveSettings ();
     if (needSend) overlay.webContents.send ('settings', settings);
     if (needReregister) registerScanHotkey (overlay);
+    pushBallStatus ();
     return { success: true };
   });
 
   openHomeWindow ();
+  createBallWindow ();
 });
 
 async function registerScanHotkey (overlay) {
@@ -341,6 +400,162 @@ function openHomeWindow () {
   homeWindow.on ('closed', () => { homeWindow = null; });
 }
 
+// ── 悬浮球 ──
+
+function defaultBallPos () {
+  const wa = screen.getPrimaryDisplay ().workArea;
+  return {
+    x: wa.x + wa.width - BALL_COLLAPSED.w - 24,
+    y: wa.y + Math.round ((wa.height - BALL_COLLAPSED.h) / 2),
+  };
+}
+
+function ballPosFromSettings () {
+  const x = settings.general.ball_x;
+  const y = settings.general.ball_y;
+  if (x == null || y == null) return defaultBallPos ();
+
+  const wa = screen.getDisplayMatching ({ x, y, width: 20, height: 20 }).workArea;
+  return {
+    x: Math.min (Math.max (x, wa.x), wa.x + wa.width - BALL_COLLAPSED.w),
+    y: Math.min (Math.max (y, wa.y), wa.y + wa.height - BALL_COLLAPSED.h),
+  };
+}
+
+function saveBallPos () {
+  if (!ballWindow) return;
+  const now = Date.now ();
+  if (now - lastBallSave < 500) return;
+  lastBallSave = now;
+  const [x, y] = ballWindow.getPosition ();
+  settings.general.ball_x = x;
+  settings.general.ball_y = y;
+  saveSettings ();
+}
+
+function createBallWindow () {
+  if (ballWindow) return;
+
+  const pos = ballPosFromSettings ();
+
+  ballWindow = new BrowserWindow ({
+    width: BALL_COLLAPSED.w,
+    height: BALL_COLLAPSED.h,
+    x: pos.x,
+    y: pos.y,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    show: false,
+    webPreferences: {
+      preload: join (SOURCE, 'preload.cjs'),
+      sandbox: false,
+      backgroundThrottling: true,
+    },
+  });
+
+  ballWindow.setAlwaysOnTop (true, 'screen-saver');
+  ballWindow.setVisibleOnAllWorkspaces (true);
+  ballWindow.loadFile (join (ROOT, 'dist', 'ball', 'index.html'));
+
+  ballWindow.once ('ready-to-show', () => {
+    ballWindow.show ();
+    applyBallLock ();
+  });
+  ballWindow.on ('move', saveBallPos);
+  ballWindow.on ('blur', () => {
+    if (ballWindow && !ballWindow.isDestroyed ()) ballWindow.webContents.send ('ball:blur');
+  });
+  ballWindow.on ('closed', () => {
+    ballWindow = null;
+    if (ballStatusTimer) { clearInterval (ballStatusTimer); ballStatusTimer = null; }
+    if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
+    ballDrag = null;
+  });
+
+  ballStatusTimer = setInterval (pushBallStatus, 2000);
+}
+
+function applyBallLock () {
+  if (!ballWindow) return;
+  ballWindow.setIgnoreMouseEvents (ballLocked, { forward: true });
+  if (ballLocked && ballExpanded) setBallExpanded (false);
+}
+
+function setBallLocked (locked) {
+  if (ballLocked === locked) return;
+  ballLocked = locked;
+  settings.general.ball_locked = locked;
+  saveSettings ();
+  applyBallLock ();
+  pushBallStatus ();
+  refreshTrayMenu ();
+}
+
+function setBallExpanded (expanded) {
+  ballExpanded = expanded;
+  if (!ballWindow || ballWindow.isDestroyed ()) return;
+
+  const size = expanded ? BALL_EXPANDED : BALL_COLLAPSED;
+  let [x, y] = ballWindow.getPosition ();
+  const wa = screen.getDisplayMatching ({ x, y, width: 20, height: 20 }).workArea;
+  x = Math.min (Math.max (x, wa.x), wa.x + wa.width - size.w);
+  y = Math.min (Math.max (y, wa.y), wa.y + wa.height - size.h);
+  ballWindow.setBounds ({ x, y, width: size.w, height: size.h });
+}
+
+function popupBallMenu () {
+  if (!ballWindow) return;
+
+  Menu.buildFromTemplate ([
+    { label: ballLocked ? '解锁悬浮球' : '锁定悬浮球', click: () => setBallLocked (!ballLocked) },
+    { type: 'separator' },
+    { label: '打开主页', click: () => openHomeWindow () },
+    { label: '查价器设置', click: () => openSettingsWindow ('settings') },
+    { type: 'separator' },
+    { label: '退出', click: () => app.quit () },
+  ]).popup ({ window: ballWindow });
+}
+
+async function gatherBallStatus () {
+  let health = null;
+  try { health = await backend.healthRaw (); } catch (e) {}
+
+  let capture = { running: false };
+  let sorting = { running: false };
+  try { capture = (await backend.captureStatus ()) || capture; } catch (e) {}
+  try { sorting = (await backend.sortStatus ()) || sorting; } catch (e) {}
+
+  return {
+    locked: ballLocked,
+    ocr: !!(health && health.status === 'ok'),
+    version: health?.version || '—',
+    mappings: health?.mappings || 0,
+    game: getCanScan (),
+    scanKey: settings.hotkeys.run_price_check || 'XButton1',
+    apiKey: !!settings.general.api_key,
+    captureRunning: !!capture.running,
+    sortingRunning: !!sorting.running,
+    scanning: ballScanning,
+  };
+}
+
+async function pushBallStatus () {
+  if (!ballWindow || ballWindow.isDestroyed ()) return;
+  try {
+    const status = await gatherBallStatus ();
+    const serialized = JSON.stringify (status);
+    if (serialized !== lastBallStatus) {
+      lastBallStatus = serialized;
+      ballWindow.webContents.send ('ball:status', status);
+    }
+  } catch (e) {
+    logger.error (`Ball status push failed: ${e.message}`);
+  }
+}
+
 async function refreshTrayMenu () {
   if (!tray) return;
 
@@ -358,9 +573,12 @@ async function refreshTrayMenu () {
     { label: `${dot (gameOk)} 游戏窗口：${gameOk ? '已检测到' : '未检测到'}`, enabled: false },
     { type: 'separator' },
     { label: '主页', click: () => openHomeWindow () },
+    { label: `${ballLocked ? '○' : '●'} 悬浮球：${ballLocked ? '已锁定' : '已解锁'}（点击切换）`, click: () => setBallLocked (!ballLocked) },
     { type: 'separator' },
     { label: '日志文件夹', click: () => shell.openPath (logPath) },
     { type: 'separator' },
     { label: '退出', click: () => app.quit () }
   ]));
+
+  pushBallStatus ();
 }

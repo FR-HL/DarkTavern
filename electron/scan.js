@@ -13,8 +13,9 @@ let scanning = false;
 let cache = { text: null, result: null, ts: 0 };
 const CACHE_TTL = 10000;
 
-export function wire (overlay) {
+export function wire (overlay, sendBall = null) {
   const send = (msg, data) => overlay.webContents.send (msg, data);
+  const markScan = (active) => { if (sendBall) sendBall ({ active }); };
 
   ipcMain.on ('ready', () => {
     logger.info ('Frontend ready');
@@ -31,6 +32,7 @@ export function wire (overlay) {
     const source = data?.source || 'auto';
     if (scanning) return;
     scanning = true;
+    markScan (true);
 
     if (source === 'manual') {
       overlay.setAlwaysOnTop (true, 'screen-saver');
@@ -42,6 +44,7 @@ export function wire (overlay) {
       if (source === 'manual') send ('clear', { scanId });
       send ('scan:finish');
       scanning = false;
+      markScan (false);
       return;
     }
 
@@ -56,6 +59,7 @@ export function wire (overlay) {
       if (source === 'manual') send ('clear', { scanId });
       send ('scan:finish');
       scanning = false;
+      markScan (false);
       return;
     }
 
@@ -84,6 +88,7 @@ export function wire (overlay) {
 
     send ('scan:finish');
     scanning = false;
+    markScan (false);
   });
 
   ipcMain.handle ('backend:health', () => backend.healthRaw ());

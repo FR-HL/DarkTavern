@@ -16,6 +16,9 @@ const defaults = {
     default_mode: 'manual',
     python_path: 'python',
     api_key: '',
+    ball_x: null,
+    ball_y: null,
+    ball_locked: false,
   },
   hotkeys: {
     run_price_check: 'XButton1',
@@ -57,6 +60,9 @@ settings.general.scale = parseFloat (settings.general.scale || '1.0');
 settings.general.default_mode = settings.general.default_mode || 'manual';
 settings.general.python_path = settings.general.python_path || 'python';
 settings.general.api_key = settings.general.api_key || '';
+settings.general.ball_x = settings.general.ball_x == null ? null : parseInt (settings.general.ball_x) || null;
+settings.general.ball_y = settings.general.ball_y == null ? null : parseInt (settings.general.ball_y) || null;
+settings.general.ball_locked = toBool (settings.general.ball_locked);
 
 settings.hotkeys.run_price_check = settings.hotkeys.run_price_check || 'XButton1';
 
