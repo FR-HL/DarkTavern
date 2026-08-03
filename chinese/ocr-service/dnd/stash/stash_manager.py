@@ -1010,8 +1010,7 @@ class StashManager:
         # ── Auto-select the correct stash tab ──
         stash_type_int = int(stash_id)
         auto_stash = macros.settings_manager.get('autoStashSelection', True)
-        mapping = macros.settings_manager.get('stashTabMapping') or []
-        mapping_configured = any(v != 0 for v in mapping)
+        mapping_configured = bool(macros.STASH_TYPE_TO_TAB_INDEX)
         calibrated = macros.has_calibration_saved()
 
         if not auto_stash:

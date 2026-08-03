@@ -217,6 +217,10 @@ app.on ('ready', async () => {
     return { success: true };
   });
   ipcMain.handle ('stash:get-state', () => ({ current: frontStash, list: frontStashList }));
+  ipcMain.handle ('stash:switch-in-game', async (e, data = {}) => {
+    if (data.stash_id == null) return { success: false, switched: false, reason: 'invalid_stash_id' };
+    return await switchInGameStash (String (data.stash_id));
+  });
 
   registerStashHotkeys ();
 
@@ -427,11 +431,42 @@ function notifyHome (event, data) {
 
 let registeredStashKeys = null;
 
+// 联动游戏内切换：点击游戏内对应仓库标签（尽力而为）。
+// 游戏未开 / 标签映射未配置 / 背包装备页等场景直接跳过，仅提示。
+async function switchInGameStash (stashId) {
+  try {
+    const r = await backend.switchStash (stashId);
+    if (r && r.switched === true) {
+      logger.info (`In-game stash switched to ${stashId}`);
+      return r;
+    }
+    const reason = r?.reason || 'unknown';
+    const messages = {
+      game_not_found: '未检测到游戏窗口，仅切换前端显示',
+      mapping_not_configured: '仓库标签映射未配置，仅切换前端显示',
+      uipi_blocked: '游戏以管理员权限运行，鼠标模拟被拦截，仅切换前端显示',
+      click_failed: '游戏内仓库标签切换失败，仅切换前端显示',
+    };
+    const msg = messages[reason];
+    if (msg) {
+      notifyHome ('stash:notify', { type: 'info', message: msg });
+    } else if (reason !== 'no_tab') {
+      logger.warn (`In-game stash switch skipped (${reason}) for stash ${stashId}`);
+    }
+    return r || { success: false, switched: false, reason: 'service_unavailable' };
+  } catch (e) {
+    logger.error (`In-game stash switch failed: ${e.message}`);
+    return { success: false, switched: false, reason: 'error' };
+  }
+}
+
 function switchFrontStash (targetId, label) {
   if (targetId == null) {
     notifyHome ('stash:notify', { type: 'error', message: '没有可切换的仓库（请先在角色仓库页加载角色）' });
     return;
   }
+  // 异步联动游戏内标签，不阻塞前端切换
+  switchInGameStash (String (targetId));
   notifyHome ('stash:switch-to', { stash_id: String (targetId), label: label || '' });
   // 回传状态（不依赖仓库页是否打开）：主进程直接更新 frontStash 并推送悬浮球
   const changed = !frontStash || frontStash.id !== String (targetId);

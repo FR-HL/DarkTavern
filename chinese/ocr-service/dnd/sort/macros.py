@@ -94,7 +94,9 @@ STASH_TYPE_NAMES = {
 
 # Default mapping: box index (0-7) → StashType int.
 # Box 0 = Storage, Box 1 = Shared Stash, Boxes 2-7 = Purchased 1-5 + Seasonal.
-DEFAULT_STASH_TAB_MAPPING = [4, 20, 5, 6, 7, 8, 9, 30]
+# NOTE: upstream swapped stash IDs 20/30 (20=Seasonal, 30=Shared) but forgot
+# to update this list — the comment above reflects the real in-game order.
+DEFAULT_STASH_TAB_MAPPING = [4, 30, 5, 6, 7, 8, 9, 20]
 
 # These module-level globals are rebuilt by load_tab_mapping().
 STASH_TAB_LABELS: list = [STASH_TYPE_NAMES.get(v, 'Not set') if v else 'Not set' for v in DEFAULT_STASH_TAB_MAPPING]
@@ -102,14 +104,23 @@ STASH_TYPE_TO_TAB_INDEX: dict = {v: i for i, v in enumerate(DEFAULT_STASH_TAB_MA
 
 
 def load_tab_mapping():
-    """Rebuild STASH_TYPE_TO_TAB_INDEX and STASH_TAB_LABELS from settings."""
+    """Rebuild STASH_TYPE_TO_TAB_INDEX and STASH_TAB_LABELS from settings.
+
+    An unconfigured mapping (missing, or all entries zero) falls back to
+    the built-in default so in-game tab switching works out of the box.
+    """
     global STASH_TYPE_TO_TAB_INDEX, STASH_TAB_LABELS
     mapping = None
     try:
         mapping = settings_manager.get('stashTabMapping')
     except Exception:
         pass
-    if not mapping or not isinstance(mapping, list) or len(mapping) != STASH_TAB_COUNT:
+    if (
+        not mapping
+        or not isinstance(mapping, list)
+        or len(mapping) != STASH_TAB_COUNT
+        or not any(mapping)
+    ):
         mapping = list(DEFAULT_STASH_TAB_MAPPING)
     STASH_TAB_LABELS = [STASH_TYPE_NAMES.get(v, 'Not set') if v else 'Not set' for v in mapping]
     STASH_TYPE_TO_TAB_INDEX = {v: i for i, v in enumerate(mapping) if v}

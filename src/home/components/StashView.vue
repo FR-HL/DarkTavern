@@ -75,6 +75,14 @@ const isEquipment = computed (() => !!currentStash.value && currentStash.value.l
 
 watch (currentStash, (s) => emit ('update:equipment', !!(s && s.layout === 'equipment')), { immediate: true });
 
+// 选择仓库：切换前端显示，并联动点击游戏内对应标签（背包/装备无游戏内标签）
+function selectTab (s) {
+  emit ('update:stashId', s.id);
+  const id = parseInt (s.id) || 0;
+  if (id === 2 || id === 3) return;
+  invoke ('stash:switch-in-game', { stash_id: s.id });
+}
+
 // ── 排序方案 ──
 const SORT_PRESETS = [
   {
@@ -382,7 +390,7 @@ watch (() => props.stashId, () => reportStashState ());
       <div class="stash-layout">
         <div class="stash-side">
           <button v-for="s in stashList" :key="s.id" class="side-tab"
-                  :class="{ active: props.stashId === s.id }" @click="emit('update:stashId', s.id)"
+                  :class="{ active: props.stashId === s.id }" @click="selectTab(s)"
                   :title="`${s.items.length} 件物品`">
             <span class="tab-ic">
               <svg v-if="tabIconType(s.label) === 'chest'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M3 12h18"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/><circle cx="12" cy="15" r="1" fill="currentColor" stroke="none"/></svg>

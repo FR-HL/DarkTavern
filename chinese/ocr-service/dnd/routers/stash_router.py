@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from fastapi import APIRouter, Response, WebSocket
+from pydantic import BaseModel
 from dnd.appdirs import get_characters_dir
 from dnd.items.icon_pak import canonical_icon_path, icon_store
 
@@ -9,6 +10,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _EQUIPMENT_SLOTS = None
+
+
+class StashSwitchRequest(BaseModel):
+    stash_id: str
 
 
 def _load_equipment_slots():
@@ -100,6 +105,54 @@ def list_characters():
             "total_items": total_items,
         })
     return {"characters": characters}
+
+
+@router.post("/switch")
+def switch_stash(body: StashSwitchRequest):
+    """Click the corresponding stash tab in the game UI for a stash type.
+
+    Best-effort in-game tab switch: when the game window is missing, the
+    tab mapping is unconfigured, or the stash type has no tab of its own
+    (bag / equipment), the request is *skipped* — the caller should still
+    switch the frontend display.
+    """
+    from dnd import uipi
+    from dnd.sort import macros
+
+    try:
+        stash_type = int(body.stash_id)
+    except (TypeError, ValueError):
+        return {"success": False, "switched": False, "reason": "invalid_stash_id"}
+
+    # Bag / equipment have no tab selectors in the game stash UI.
+    if stash_type in (2, 3):
+        return {"success": True, "switched": False, "reason": "no_tab"}
+
+    status = uipi.check_uipi_status()
+    if status["blocked"]:
+        return {
+            "success": False,
+            "switched": False,
+            "reason": "uipi_blocked",
+            "uipi": status,
+        }
+
+    # Rebuild the tab mapping so edits to settings take effect without a restart.
+    macros.load_tab_mapping()
+    if stash_type not in macros.STASH_TYPE_TO_TAB_INDEX:
+        return {"success": True, "switched": False, "reason": "mapping_not_configured"}
+
+    if not macros.force_activate_game_window():
+        return {"success": True, "switched": False, "reason": "game_not_found"}
+
+    try:
+        if not macros.click_stash_tab(stash_type):
+            return {"success": False, "switched": False, "reason": "click_failed"}
+    except Exception as exc:
+        logger.warning("In-game stash switch failed for type %s: %s", stash_type, exc)
+        return {"success": False, "switched": False, "reason": "click_failed"}
+
+    return {"success": True, "switched": True, "reason": ""}
 
 
 @router.get("/current")
