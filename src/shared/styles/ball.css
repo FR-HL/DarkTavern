@@ -122,6 +122,7 @@ html, body, #app {
 .ball-text.warn { color: var(--amber); }
 .ball-text.bad { color: var(--red); }
 .ball-text.busy { color: var(--accent); }
+.ball-text.small .bt-1 { font-size: 13.5px; }
 
 /* 扫描脉动 */
 .pulse {
