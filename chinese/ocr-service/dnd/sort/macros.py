@@ -96,8 +96,8 @@ STASH_TYPE_NAMES = {
 
 # In-game tab order of StashType values (top → bottom). The game shows tabs
 # for *owned* stashes only, in this fixed type order: Storage, Purchased 1-5,
-# Shared Stash, Seasonal 1-2.
-TAB_TYPE_ORDER = [4, 5, 6, 7, 8, 9, 30, 20, 21]
+# Seasonal 1-2, Shared Stash.
+TAB_TYPE_ORDER = [4, 5, 6, 7, 8, 9, 20, 21, 30]
 
 # Fallback mapping (full owned set, in in-game order) used when no character
 # context is available. The per-character dynamic mapping replaces this.
@@ -356,6 +356,13 @@ def nudge_cursor(dx=15, dy=0):
     pt = POINT()
     ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
     move_mouse(pt.x + dx, pt.y + dy)
+
+
+def get_cursor_pos():
+    """Return the current cursor position as (x, y) screen coordinates."""
+    pt = POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+    return pt.x, pt.y
 
 
 def mouse_down():
@@ -624,18 +631,17 @@ def get_stash_tab_positions():
     """Return one Point per stash tab selector currently mapped.
 
     Tab count follows the *active* mapping (owned stashes in in-game order),
-    so tab ``i`` is clicked at ``origin + i * spacing``.  If individual tab
-    positions were saved during calibration they are used directly.
-    Calls :func:`get_screen_positions` to ensure the latest calibration data
-    is used (including any overrides saved after module import).
+    so tab ``i`` is clicked at ``origin + i * spacing`` unless a calibration
+    session saved the individual tab positions (stashTabPositions) — those
+    are used verbatim, in mapping order.
     """
     positions = get_screen_positions()
 
     # Prefer individually-saved positions from a calibration session.
     saved = positions.get('stash_tab_positions')
-    if saved and isinstance(saved, list) and len(saved) >= STASH_TAB_COUNT:
+    if saved and isinstance(saved, list) and len(saved) >= len(STASH_TYPE_TO_TAB_INDEX):
         pts = []
-        for p in saved[:STASH_TAB_COUNT]:
+        for p in saved[:len(STASH_TYPE_TO_TAB_INDEX)]:
             pts.append(Point(int(round(p['x'])), int(round(p['y']))))
         return pts
 

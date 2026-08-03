@@ -186,6 +186,105 @@ def _owned_stash_ids(character_id: str):
         return []
 
 
+# ── Stash tab calibration ──
+
+# In-memory coordinates collected during a calibration session, keyed by
+# tab index in the *active* mapping order. Saved via /stash/calibration/save.
+_calibration_buffer = {}
+
+
+class CalibrationRecordRequest(BaseModel):
+    index: int
+
+
+@router.get("/calibration")
+def calibration_status():
+    """Return the active tab mapping and any saved calibration positions."""
+    from dnd.sort import macros
+
+    mapping = [t for t in macros.STASH_TYPE_TO_TAB_INDEX.keys()]
+    cal = None
+    try:
+        cal = macros.settings_manager.get("calibrationOverride") or {}
+    except Exception:
+        pass
+    saved = cal.get("stashTabPositions") or []
+    return {
+        "mapping": mapping,
+        "labels": [macros.STASH_TYPE_NAMES.get(t, str(t)) for t in mapping],
+        "saved_positions": saved,
+        "pending": [None if i not in _calibration_buffer else _calibration_buffer[i]
+                    for i in range(len(mapping))],
+    }
+
+
+@router.post("/calibration/record")
+def calibration_record(body: CalibrationRecordRequest):
+    """Record the current cursor position as the location of tab ``index``.
+
+    The user clicks the corresponding stash tab in-game, then triggers this
+    endpoint (from the settings UI) while the cursor is still on it.
+    """
+    from dnd.sort import macros
+
+    try:
+        x, y = macros.get_cursor_pos()
+    except Exception as exc:
+        logger.warning("Failed to read cursor position: %s", exc)
+        return {"success": False, "error": "cursor_read_failed"}
+
+    _calibration_buffer[int(body.index)] = {"x": x, "y": y}
+    return {"success": True, "index": int(body.index), "x": x, "y": y}
+
+
+class CalibrationSaveRequest(BaseModel):
+    resolution: str = ""
+
+
+@router.post("/calibration/save")
+def calibration_save(body: CalibrationSaveRequest):
+    """Persist the recorded tab positions into calibrationOverride."""
+    from dnd.sort import macros
+
+    mapping = list(macros.STASH_TYPE_TO_TAB_INDEX.keys())
+    positions = [
+        _calibration_buffer.get(i)
+        for i in range(len(mapping))
+    ]
+    if not all(positions):
+        missing = [i for i, p in enumerate(positions) if p is None]
+        return {"success": False, "missing": missing}
+
+    cal = macros.settings_manager.get("calibrationOverride") or {}
+    try:
+        res_w, res_h = map(int, body.resolution.lower().split("x"))
+    except (ValueError, AttributeError):
+        res_w, res_h = macros.get_current_resolution()
+
+    cal = dict(cal)
+    cal["resolution"] = {"width": res_w, "height": res_h}
+    cal["stashTabPositions"] = positions
+    macros.settings_manager.update({"calibrationOverride": cal})
+    logger.info("Stash tab calibration saved: %s", positions)
+    return {"success": True, "positions": positions}
+
+
+@router.post("/calibration/reset")
+def calibration_reset():
+    """Clear the saved stash tab calibration."""
+    from dnd.sort import macros
+
+    _calibration_buffer.clear()
+    try:
+        cal = macros.settings_manager.get("calibrationOverride") or {}
+        if cal:
+            cal.pop("stashTabPositions", None)
+            macros.settings_manager.update({"calibrationOverride": cal})
+    except Exception:
+        pass
+    return {"success": True}
+
+
 @router.get("/current")
 def current_character():
     """Currently active character (last snapshot seen by the packet capture)."""

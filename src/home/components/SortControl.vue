@@ -239,12 +239,68 @@ function onSortCancelled () {
   sorting.value = false;
 }
 
+// ── 仓库标签校准 ──
+const calItems = ref ([]);
+const calPending = ref ([]);
+const calSaving = ref (false);
+const calNote = ref ('');
+
+async function loadCalibration () {
+  try {
+    const r = await invoke ('stash:calibration-status');
+    if (r && Array.isArray (r.mapping)) {
+      calItems.value = r.mapping.map ((t, i) => ({
+        type: t,
+        label: (r.labels && r.labels[i]) || String (t),
+        saved: r.saved_positions && r.saved_positions[i],
+      }));
+      calPending.value = (r.pending || []).slice ();
+    }
+  } catch (e) {}
+}
+
+async function recordCalTab (index) {
+  calNote.value = '';
+  const r = await invoke ('stash:calibration-record', index);
+  if (r && r.success) {
+    const next = calPending.value.slice ();
+    next[index] = { x: r.x, y: r.y };
+    calPending.value = next;
+  } else {
+    calNote.value = '记录失败，请重试';
+  }
+}
+
+async function saveCalibration () {
+  calSaving.value = true;
+  calNote.value = '';
+  try {
+    const r = await invoke ('stash:calibration-save', '');
+    if (r && r.success) {
+      calNote.value = '校准已保存，之后点击将使用校准坐标';
+      await loadCalibration ();
+    } else if (r && Array.isArray (r.missing)) {
+      calNote.value = `还有 ${r.missing.length} 个标签未记录`;
+    } else {
+      calNote.value = '保存失败';
+    }
+  } catch (e) { calNote.value = '保存失败'; }
+  calSaving.value = false;
+}
+
+async function resetCalibration () {
+  calNote.value = '';
+  await invoke ('stash:calibration-reset');
+  await loadCalibration ();
+}
+
 let unsubs = [];
 onMounted (async () => {
   checkUipi ();
   loadSortSpeed ();
   loadSortOrder ();
   loadHotkeys ();
+  loadCalibration ();
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
@@ -394,6 +450,32 @@ onBeforeUnmount (() => {
         </div>
       </div>
     </div>
+
+    <div class="sec">
+      <div class="sec-label">仓库标签校准</div>
+      <div class="card">
+        <div class="term-body cal-intro">
+          <p>若游戏内切换/整理时点错仓库标签，请校准一次：<b>在游戏中打开仓库界面</b>，按下面的顺序点击游戏里的仓库标签，点完一个后回到这里点对应的「记录当前位置」按钮（记录的是鼠标此刻的位置）。</p>
+        </div>
+        <div class="cal-list">
+          <div v-for="(it, i) in calItems" :key="i" class="cal-row">
+            <span class="cal-idx">{{ i + 1 }}</span>
+            <span class="cal-name">{{ it.label }}</span>
+            <span class="cal-pos">
+              <template v-if="calPending[i]">待保存 ({{ calPending[i].x }}, {{ calPending[i].y }})</template>
+              <template v-else-if="it.saved">已校准 ({{ it.saved.x }}, {{ it.saved.y }})</template>
+              <template v-else>未校准</template>
+            </span>
+            <button class="keybind-btn cal-btn" @click="recordCalTab(i)">记录当前位置</button>
+          </div>
+        </div>
+        <div class="cal-foot">
+          <button class="btn primary" :disabled="calSaving" @click="saveCalibration">{{ calSaving ? '保存中…' : '保存校准' }}</button>
+          <button class="btn" @click="resetCalibration">清除校准</button>
+          <span v-if="calNote" class="cal-note">{{ calNote }}</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -405,6 +487,30 @@ onBeforeUnmount (() => {
 .btn.lg { padding: 9px 24px; font-size: 14px; }
 .btn:disabled { opacity: .45; cursor: default; transform: none; }
 .run-keys { margin-top: 4px; }
+
+.cal-intro p { margin: 0 0 6px; }
+.cal-intro b { color: var(--text); font-weight: 650; }
+.cal-list { display: flex; flex-direction: column; padding: 2px 0 6px; }
+.cal-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.cal-row:last-child { border-bottom: none; }
+.cal-idx {
+  width: 22px; height: 22px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 7px;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cal-name { font-weight: 600; color: var(--text); min-width: 110px; }
+.cal-pos { flex: 1; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.cal-btn { min-width: 0; padding: 5px 12px; font-size: 12px; flex: none; }
+.cal-foot { display: flex; align-items: center; gap: 10px; padding: 10px 2px 2px; }
+.cal-note { font-size: 12.5px; color: var(--green); }
 
 .uipi-warn {
   display: flex; flex-direction: column; gap: 6px;

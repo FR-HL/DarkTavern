@@ -180,6 +180,22 @@ export async function switchStash (stashId, characterId = '') {
   return await post ('/stash/switch', { stash_id: String (stashId), character_id: String (characterId) }) || { error: 'Service unavailable' };
 }
 
+export async function calibrationStatus () {
+  return await get ('/stash/calibration');
+}
+
+export async function calibrationRecord (index) {
+  return await post ('/stash/calibration/record', { index }) || { error: 'Service unavailable' };
+}
+
+export async function calibrationSave (resolution = '') {
+  return await post ('/stash/calibration/save', { resolution }) || { error: 'Service unavailable' };
+}
+
+export async function calibrationReset () {
+  return await post ('/stash/calibration/reset') || { error: 'Service unavailable' };
+}
+
 // ── DnD Tools: Sort ──
 
 export async function sortStart (params) {
