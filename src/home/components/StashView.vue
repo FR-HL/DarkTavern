@@ -16,9 +16,9 @@ const stashDefaultKey = ref ('Ctrl+E');
 const listeningKey = ref (null);
 const newKey = ref (null);
 
-function keyLabel () {
-  if (listeningKey.value) return '等待输入…（按 Esc 取消）';
-  return newKey.value || '点击此处，然后按下新按键';
+function keyLabel (target) {
+  if (listeningKey.value === target) return '等待输入…（按 Esc 取消）';
+  return '点击此处，然后按下新按键';
 }
 
 function startKeyListen (target) { listeningKey.value = target; newKey.value = null; }
@@ -328,7 +328,7 @@ watch (() => props.stashId, () => reportStashState ());
           </div>
           <div class="srow-ctl">
             <span class="kbd">{{ stashNextKey }}</span>
-            <button class="keybind-btn" :class="{ listening: listeningKey === 'next' }" @click="startKeyListen('next')">{{ keyLabel() }}</button>
+            <button class="keybind-btn" :class="{ listening: listeningKey === 'next' }" @click="startKeyListen('next')">{{ keyLabel('next') }}</button>
             <button class="btn primary" @click="saveKey('stash_next_key', 'next')">保存</button>
           </div>
         </div>
@@ -339,7 +339,7 @@ watch (() => props.stashId, () => reportStashState ());
           </div>
           <div class="srow-ctl">
             <span class="kbd">{{ stashDefaultKey }}</span>
-            <button class="keybind-btn" :class="{ listening: listeningKey === 'default' }" @click="startKeyListen('default')">{{ keyLabel() }}</button>
+            <button class="keybind-btn" :class="{ listening: listeningKey === 'default' }" @click="startKeyListen('default')">{{ keyLabel('default') }}</button>
             <button class="btn primary" @click="saveKey('stash_default_key', 'default')">保存</button>
           </div>
         </div>

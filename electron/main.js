@@ -305,8 +305,8 @@ app.on ('ready', async () => {
     launch_on_startup: !!settings.general.launch_on_startup,
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+F11',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+F12',
-    stash_next_key: settings.dnd?.stash_next_key || 'Ctrl+Tab',
-    stash_default_key: settings.dnd?.stash_default_key || 'Ctrl+E',
+    stash_next_key: settings.dnd?.stash_next_key || 'Ctrl+E',
+    stash_default_key: settings.dnd?.stash_default_key || 'Ctrl+Tab',
     developer_mode: !!settings.general.developer_mode,
     theme: settings.general.theme === 'dark' ? 'dark' : 'light',
   }));
@@ -447,8 +447,8 @@ function switchFrontStash (targetId, label) {
 }
 
 function registerStashHotkeys () {
-  const nextKey = settings.dnd?.stash_next_key || 'Ctrl+Tab';
-  const defaultKey = settings.dnd?.stash_default_key || 'Ctrl+E';
+  const nextKey = settings.dnd?.stash_next_key || 'Ctrl+E';
+  const defaultKey = settings.dnd?.stash_default_key || 'Ctrl+Tab';
 
   if (registeredStashKeys) {
     for (const k of registeredStashKeys) {
