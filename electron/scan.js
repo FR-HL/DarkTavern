@@ -16,6 +16,7 @@ const CACHE_TTL = 10000;
 export function wire (overlay, sendBall = null) {
   const send = (msg, data) => overlay.webContents.send (msg, data);
   const markScan = (active) => { if (sendBall) sendBall ({ active }); };
+  const markResult = (data) => { if (sendBall) sendBall ({ scanResult: data }); };
 
   ipcMain.on ('ready', () => {
     logger.info ('Frontend ready');
@@ -77,13 +78,18 @@ export function wire (overlay, sendBall = null) {
 
     if (result.success) {
       send ('hover:item', { scanId, ...tooltip, ...result.data });
-      queryMarketLive (result.data, scanId, send);
+      markResult ({ ok: true, name: result.data?.item?.name || '', market: result.data?.pricing?.market ?? null });
+      queryMarketLive (result.data, scanId, (msg, payload) => {
+        send (msg, payload);
+        if (msg === 'hover:live-price') markResult ({ ok: true, live: payload?.price ?? null });
+      });
     } else {
       send ('hover:error', {
         scanId, message: result.error,
         x: tooltip.x || 0, y: tooltip.y || 0,
         width: tooltip.width || 100, height: tooltip.height || 50,
       });
+      markResult ({ ok: false, message: result.error });
     }
 
     send ('scan:finish');

@@ -28,8 +28,11 @@ let lastBallStatus = null;
 let lastBallSave = 0;
 let ballDrag = null;
 let ballDragTimer = null;
+let lastCharKey = '';
+let lastSortRunning = false;
+let lastScan = { ok: null, name: '', price: null, market: null, message: '', ts: 0 };
 const BALL_COLLAPSED = { w: 76, h: 76 };
-const BALL_EXPANDED = { w: 340, h: 470 };
+const BALL_EXPANDED = { w: 340, h: 530 };
 
 process.on ('uncaughtException', (e) => logger.error ('Uncaught Exception:', e));
 process.on ('unhandledRejection', (r) => logger.error (`Unhandled Rejection: ${r}`));
@@ -101,8 +104,22 @@ app.on ('ready', async () => {
 
   startTracking (overlay);
   wire (overlay, (data) => {
-    ballScanning = !!data?.active;
-    pushBallStatus ();
+    if (data?.active !== undefined) {
+      ballScanning = !!data.active;
+      pushBallStatus ();
+    }
+    if (data?.scanResult) {
+      const r = data.scanResult;
+      lastScan = {
+        ok: !!r.ok,
+        name: r.name || '',
+        price: r.live ?? null,
+        market: r.market ?? null,
+        message: r.message || '',
+        ts: Date.now (),
+      };
+      sendBallScanResult ();
+    }
   });
 
   globalShortcut.register ('F5', () => openSettingsWindow ('settings'));
@@ -528,6 +545,29 @@ async function gatherBallStatus () {
   try { capture = (await backend.captureStatus ()) || capture; } catch (e) {}
   try { sorting = (await backend.sortStatus ()) || sorting; } catch (e) {}
 
+  let current = null;
+  try {
+    const d = await backend.getCurrentCharacter ();
+    current = d?.current || null;
+  } catch (e) {}
+
+  // 角色/仓库数据更新检测（id 或更新时间变化 → 一次性瞬态标记）
+  const charKey = current ? `${current.id}|${current.updated_at || ''}` : '';
+  const charJustUpdated = !!charKey && charKey !== lastCharKey;
+  if (charKey) lastCharKey = charKey;
+  else lastCharKey = '';
+
+  // 整理结束检测（running true → false 且带结果）
+  const sortJustFinished = lastSortRunning && !sorting.running && (!!sorting.result || !!sorting.error);
+  lastSortRunning = !!sorting.running;
+
+  let lastSortText = '';
+  if (sorting.result) {
+    lastSortText = sorting.result.success ? '成功 ✓' : ('失败：' + (sorting.result.message || ''));
+  } else if (sorting.error) {
+    lastSortText = '失败：' + String (sorting.error);
+  }
+
   return {
     locked: ballLocked,
     ocr: !!(health && health.status === 'ok'),
@@ -539,7 +579,25 @@ async function gatherBallStatus () {
     captureRunning: !!capture.running,
     sortingRunning: !!sorting.running,
     scanning: ballScanning,
+    sortJustFinished,
+    sortOk: !!sorting.result?.success,
+    lastSortText,
+    character: current ? {
+      nickname: current.nickname,
+      cls: current.class,
+      level: current.level,
+      stashCount: current.stash_count,
+      totalItems: current.total_items,
+      updatedAt: current.updated_at,
+    } : null,
+    charJustUpdated,
+    lastScan: { ...lastScan },
   };
+}
+
+function sendBallScanResult () {
+  if (!ballWindow || ballWindow.isDestroyed ()) return;
+  ballWindow.webContents.send ('ball:scan-result', { ...lastScan });
 }
 
 async function pushBallStatus () {

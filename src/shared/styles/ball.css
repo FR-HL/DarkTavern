@@ -97,12 +97,31 @@ html, body, #app {
 }
 .ball:active { transform: scale(.96); }
 .ball.locked { opacity: .75; }
-.ball svg.icon {
-  width: 24px; height: 24px;
-  color: #d1a33a;
-  filter: drop-shadow(0 1px 1px rgba(180,133,9,0.35));
+
+/* ===== 球心两行文字 ===== */
+.ball-text {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  line-height: 1.15;
   pointer-events: none;
+  user-select: none;
 }
+.ball-text .bt-1 {
+  font-size: 13px; font-weight: 800; letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+.ball-text .bt-2 {
+  margin-top: 1px;
+  font-size: 9.5px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  max-width: 42px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ball-text.ok { color: var(--green); }
+.ball-text.warn { color: var(--amber); }
+.ball-text.bad { color: var(--red); }
+.ball-text.busy { color: var(--accent); }
 
 /* 扫描脉动 */
 .pulse {
@@ -184,11 +203,19 @@ html, body, #app {
 .sdot.pending { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); animation: blink 1.6s var(--ease) infinite; }
 .sdot.bad { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
 .stat-k { flex: 1; font-size: 12.5px; font-weight: 550; color: var(--text-2); }
-.stat-v { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat-v { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stat-v.mono { font-family: var(--mono); font-size: 11.5px; }
 .stat-v.ok { color: var(--green); }
 .stat-v.pending { color: var(--amber); }
 .stat-v.bad { color: var(--red); }
+.stat-v.ellipsis {
+  max-width: 165px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.char-cell { display: inline-flex; align-items: center; gap: 6px; }
+.char-icon { width: 16px; height: 16px; flex: none; border-radius: 3px; object-fit: cover; }
+.char-name { overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
 
 .sec-divider {
   display: flex; align-items: center; gap: 8px;

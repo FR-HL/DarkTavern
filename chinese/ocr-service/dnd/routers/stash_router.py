@@ -113,6 +113,30 @@ def list_characters():
     return {"characters": characters}
 
 
+@router.get("/current")
+def current_character():
+    """Currently active character (last snapshot seen by the packet capture)."""
+    from dnd import service
+    char_id = service.last_snapshot_character_id
+    if not char_id:
+        return {"current": None}
+    mgr = service.get_stash_manager()
+    char_data = mgr.characters_cache.get(char_id)
+    if not char_data:
+        return {"current": None}
+    stashes = char_data.get("stashes", {})
+    total_items = sum(len(v) for v in stashes.values() if isinstance(v, list))
+    return {"current": {
+        "id": char_id,
+        "nickname": char_data.get("nickname", "Unknown"),
+        "class": char_data.get("class", "Unknown"),
+        "level": char_data.get("level", 0),
+        "stash_count": len(stashes),
+        "total_items": total_items,
+        "updated_at": char_data.get("lastUpdate", ""),
+    }}
+
+
 @router.get("/character/{character_id}")
 def get_character(character_id: str):
     from dnd.service import get_stash_manager

@@ -160,6 +160,10 @@ export async function getCharacters () {
   return await get ('/stash/characters');
 }
 
+export async function getCurrentCharacter () {
+  return await get ('/stash/current');
+}
+
 export async function getCharacter (id) {
   return await get (`/stash/character/${id}`);
 }

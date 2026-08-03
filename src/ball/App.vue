@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import StatusPanel from './components/StatusPanel.vue';
 
 const invoke = (channel, data) => window.electron.invoke (channel, data);
@@ -15,18 +15,82 @@ const status = reactive ({
   scanning: false,
   version: '—',
   mappings: 0,
+  sortJustFinished: false,
+  sortOk: false,
+  charJustUpdated: false,
+  character: null,
+  lastScan: { ok: null, name: '', price: null, market: null, message: '' },
 });
 
 const expanded = ref (false);
+const transient = ref (null);
 
 let dragActive = false;
 let suppressClick = false;
+let transientTimer = null;
 
 const ring = computed (() => {
   if (!status.ocr) return 'bad';
   if (!status.game || !status.apiKey) return 'warn';
   return 'ok';
 });
+
+const center = computed (() => {
+  if (status.scanning) return { t1: '扫描', t2: '', cls: 'busy' };
+  const t = transient.value;
+  if (t && t.until > Date.now ()) {
+    if (t.kind === 'ok') return { t1: '✓', t2: t.sub, cls: 'ok' };
+    if (t.kind === 'fail') return { t1: '✗', t2: t.sub, cls: 'bad' };
+    if (t.kind === 'sortok') return { t1: '成', t2: '完成', cls: 'ok' };
+    if (t.kind === 'sortfail') return { t1: '败', t2: '失败', cls: 'bad' };
+    if (t.kind === 'char') return { t1: t.sub, t2: '已更新', cls: 'busy' };
+  }
+  if (!status.ocr) return { t1: '故障', t2: '', cls: 'bad' };
+  if (status.sortingRunning) return { t1: '整理', t2: '', cls: 'busy' };
+  if (status.captureRunning) return { t1: '抓包', t2: '', cls: 'busy' };
+  if (!status.game || !status.apiKey) return { t1: '待机', t2: '', cls: 'warn' };
+  return { t1: '就绪', t2: '', cls: 'ok' };
+});
+
+function setTransient (kind, sub, dur) {
+  clearTimeout (transientTimer);
+  transient.value = { kind, sub, until: Date.now () + dur };
+  transientTimer = setTimeout (() => { transient.value = null; }, dur + 50);
+}
+
+function fmtG (v) {
+  if (v == null) return '暂无';
+  const n = Number (v);
+  if (n >= 10000) {
+    const w = n / 10000;
+    return (w >= 100 ? Math.round (w) : Math.round (w * 10) / 10) + 'w G';
+  }
+  return String (Math.round (n)) + ' G';
+}
+
+function onScanResult (d) {
+  if (!d || d.ok == null) return;
+  if (d.ok) {
+    const price = d.price ?? d.market;
+    setTransient ('ok', fmtG (price), 3000);
+  } else {
+    setTransient ('fail', '未找到', 3000);
+  }
+}
+
+function onStatus (d) {
+  const wasLocked = status.locked;
+  Object.assign (status, d);
+  if (d.locked && wasLocked === false && expanded.value) collapse ();
+
+  if (d.charJustUpdated && d.character) {
+    const cls = d.character.cls || '角色';
+    setTransient ('char', cls, 3000);
+  }
+  if (d.sortJustFinished) {
+    setTransient (d.sortOk ? 'sortok' : 'sortfail', '', 5000);
+  }
+}
 
 function toggle () {
   expanded.value = !expanded.value;
@@ -66,13 +130,14 @@ onMounted (async () => {
   const s = await invoke ('ball:get-status').catch (() => null);
   if (s) Object.assign (status, s);
 
-  window.electron.on ('ball:status', (d) => {
-    const wasLocked = status.locked;
-    Object.assign (status, d);
-    if (d.locked && wasLocked === false && expanded.value) collapse ();
-  });
+  window.electron.on ('ball:status', onStatus);
+  window.electron.on ('ball:scan-result', onScanResult);
   window.electron.on ('ball:blur', () => collapse ());
   window.addEventListener ('contextmenu', onContext);
+});
+
+onBeforeUnmount (() => {
+  clearTimeout (transientTimer);
 });
 </script>
 
@@ -81,7 +146,10 @@ onMounted (async () => {
     <div class="ball-anchor">
       <div class="ring" :class="ring">
         <div class="ball" :class="{ locked: status.locked }" @mousedown="onBallMouseDown" @mouseup="onBallMouseUp" @click="onBallClick" @contextmenu="onContext">
-          <svg class="icon" viewBox="0 0 576 512" fill="currentColor"><path d="M0 80l0 48c0 17.7 14.3 32 32 32l16 0 48 0 0-80c0-26.5-21.5-48-48-48S0 53.5 0 80zM112 32c10 13.4 16 30 16 48l0 304c0 35.3 28.7 64 64 64s64-28.7 64-64l0-5.3c0-32.4 26.3-58.7 58.7-58.7L480 320l0-192c0-53-43-96-96-96L112 32zM464 480c61.9 0 112-50.1 112-112c0-8.8-7.2-16-16-16l-245.3 0c-14.7 0-26.7 11.9-26.7 26.7l0 5.3c0 53-43 96-96 96l176 0 96 0z"/></svg>
+          <div class="ball-text" :class="center.cls">
+            <span class="bt-1">{{ center.t1 }}</span>
+            <span v-if="center.t2" class="bt-2">{{ center.t2 }}</span>
+          </div>
           <span v-if="status.scanning" class="pulse"></span>
         </div>
       </div>
