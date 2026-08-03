@@ -665,12 +665,28 @@ class PacketCapture:
                 if 'TCP' in packet and hasattr(packet.tcp, 'payload'):
                     # Reassemble each TCP stream independently — the game uses
                     # several connections and their bytes must not be mixed.
+                    # Since we now capture both directions, upstream and
+                    # downstream segments of the *same* connection are also
+                    # split into separate buffers — interleaving them would
+                    # corrupt reassembly for large packets.
                     stream_key = getattr(packet.tcp, 'stream', None)
                     if stream_key is None:
                         try:
                             stream_key = f"{packet.tcp.srcport}-{packet.tcp.dstport}"
                         except Exception:
                             stream_key = "default"
+                    try:
+                        srcport = int(packet.tcp.srcport)
+                    except (ValueError, TypeError):
+                        srcport = None
+                    if self.active_proxy_port is not None:
+                        is_downstream = srcport == self.active_proxy_port
+                    else:
+                        is_downstream = (
+                            srcport is not None
+                            and self.port_range[0] <= srcport <= self.port_range[1]
+                        )
+                    stream_key = f"{stream_key}-{'D' if is_downstream else 'U'}"
                     self.process_packet(packet.tcp.payload.binary_value, stream_key)
         except RuntimeError as e:
             if "Event loop" in str(e) and "stopped" in str(e):
