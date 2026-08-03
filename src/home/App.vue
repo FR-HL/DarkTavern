@@ -1267,8 +1267,8 @@ onBeforeUnmount (() => {
           <div class="sec-label">软件来源 · 致敬</div>
           <div class="card">
             <div class="about-block">
-              <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a> 与开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>。最初我基于中文版本延续开发，后来因后续维护问题，不愿再麻烦原作者，便决定潜心研读源码，将软件<strong>完整重写</strong>。</p>
-              <p>遵从前辈们的开源精神，DarkTavern 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢 GrimVault 与 GrimVault-Chinese-Edition 两个项目铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
+              <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a>、开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>，仓库整理功能则参考了 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>。最初我基于中文版延续开发，后来因后续维护问题，不愿再麻烦原作者，便决定潜心研读源码，将软件<strong>完整重写</strong>。</p>
+              <p>遵从前辈们的开源精神，DarkTavern 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢 GrimVault、GrimVault-Chinese-Edition 与 DnDTools 铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
             </div>
             <div class="src-links">
               <a class="src-card" href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">
@@ -1278,6 +1278,10 @@ onBeforeUnmount (() => {
               <a class="src-card" href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">
                 <span class="src-name">GrimVault-Chinese-Edition</span>
                 <span class="src-desc">开源中文版 · 传承之基</span>
+              </a>
+              <a class="src-card" href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">
+                <span class="src-name">DnDTools</span>
+                <span class="src-desc">仓库整理工具 · 参考来源</span>
               </a>
               <a class="src-card" href="#" @click.prevent="openGithub">
                 <span class="src-name">DarkTavern</span>
