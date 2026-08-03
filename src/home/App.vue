@@ -43,6 +43,19 @@ const ocrStatusText = ref ('检查中…');
 const ocrStatusColor = ref ('var(--ink-dim)');
 const mappingCount = ref ('—');
 
+// ── 概览 · 功能状态 ──
+const overviewCapture = ref (false);
+const overviewSorting = ref (false);
+const overviewSortText = ref ('');
+const ballLocked = ref (false);
+const ballVisible = ref (true);
+const sessionScans = ref (0);
+const historyCount = ref (0);
+const charCount = ref (0);
+const stashItems = ref (0);
+const sortHotkey = ref ('Ctrl+F11');
+const cancelHotkey = ref ('Ctrl+F12');
+
 const apiKey = ref ('');
 const apiKeyVisible = ref (false);
 const scanKey = ref ('XButton1');
@@ -119,22 +132,29 @@ let settingsTimer = null;
 let mappingTimer = null;
 let scaleTimer = null;
 let uptimeTimer = null;
+let overviewTimer = null;
 const startMs = Date.now ();
 
 const headline = computed (() => {
   if (!ocrOk.value) return '侍者正在备酒';
+  if (overviewSorting.value) return '正在整理仓库…';
   if (!gameOk.value) return '酒馆已经开张';
+  if (!overviewCapture.value) return '酒馆还未开张';
   return '万事俱备 · 悬停即知价';
 });
 const sub = computed (() => {
   if (!ocrOk.value) return 'OCR 引擎唤醒中，请稍候片刻…';
+  if (overviewSorting.value) return '仓库整理进行中，请保持游戏窗口在前台';
   if (!gameOk.value) return '启动游戏、把鼠标悬停在物品上即可查价';
+  if (!overviewCapture.value) return '启动抓包后，角色仓库数据会自动采集';
   return '已检测到游戏窗口，按下 ' + scanKey.value + ' 开始';
 });
 const subHtml = computed (() => {
   const esc = (s) => String (s).replace (/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   if (!ocrOk.value) return 'OCR 引擎唤醒中，请稍候片刻…';
+  if (overviewSorting.value) return '仓库整理进行中，请保持游戏窗口在前台';
   if (!gameOk.value) return '启动游戏、把鼠标悬停在物品上即可查价';
+  if (!overviewCapture.value) return '启动抓包后，角色仓库数据会自动采集';
   return '已检测到游戏窗口，按下 <span class="kbd">' + esc (scanKey.value) + '</span> 即刻查价';
 });
 const scaleVal = computed (() => scale.value.toFixed (1) + '×');
@@ -335,6 +355,36 @@ function tick () {
   uptime.value = h > 0 ? `${h}:${pad (m)}:${pad (ss)}` : `${pad (m)}:${pad (ss)}`;
 }
 
+async function refreshOverview () {
+  try {
+    const s = await invoke ('ball:get-status');
+    if (s) {
+      overviewCapture.value = !!s.captureRunning;
+      overviewSorting.value = !!s.sortingRunning;
+      overviewSortText.value = s.lastSortText || '';
+      ballLocked.value = !!s.locked;
+      ballVisible.value = s.ballVisible !== false;
+      sessionScans.value = s.sessionScans || 0;
+    }
+  } catch (e) {}
+  try {
+    const d = await invoke ('settings:get');
+    if (d?.sort_hotkey) sortHotkey.value = d.sort_hotkey;
+    if (d?.cancel_hotkey) cancelHotkey.value = d.cancel_hotkey;
+  } catch (e) {}
+  try {
+    const h = await invoke ('history:list');
+    if (h?.records) historyCount.value = h.records.length;
+  } catch (e) {}
+  try {
+    const c = await invoke ('dnd:characters');
+    if (c?.characters) {
+      charCount.value = c.characters.length;
+      stashItems.value = c.characters.reduce ((n, x) => n + (x.total_items || 0), 0);
+    }
+  } catch (e) {}
+}
+
 async function fetchHealth () {
   try {
     const d = await invoke ('backend:health');
@@ -522,16 +572,19 @@ onMounted (() => {
   document.addEventListener ('keydown', onKeyDown);
   document.addEventListener ('mousedown', onMouseDown);
   uptimeTimer = setInterval (tick, 1000);
+  overviewTimer = setInterval (refreshOverview, 5000);
   fetchHealth ();
   fetchGameState ();
   loadSettings ();
   restoreSortConfig ();
+  refreshOverview ();
 });
 
 onBeforeUnmount (() => {
   document.removeEventListener ('keydown', onKeyDown);
   document.removeEventListener ('mousedown', onMouseDown);
   clearInterval (uptimeTimer);
+  clearInterval (overviewTimer);
 });
 </script>
 
@@ -611,36 +664,68 @@ onBeforeUnmount (() => {
           <div class="hero-sub" v-html="subHtml"></div>
           <div class="hero-stats">
             <div class="hstat">
-              <div class="hstat-k">汉化数据</div>
-              <div class="hstat-v accent">{{ mMappings.toLocaleString() }}</div>
+              <div class="hstat-k">查价 · 会话</div>
+              <div class="hstat-v accent">{{ sessionScans.toLocaleString() }} <span class="hstat-unit">次</span></div>
+            </div>
+            <div class="hstat">
+              <div class="hstat-k">查价 · 3 天</div>
+              <div class="hstat-v">{{ historyCount.toLocaleString() }} <span class="hstat-unit">条</span></div>
+            </div>
+            <div class="hstat">
+              <div class="hstat-k">角色</div>
+              <div class="hstat-v">{{ charCount.toLocaleString() }} <span class="hstat-unit">个</span></div>
+            </div>
+            <div class="hstat">
+              <div class="hstat-k">仓库物品</div>
+              <div class="hstat-v">{{ stashItems.toLocaleString() }} <span class="hstat-unit">件</span></div>
             </div>
             <div class="hstat">
               <div class="hstat-k">本次会话</div>
               <div class="hstat-v">{{ uptime }}</div>
-            </div>
-            <div class="hstat">
-              <div class="hstat-k">服务版本</div>
-              <div class="hstat-v"><span class="vdot" :class="{ bad: verDotBad }"></span>{{ version }}</div>
             </div>
           </div>
         </div>
 
         <div class="ov-grid">
           <section class="card">
-            <div class="card-head"><span class="card-title">运行状态</span></div>
+            <div class="card-head"><span class="card-title">查价状态</span></div>
             <div class="stat-row"><span class="sdot" :class="runes.ocr.state"></span><span class="stat-k">OCR 引擎</span><span class="stat-v" :class="runes.ocr.state">{{ runes.ocr.text }}</span></div>
             <div class="stat-row"><span class="sdot" :class="runes.game.state"></span><span class="stat-k">游戏窗口</span><span class="stat-v" :class="runes.game.state">{{ runes.game.text }}</span></div>
             <div class="stat-row"><span class="sdot" :class="runes.key.state"></span><span class="stat-k">扫描热键</span><span class="stat-v" :class="runes.key.state">{{ runes.key.text }}</span></div>
             <div class="stat-row"><span class="sdot" :class="runes.api.state"></span><span class="stat-k">DarkerDB API</span><span class="stat-v" :class="runes.api.state">{{ runes.api.text }}</span></div>
-            <div class="card-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>不读取游戏内存 · 仅屏幕识别</div>
+            <div class="card-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>不读取游戏内存 · 仅屏幕识别<span class="foot-ver">v{{ version }}</span></div>
           </section>
 
           <section class="card">
-            <div class="card-head"><span class="card-title">三步上手</span></div>
-            <div class="steps">
-              <div class="step"><div class="step-n">1</div><div class="step-t">启动 <b>Dark and Darker</b>（中文客户端）</div></div>
-              <div class="step"><div class="step-n">2</div><div class="step-t">把鼠标 <b>悬停</b> 在任意物品上</div></div>
-              <div class="step"><div class="step-n">3</div><div class="step-t">按下 <span class="kbd">{{ scanKey }}</span> 即刻查价</div></div>
+            <div class="card-head"><span class="card-title">仓库工具状态</span></div>
+            <div class="stat-row"><span class="sdot" :class="overviewCapture ? 'ok' : 'pending'"></span><span class="stat-k">抓包</span><span class="stat-v" :class="overviewCapture ? 'ok' : 'pending'">{{ overviewCapture ? '运行中' : '已停止' }}</span></div>
+            <div class="stat-row"><span class="sdot" :class="overviewSorting ? 'ok' : 'pending'"></span><span class="stat-k">仓库整理</span><span class="stat-v" :class="overviewSorting ? 'ok' : 'pending'">{{ overviewSorting ? '进行中' : (overviewSortText || '空闲') }}</span></div>
+            <div class="stat-row"><span class="sdot ok"></span><span class="stat-k">整理快捷键</span><span class="stat-v mono">{{ sortHotkey }} · {{ cancelHotkey }}</span></div>
+            <div class="card-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 9 6"/><polyline points="3 12 15 12"/><polyline points="3 18 21 18"/></svg>抓包 → 角色仓库 → 一键整理</div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-title">悬浮球状态</span></div>
+            <div class="stat-row"><span class="sdot" :class="ballVisible ? 'ok' : 'pending'"></span><span class="stat-k">悬浮球</span><span class="stat-v" :class="ballVisible ? 'ok' : 'pending'">{{ ballVisible ? '已显示' : '已隐藏' }}</span></div>
+            <div class="stat-row"><span class="sdot" :class="ballLocked ? 'ok' : 'pending'"></span><span class="stat-k">位置锁定</span><span class="stat-v" :class="ballLocked ? 'ok' : 'pending'">{{ ballLocked ? '已锁定' : '未锁定' }}</span></div>
+            <div class="card-foot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>托盘菜单或 Ctrl+Alt+B 切换</div>
+          </section>
+
+          <section class="card">
+            <div class="card-head"><span class="card-title">上手引导</span></div>
+            <div class="steps two-col">
+              <div class="step-col">
+                <div class="step-col-t">查价</div>
+                <div class="step"><div class="step-n">1</div><div class="step-t">启动 <b>Dark and Darker</b>（中文客户端）</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t">把鼠标 <b>悬停</b> 在任意物品上</div></div>
+                <div class="step"><div class="step-n">3</div><div class="step-t">按下 <span class="kbd">{{ scanKey }}</span> 即刻查价</div></div>
+              </div>
+              <div class="step-col">
+                <div class="step-col-t">整理仓库</div>
+                <div class="step"><div class="step-n">1</div><div class="step-t">启动<b>抓包</b>（角色仓库页）</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t">游戏中<b>打开要整理的仓库</b>界面</div></div>
+                <div class="step"><div class="step-n">3</div><div class="step-t">按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理</div></div>
+              </div>
             </div>
           </section>
         </div>

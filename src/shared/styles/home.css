@@ -502,12 +502,14 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text); font-variant-numeric: tabular-nums;
   display: flex; align-items: center; gap: 8px;
 }
+.hstat-unit { font-size: 12px; font-weight: 600; color: var(--text-3); letter-spacing: 0; }
 .hstat-v.accent { color: var(--accent); }
 .hstat-v .vdot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .hstat-v .vdot.bad { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.foot-ver { margin-left: auto; font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
 
 /* ===== overview grid ===== */
-.ov-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; align-items: start; }
+.ov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 
 .card-head {
   display: flex; align-items: center; gap: 9px;
@@ -541,6 +543,14 @@ input[type="range"]::-moz-range-thumb {
 
 /* steps */
 .steps { padding: 4px 18px 14px; }
+.steps.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; }
+.step-col-t {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 0 2px;
+  font-size: 12px; font-weight: 650; letter-spacing: 0.01em;
+  color: var(--text-2);
+}
+.step-col-t::after { content: ''; flex: 1; height: 1px; background: var(--line-soft); }
 .step {
   display: flex; align-items: flex-start; gap: 13px;
   padding: 10px 0;

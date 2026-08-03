@@ -32,6 +32,7 @@ let ballDrag = null;
 let ballDragTimer = null;
 let lastCharKey = '';
 let lastSortRunning = false;
+let sessionScanCount = 0;
 let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', pricing: null, attributes: { primary: [], secondary: [] }, reverseAttributes: {}, message: '', ts: 0 };
 const BALL_COLLAPSED = { w: 82, h: 82 };
 const BALL_EXPANDED = { w: 340, h: 590 };
@@ -125,6 +126,7 @@ app.on ('ready', async () => {
       if (isNewScan) {
         lastScan.id = r.id;
         lastScan.ts = Date.now ();
+        sessionScanCount++;
       }
       lastScan.zhName = findZhName (lastScan.id);
       if (lastScan.ok && lastScan.id) upsertHistoryRecord ();
@@ -638,6 +640,8 @@ async function gatherBallStatus () {
 
   return {
     locked: ballLocked,
+    ballVisible,
+    sessionScans: sessionScanCount,
     ocr: !!(health && health.status === 'ok'),
     version: health?.version || '—',
     mappings: health?.mappings || 0,
