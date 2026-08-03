@@ -1,38 +1,38 @@
 /* ============================================================
-   DarkTavern Floating Ball — 与主页同源设计变量 + 浅色玻璃拟态
+   DarkTavern Floating Ball — 暗酒馆深色玻璃拟态
    ============================================================ */
 
 :root {
   /* surfaces */
-  --bg: #f4f4f6;
-  --card: #ffffff;
-  --card-2: #fbfbfd;
-  --field: #ffffff;
-  --field-soft: rgba(0,0,0,0.045);
+  --bg: #1c1c1f;
+  --card: #2a2a2f;
+  --card-2: #232327;
+  --field: #2e2e34;
+  --field-soft: rgba(255,255,255,0.06);
 
   /* lines & shadows */
-  --line: rgba(0,0,0,0.085);
-  --line-soft: rgba(0,0,0,0.055);
-  --shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.05);
-  --shadow-pop: 0 4px 14px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
-  --shadow-nav: 0 1px 2px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.05);
+  --line: rgba(255,255,255,0.12);
+  --line-soft: rgba(255,255,255,0.08);
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.25);
+  --shadow-pop: 0 6px 20px rgba(0,0,0,0.45), 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-nav: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px rgba(0,0,0,0.25);
 
   /* text */
-  --text: #1d1d1f;
-  --text-2: #515154;
-  --text-3: #86868b;
+  --text: #f2f2f4;
+  --text-2: #b8b8be;
+  --text-3: #8b8b93;
 
   /* accent + semantic */
-  --accent: #0071e3;
-  --accent-strong: #0060c0;
-  --accent-soft: rgba(0,113,227,0.10);
-  --accent-softer: rgba(0,113,227,0.06);
-  --green: #1f9d55;
-  --green-soft: rgba(31,157,85,0.12);
-  --amber: #b45309;
-  --amber-soft: rgba(180,83,9,0.12);
-  --red: #d92d20;
-  --red-soft: rgba(217,45,32,0.10);
+  --accent: #4a9eff;
+  --accent-strong: #2f86f0;
+  --accent-soft: rgba(74,158,255,0.16);
+  --accent-softer: rgba(74,158,255,0.10);
+  --green: #4ade80;
+  --green-soft: rgba(74,222,128,0.14);
+  --amber: #fbbf24;
+  --amber-soft: rgba(251,191,36,0.14);
+  --red: #f87171;
+  --red-soft: rgba(248,113,113,0.14);
 
   /* radii */
   --r-card: 12px;
@@ -85,11 +85,11 @@ html, body, #app {
   position: relative;
   width: 54px; height: 54px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.78);
-  -webkit-backdrop-filter: blur(16px) saturate(1.5);
-  backdrop-filter: blur(16px) saturate(1.5);
-  border: 1px solid rgba(0,0,0,0.08);
-  box-shadow: var(--shadow-pop), inset 0 1px 0 rgba(255,255,255,0.7);
+  background: linear-gradient(150deg, rgba(46,46,52,0.94), rgba(28,28,32,0.94));
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: var(--shadow-pop), inset 0 1px 0 rgba(255,255,255,0.08);
   display: grid; place-items: center;
   cursor: pointer;
   transition: transform .15s var(--ease), opacity .25s var(--ease), box-shadow .25s var(--ease);
@@ -124,11 +124,11 @@ html, body, #app {
 .ball-text.busy { color: var(--accent); }
 .ball-text.small .bt-1 { font-size: 13.5px; }
 .ball-text .bt-2.gold {
-  color: #b48109;
+  color: #f2c14e;
   font-size: 15px;
   font-weight: 800;
   max-width: 52px;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.35);
 }
 .ball-text .bt-2 .bt-suffix {
   font-weight: 900;
@@ -152,12 +152,12 @@ html, body, #app {
 .panel {
   position: absolute; top: 70px; left: 0;
   width: 312px;
-  background: rgba(255,255,255,0.82);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
-  backdrop-filter: blur(20px) saturate(1.6);
-  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(26,26,30,0.92);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.10);
   border-radius: 14px;
-  box-shadow: var(--shadow-pop), inset 0 1px 0 rgba(255,255,255,0.8);
+  box-shadow: var(--shadow-pop), inset 0 1px 0 rgba(255,255,255,0.06);
   overflow: hidden;
   -webkit-app-region: no-drag;
 }
@@ -189,7 +189,7 @@ html, body, #app {
   cursor: pointer;
   transition: all .16s var(--ease);
 }
-.panel-close:hover { color: var(--text); background: rgba(0,0,0,0.08); }
+.panel-close:hover { color: var(--text); background: rgba(255,255,255,0.10); }
 .panel-close svg { width: 11px; height: 11px; }
 
 .scanning-bar {
@@ -209,7 +209,7 @@ html, body, #app {
   border-top: 1px solid var(--line-soft);
 }
 .stat-row:first-of-type { border-top: none; }
-.sdot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: rgba(0,0,0,0.14); transition: background .3s var(--ease), box-shadow .3s var(--ease); }
+.sdot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: rgba(255,255,255,0.18); transition: background .3s var(--ease), box-shadow .3s var(--ease); }
 .sdot.ok { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .sdot.pending { background: var(--amber); box-shadow: 0 0 0 3px var(--amber-soft); animation: blink 1.6s var(--ease) infinite; }
 .sdot.bad { background: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
@@ -241,7 +241,7 @@ html, body, #app {
   padding: 12px 14px 13px;
   border-top: 1px solid var(--line-soft);
   margin-top: 4px;
-  background: rgba(251,251,253,0.6);
+  background: rgba(255,255,255,0.04);
 }
 
 /* ===== buttons（与主页同源） ===== */
@@ -267,5 +267,5 @@ html, body, #app {
   background: var(--field-soft);
   border-color: var(--line-soft);
 }
-.btn.subtle:hover { color: var(--text); background: rgba(0,0,0,0.07); }
+.btn.subtle:hover { color: var(--text); background: rgba(255,255,255,0.10); }
 .btn.foot { flex: 1; }
