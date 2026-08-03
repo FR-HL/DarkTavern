@@ -33,6 +33,9 @@ debug/
 obsolete/
 opencode.exe
 
+# Investigation notes (session records, not for commit)
+INVESTIGATION-*.md
+
 # Reference projects pulled in for comparison only (not part of DarkTavern)
 GrimVault/
 GrimVault-Chinese-Edition/

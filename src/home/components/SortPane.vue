@@ -27,15 +27,15 @@ const SPEED_OPTIONS = [
 
 const SORT_PRESETS = [
   {
-    id: 'default', label: '默认整理',
+    id: 'default', label: '默认',
     order: [
-      { field: 'name', direction: 'asc' },
       { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
+      { field: 'name', direction: 'asc' },
       { field: 'slot', direction: 'desc' }, { field: 'rarity', direction: 'desc' },
     ],
   },
   {
-    id: 'category', label: '区分类别',
+    id: 'category', label: '宽松',
     groupMode: 'category',
     order: [
       { field: 'category', direction: 'asc' },
