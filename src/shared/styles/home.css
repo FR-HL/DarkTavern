@@ -612,7 +612,7 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
 .hist-en { font-size: 11px; color: var(--text-3); }
 .hist-rarity { font-size: 10px; vertical-align: 1px; }
 .hist-rarity-name { font-size: 12px; color: var(--text-2); }
-.hist-price { color: var(--amber); font-weight: 650; font-variant-numeric: tabular-nums; }
+.hist-price { color: var(--amber); font-weight: 700; font-variant-numeric: tabular-nums; }
 .hist-row { cursor: pointer; }
 .hist-row:hover td { background: var(--accent-softer); }
 .hist-row.open td { background: var(--accent-softer); }

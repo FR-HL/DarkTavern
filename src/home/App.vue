@@ -692,12 +692,11 @@ onBeforeUnmount (() => {
           <table>
             <thead><tr>
               <th style="width:104px">时间</th>
-              <th style="width:30%">物品</th>
+              <th style="width:34%">物品</th>
               <th style="width:88px">稀有度</th>
-              <th style="width:96px">市场现价</th>
-              <th style="width:96px">市场均价</th>
-              <th style="width:96px">商人回收</th>
-              <th style="width:88px">每格价值</th>
+              <th style="width:104px">市场现价</th>
+              <th style="width:104px">市场均价</th>
+              <th style="width:104px">商人回收</th>
             </tr></thead>
             <tbody>
               <template v-for="(rec, idx) in historyRecords" :key="rec.ts + '-' + idx">
@@ -711,12 +710,11 @@ onBeforeUnmount (() => {
                   </td>
                   <td><span class="hist-rarity" :style="{ color: rarityColor (rec.rarity) }">●</span> <span class="hist-rarity-name">{{ RARITY_CN[rec.rarity] || rec.rarity }}</span></td>
                   <td class="hist-price">{{ fmtG (rec.price) }}</td>
-                  <td>{{ fmtG (rec.market) }}</td>
-                  <td>{{ fmtG (rec.vendor) }}</td>
-                  <td class="mono dim">{{ rec.density ?? '—' }}</td>
+                  <td class="hist-price">{{ fmtG (rec.market) }}</td>
+                  <td class="hist-price">{{ fmtG (rec.vendor) }}</td>
                 </tr>
                 <tr v-if="expandedHistory === rec.ts" class="hist-detail-row">
-                  <td colspan="7">
+                  <td colspan="6">
                     <div class="hist-detail">
                       <div v-if="rec.attributes?.primary?.length" class="attr-group">
                         <div class="attr-group-title">主属性</div>
