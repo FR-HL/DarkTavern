@@ -8,6 +8,7 @@ import donorWangjiajun from '@assets/images/sponsors/wangjiajun.webp';
 import donorYuehai from '@assets/images/sponsors/yuehai.webp';
 import donorLidand from '@assets/images/sponsors/lidang.webp';
 import donorMobao from '@assets/images/sponsors/mobao.webp';
+import adminAvatar from '@assets/images/admin.avif';
 
 import StashView from './components/StashView.vue';
 import SortControl from './components/SortControl.vue';
@@ -1228,7 +1229,7 @@ onBeforeUnmount (() => {
         <div class="keeper">
           <div class="keeper-glow"></div>
           <div class="keeper-top">
-            <div class="keeper-seal"><span>方</span></div>
+            <div class="keeper-seal"><img :src="adminAvatar" alt="方源Official" /></div>
             <div class="keeper-idblock">
               <div class="keeper-name">方源Official</div>
               <div class="keeper-role">

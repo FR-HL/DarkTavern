@@ -743,14 +743,13 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
 .keeper-top { position: relative; display: flex; align-items: center; gap: 17px; }
 .keeper-seal {
   width: 62px; height: 62px; flex: none;
-  display: grid; place-items: center;
-  border-radius: 16px;
+  border-radius: 50%;
+  overflow: hidden;
   background: linear-gradient(150deg, #f2c14e 0%, #d1a33a 55%, #a87c1f 100%);
   box-shadow: 0 4px 14px rgba(180,133,9,0.4), inset 0 1px 0 rgba(255,255,255,0.45);
-  color: #4a350b;
   transition: transform .25s var(--ease), box-shadow .25s var(--ease);
 }
-.keeper-seal span { font-size: 30px; font-weight: 800; letter-spacing: 0; }
+.keeper-seal img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .keeper-top:hover .keeper-seal { transform: rotate(-4deg) scale(1.05); box-shadow: 0 7px 20px rgba(180,133,9,0.5), inset 0 1px 0 rgba(255,255,255,0.45); }
 .keeper-idblock { flex: 1; min-width: 0; }
 .keeper-name {
