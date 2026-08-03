@@ -96,8 +96,8 @@ STASH_TYPE_NAMES = {
 
 # In-game tab order of StashType values (top → bottom). The game shows tabs
 # for *owned* stashes only, in this fixed type order: Storage, Purchased 1-5,
-# Seasonal 1-2, Shared Stash.
-TAB_TYPE_ORDER = [4, 5, 6, 7, 8, 9, 20, 21, 30]
+# Shared Stash, Seasonal 1-2.
+TAB_TYPE_ORDER = [4, 5, 6, 7, 8, 9, 30, 20, 21]
 
 # Fallback mapping (full owned set, in in-game order) used when no character
 # context is available. The per-character dynamic mapping replaces this.
