@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { RARITY_CN, rarityColor } from '@/shared/lib/rarity.js';
 
 import donorKk from '@assets/images/sponsors/donor_kk.webp';
