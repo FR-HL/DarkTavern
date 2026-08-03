@@ -154,12 +154,23 @@ app.on ('ready', async () => {
   ipcMain.handle ('ball:open-home', () => openHomeWindow ());
   ipcMain.handle ('ball:open-settings', () => openSettingsWindow ('settings'));
 
-  ipcMain.handle ('ball:drag-start', () => {
+  ipcMain.handle ('ball:drag-start', async () => {
     if (!ballWindow || ballWindow.isDestroyed ()) return;
     const [wx, wy] = ballWindow.getPosition ();
     const c = screen.getCursorScreenPoint ();
     ballDrag = { wx, wy, cx: c.x, cy: c.y, moved: false };
     if (ballDragTimer) clearInterval (ballDragTimer);
+
+    // 左键状态探测（koffi），用于兜底结束拖拽
+    let vkGet = null;
+    try {
+      const { createRequire } = await import ('node:module');
+      const _require = createRequire (import.meta.url);
+      const koffi = _require ('koffi');
+      const user32 = koffi.load ('user32.dll');
+      vkGet = user32.func ('short __stdcall GetAsyncKeyState(int vKey)');
+    } catch (e) { /* ignore */ }
+
     ballDragTimer = setInterval (() => {
       if (!ballDrag || !ballWindow || ballWindow.isDestroyed ()) return;
       const cur = screen.getCursorScreenPoint ();
@@ -167,6 +178,20 @@ app.on ('ready', async () => {
       const dy = cur.y - ballDrag.cy;
       if (!ballDrag.moved && Math.abs (dx) + Math.abs (dy) > 3) ballDrag.moved = true;
       if (ballDrag.moved) ballWindow.setPosition (Math.round (ballDrag.wx + dx), Math.round (ballDrag.wy + dy));
+
+      // 兜底：左键已松开但 mouseup 事件丢失（拖出窗口/失焦等）→ 远程结束拖拽
+      if (vkGet) {
+        try {
+          const leftDown = (vkGet (0x01) & 0x8000) !== 0;
+          if (!leftDown) {
+            const moved = ballDrag.moved;
+            if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
+            ballDrag = null;
+            saveBallPos ();
+            if (ballWindow && !ballWindow.isDestroyed ()) ballWindow.webContents.send ('ball:drag-ended', { moved });
+          }
+        } catch (e) { /* ignore */ }
+      }
     }, 16);
   });
   ipcMain.handle ('ball:drag-end', () => {

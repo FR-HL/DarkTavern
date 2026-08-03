@@ -147,6 +147,12 @@ onMounted (async () => {
   window.electron.on ('ball:status', onStatus);
   window.electron.on ('ball:scan-result', onScanResult);
   window.electron.on ('ball:blur', () => collapse ());
+  window.electron.on ('ball:drag-ended', (d) => {
+    dragActive = false;
+    if (d && d.moved) { suppressClick = true; return; }
+    if (status.locked) return;
+    toggle ();
+  });
   window.addEventListener ('contextmenu', onContext);
 });
 
