@@ -102,7 +102,7 @@ class SettingsManager:
             "wiresharkPath": detect_wireshark_installation(),
             "developerMode": False,
             "sortFeedbackSyncEnabled": True,
-            "stashTabMapping": [4, 5, 6, 7, 8, 9, 30, 20, 21],
+            "stashTabMapping": [4, 5, 6, 7, 8, 9, 20, 21, 30],
             "autoStashSelection": True,
             "stashPackMode": False,
             "stashStackMode": False,
