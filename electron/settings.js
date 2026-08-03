@@ -27,8 +27,8 @@ const defaults = {
     run_price_check: 'XButton1',
   },
   dnd: {
-    sort_hotkey: 'Ctrl+F11',
-    cancel_hotkey: 'Ctrl+F12',
+    sort_hotkey: 'Ctrl+R',
+    cancel_hotkey: 'Ctrl+T',
     stash_next_key: 'Ctrl+E',
     capture_interface: 'Ethernet',
     capture_port_low: 20200,
@@ -73,8 +73,8 @@ settings.general.theme = settings.general.theme === 'dark' ? 'dark' : 'light';
 
 settings.hotkeys.run_price_check = settings.hotkeys.run_price_check || 'XButton1';
 
-settings.dnd.sort_hotkey = settings.dnd.sort_hotkey || 'Ctrl+F11';
-settings.dnd.cancel_hotkey = settings.dnd.cancel_hotkey || 'Ctrl+F12';
+settings.dnd.sort_hotkey = settings.dnd.sort_hotkey || 'Ctrl+R';
+settings.dnd.cancel_hotkey = settings.dnd.cancel_hotkey || 'Ctrl+T';
 settings.dnd.stash_next_key = settings.dnd.stash_next_key || 'Ctrl+E';
 settings.dnd.capture_interface = settings.dnd.capture_interface || 'Ethernet';
 settings.dnd.capture_port_low = parseInt (settings.dnd.capture_port_low) || 20200;

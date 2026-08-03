@@ -20,8 +20,8 @@ const error = ref ('');
 const uipi = ref (null);
 const sortSpeed = ref ('medium');
 const sortPreset = ref ('default');
-const sortHotkey = ref ('Ctrl+F11');
-const cancelHotkey = ref ('Ctrl+F12');
+const sortHotkey = ref ('Ctrl+R');
+const cancelHotkey = ref ('Ctrl+T');
 const listeningFor = ref (null);
 const newHotkey = ref (null);
 

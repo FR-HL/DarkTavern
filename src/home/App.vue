@@ -51,8 +51,8 @@ const sessionScans = ref (0);
 const historyCount = ref (0);
 const charCount = ref (0);
 const stashItems = ref (0);
-const sortHotkey = ref ('Ctrl+F11');
-const cancelHotkey = ref ('Ctrl+F12');
+const sortHotkey = ref ('Ctrl+R');
+const cancelHotkey = ref ('Ctrl+T');
 
 const apiKey = ref ('');
 const apiKeyVisible = ref (false);

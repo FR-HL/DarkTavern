@@ -304,8 +304,8 @@ app.on ('ready', async () => {
     alignment: settings.general.alignment || 'attached',
     scale: settings.general.scale || 1.0,
     launch_on_startup: !!settings.general.launch_on_startup,
-    sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+F11',
-    cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+F12',
+    sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+R',
+    cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+T',
     stash_next_key: settings.dnd?.stash_next_key || 'Ctrl+E',
     developer_mode: !!settings.general.developer_mode,
     theme: settings.general.theme === 'dark' ? 'dark' : 'light',
@@ -475,8 +475,8 @@ function registerStashHotkeys () {
 let registeredSortKeys = null;
 
 function registerSortHotkeys () {
-  const sortKey = settings.dnd?.sort_hotkey || 'Ctrl+F11';
-  const cancelKey = settings.dnd?.cancel_hotkey || 'Ctrl+F12';
+  const sortKey = settings.dnd?.sort_hotkey || 'Ctrl+R';
+  const cancelKey = settings.dnd?.cancel_hotkey || 'Ctrl+T';
 
   if (registeredSortKeys) {
     for (const k of registeredSortKeys) {
