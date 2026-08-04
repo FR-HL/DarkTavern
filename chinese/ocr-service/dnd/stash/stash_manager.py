@@ -1860,20 +1860,18 @@ class StashManager:
 
         if config.get("clear_bag"):
             def _clear_bag_step():
-                moved = skipped = 0
+                sims = self._sim_snapshot(storages, tab_order)
+                moves = []
                 for item in list(inventory.pq):
                     if cancel_event and cancel_event.is_set():
                         break
-                    dst_sid, dst_pos = self._find_stash_slot(storages, tab_order, item)
-                    if dst_sid is None:
-                        skipped += 1
-                        continue
-                    if self._cross_move(storages, inventory, StashType.BAG.value, item,
-                                        dst_sid, dst_pos, cancel_event):
-                        moved += 1
-                    else:
-                        skipped += 1
-                return f"搬入仓库 {moved} 件，跳过 {skipped} 件"
+                    for sid in tab_order:
+                        pos = self._sim_find(sims[sid], item)
+                        if pos is not None:
+                            moves.append((StashType.BAG.value, item, sid, pos))
+                            break
+                done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
+                return f"搬入仓库 {done}/{len(moves)} 件"
             run_step("背包清空", _clear_bag_step)
 
         if config.get("evacuate"):
@@ -1882,32 +1880,31 @@ class StashManager:
                 if int(s) in tab_order
             ]
             def _evacuate_step():
-                moved = skipped = 0
+                sims = self._sim_snapshot(storages, tab_order)
+                moves = []
                 for src_sid in evac_ids:
                     if cancel_event and cancel_event.is_set():
                         break
                     for item in list(storages[src_sid].pq):
                         if cancel_event and cancel_event.is_set():
                             break
-                        dst_sid, dst_pos = self._find_stash_slot(
-                            storages, [s for s in tab_order if s != src_sid], item
-                        )
-                        if dst_sid is None:
-                            skipped += 1
-                            continue
-                        if self._cross_move(storages, inventory, src_sid, item,
-                                            dst_sid, dst_pos, cancel_event):
-                            moved += 1
-                        else:
-                            skipped += 1
-                return f"搬出 {moved} 件，跳过 {skipped} 件"
+                        for dst_sid in tab_order:
+                            if dst_sid == src_sid:
+                                continue
+                            pos = self._sim_find(sims[dst_sid], item)
+                            if pos is not None:
+                                moves.append((src_sid, item, dst_sid, pos))
+                                break
+                done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
+                return f"搬出 {done}/{len(moves)} 件"
             run_step("腾空仓库", _evacuate_step)
 
         if config.get("categorize"):
             category_map = config.get("category_map") or {}
             def _categorize_step():
                 from dnd.items.game_data import item_data_manager
-                moved = skipped = 0
+                sims = self._sim_snapshot(storages, tab_order)
+                moves = []
                 for src_sid in tab_order:
                     if cancel_event and cancel_event.is_set():
                         break
@@ -1918,25 +1915,18 @@ class StashManager:
                         item_type = str(item_data.get("item_type") or "") or "other"
                         dst_val = category_map.get(item_type) or category_map.get("other")
                         if dst_val is None:
-                            skipped += 1
                             continue
                         try:
                             dst_sid = int(dst_val)
                         except (TypeError, ValueError):
-                            skipped += 1
                             continue
                         if dst_sid == src_sid or dst_sid not in storages:
                             continue
-                        dst_pos = storages[dst_sid].find_empty_slot(item)
-                        if dst_pos is None:
-                            skipped += 1
-                            continue
-                        if self._cross_move(storages, inventory, src_sid, item,
-                                            dst_sid, dst_pos, cancel_event):
-                            moved += 1
-                        else:
-                            skipped += 1
-                return f"归类 {moved} 件，跳过 {skipped} 件"
+                        pos = self._sim_find(sims[dst_sid], item)
+                        if pos is not None:
+                            moves.append((src_sid, item, dst_sid, pos))
+                done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
+                return f"归类 {done}/{len(moves)} 件"
             run_step("归类整理", _categorize_step)
 
         if config.get("repack"):
@@ -1952,27 +1942,164 @@ class StashManager:
                         items.sort(key=lambda e: e[1], cmp=comparator)
                     except Exception:
                         pass
-                moved = skipped = 0
+                sims = self._sim_snapshot(storages, tab_order)
+                moves = []
                 for src_sid, item in items:
                     if cancel_event and cancel_event.is_set():
                         break
-                    dst_sid, dst_pos = self._find_stash_slot(storages, tab_order, item)
-                    if dst_sid is None:
-                        skipped += 1
-                        continue
-                    if dst_sid == src_sid:
-                        continue
-                    if self._cross_move(storages, inventory, src_sid, item,
-                                        dst_sid, dst_pos, cancel_event):
-                        moved += 1
-                    else:
-                        skipped += 1
-                return f"前移 {moved} 件，跳过 {skipped} 件"
+                    for dst_sid in tab_order:
+                        pos = self._sim_find(sims[dst_sid], item)
+                        if pos is not None:
+                            if dst_sid != src_sid:
+                                moves.append((src_sid, item, dst_sid, pos))
+                            break
+                done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
+                return f"前移 {done}/{len(moves)} 件"
             run_step("全局重排", _repack_step)
 
         if cancel_event and cancel_event.is_set():
             return False, "跨仓整理已取消", results
         return True, "跨仓整理完成", results
+
+    def _sim_snapshot(self, storages, tab_order):
+        """Lightweight grid copies used for placement planning (target stash
+        selection stays consistent without touching the real models)."""
+        sims = {}
+        for sid in tab_order:
+            st = storages[sid]
+            sims[sid] = {
+                "width": st.width,
+                "height": st.height,
+                "grid": [row[:] for row in st.grid],
+            }
+        return sims
+
+    def _sim_find(self, sim, item):
+        """Find a free slot on the simulated grid and reserve it. Returns a
+        Point or None."""
+        from dnd.sort.point import Point
+        grid = sim["grid"]
+        w, h = item.width, item.height
+        for y in range(sim["height"] - h, -1, -1):
+            for x in range(sim["width"] - w, -1, -1):
+                if all(grid[x + dx][y + dy] == 0 for dx in range(w) for dy in range(h)):
+                    for dx in range(w):
+                        for dy in range(h):
+                            grid[x + dx][y + dy] = 1
+                    return Point(x, y)
+        return None
+
+    def _place_at(self, storages, inventory, src_sid, item, dst_sid, planned_pos):
+        """Place item into dst stash. Same-stash moves drag directly; other
+        moves come from the inventory (bag is always visible)."""
+        dst = storages[dst_sid]
+        pos = planned_pos
+        if pos is not None:
+            try:
+                free = all(
+                    dst.grid[pos.x + dx][pos.y + dy] == 0
+                    for dx in range(item.width) for dy in range(item.height)
+                )
+            except Exception:
+                free = False
+            if not free:
+                pos = dst.find_empty_slot(item)
+        else:
+            pos = dst.find_empty_slot(item)
+        if pos is None:
+            return False
+        try:
+            if src_sid == dst_sid:
+                dst.move(item, pos, dst)
+            else:
+                inventory.move(item, pos, dst)
+            return True
+        except Exception as e:
+            logger.warning(
+                "Place failed (%s -> stash %d): %s",
+                getattr(item, "name", "?"), dst_sid, e,
+            )
+            return False
+
+    def _execute_moves_batched(self, storages, inventory, moves, cancel_event):
+        """Execute planned moves in batches: items sharing the same source and
+        destination stash are picked into the inventory together (up to its
+        capacity), then the destination tab is switched once and they are all
+        dropped. Returns the number of successfully moved items."""
+        import time as _time
+        from collections import defaultdict
+        from dnd.sort import macros
+        from dnd.stash.storage import StashType
+
+        inv_capacity = inventory.width * inventory.height
+        groups = defaultdict(list)
+        for src, item, dst, pos in moves:
+            groups[(src, dst)].append((item, pos))
+
+        done = 0
+        for (src_sid, dst_sid), items in groups.items():
+            if cancel_event and cancel_event.is_set():
+                break
+            batches = []
+            batch, cells = [], 0
+            for item, pos in items:
+                c = item.width * item.height
+                if batch and cells + c > inv_capacity - 4:
+                    batches.append(batch)
+                    batch, cells = [], 0
+                batch.append((item, pos))
+                cells += c
+            if batch:
+                batches.append(batch)
+
+            for batch in batches:
+                if cancel_event and cancel_event.is_set():
+                    break
+                try:
+                    if src_sid == StashType.BAG.value:
+                        # Bag → stash: switch once, drop all (bag is visible).
+                        if not macros.click_stash_tab(dst_sid):
+                            break
+                        _time.sleep(0.25)
+                        for item, pos in batch:
+                            if not self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
+                                break
+                            done += 1
+                    elif src_sid == dst_sid:
+                        for item, pos in batch:
+                            if not self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
+                                break
+                            done += 1
+                    else:
+                        # Cross stash: switch to source, pick the whole batch
+                        # into the bag, switch to destination, drop all.
+                        if not macros.click_stash_tab(src_sid):
+                            break
+                        _time.sleep(0.25)
+                        picked = []
+                        for item, pos in batch:
+                            inv_slot = inventory.find_empty_slot(item)
+                            if inv_slot is None:
+                                break
+                            try:
+                                storages[src_sid].move(item, inv_slot, inventory)
+                            except Exception:
+                                break
+                            picked.append((item, pos))
+                        if not picked:
+                            break
+                        if not macros.click_stash_tab(dst_sid):
+                            break
+                        _time.sleep(0.25)
+                        for item, pos in picked:
+                            if self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
+                                done += 1
+                except Exception as e:
+                    logger.warning(
+                        "Batch move failed (stash %d -> %d): %s", src_sid, dst_sid, e
+                    )
+                    break
+        return done
 
     def _get_character(self, character_id):
         try:
