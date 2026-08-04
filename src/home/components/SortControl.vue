@@ -798,29 +798,17 @@ watch (() => props.charId, () => loadStashOptions ());
     <div class="sec">
       <div class="sec-label">跨仓整理</div>
       <div class="card">
-        <div class="term-body">
-          <p>组合多个跨仓库操作，按勾选顺序执行（移动以<b>背包为中转</b>；大批量搬运耗时较长，可随时 <span class="kbd">{{ cancelHotkey }}</span> 取消）。配置自动保存。</p>
-        </div>
         <div class="srow">
           <div class="srow-info">
-            <div class="srow-t">执行</div>
-            <div class="srow-d">按勾选的步骤依次执行（快捷键 <span class="kbd">{{ crossHotkey }}</span>）</div>
+            <div class="srow-t">开始跨仓整理</div>
+            <div class="srow-d">全局快捷键 <span class="kbd">{{ crossHotkey }}</span>，点击右侧「录制」可改</div>
           </div>
           <div class="srow-ctl">
             <button v-if="!(sorting && kind === 'cross')" class="btn primary" :disabled="!props.charId || sorting" @click="startCrossSort">开始跨仓整理</button>
             <button v-else class="btn danger" @click="cancelSort">取消整理</button>
-            <span v-if="crossNote" class="cal-note">{{ crossNote }}</span>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">开始跨仓整理键</div>
-            <div class="srow-d">全局快捷键，按保存的配置开始跨仓整理</div>
-          </div>
-          <div class="srow-ctl">
-            <span class="kbd">{{ crossHotkey }}</span>
             <button class="keybind-btn" :class="{ listening: listeningFor === 'cross' }" @click="startHotkeyListen('cross')">{{ hotkeyLabel('cross') }}</button>
-            <button class="btn primary" @click="saveHotkey('cross')">保存</button>
+            <button class="btn" @click="saveHotkey('cross')">保存</button>
+            <span v-if="crossNote" class="cal-note">{{ crossNote }}</span>
           </div>
         </div>
         <div class="srow">
