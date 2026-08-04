@@ -234,6 +234,7 @@ app.on ('ready', async () => {
   ipcMain.handle ('stash:calibration-reset', () => backend.calibrationReset ());
 
   registerStashHotkeys ();
+  registerCrossHotkeys ();
 
   // ── 查价记录 IPC ──
 
@@ -373,6 +374,11 @@ app.on ('ready', async () => {
       settings.dnd.stash_next_key = data.stash_next_key;
       needStashReregister = true;
     }
+    let needCrossReregister = false;
+    if (data.cross_hotkey !== undefined && data.cross_hotkey !== settings.dnd.cross_hotkey) {
+      settings.dnd.cross_hotkey = data.cross_hotkey;
+      needCrossReregister = true;
+    }
     if (data.follow_mode !== undefined && ['off', 'click', 'pixel'].includes (data.follow_mode)) {
       settings.dnd.follow_mode = data.follow_mode;
     }
@@ -405,6 +411,7 @@ app.on ('ready', async () => {
     if (needReregister) registerScanHotkey (overlay);
     if (needSortReregister) registerSortHotkeys ();
     if (needStashReregister) registerStashHotkeys ();
+    if (needCrossReregister) registerCrossHotkeys ();
     pushBallStatus ();
     return { success: true };
   });
@@ -546,6 +553,41 @@ function registerStashHotkeys () {
   }
 
   registeredStashKeys = registered;
+}
+
+let registeredCrossKeys = null;
+
+function registerCrossHotkeys () {
+  const crossKey = settings.dnd?.cross_hotkey || 'Ctrl+F12';
+
+  if (registeredCrossKeys) {
+    for (const k of registeredCrossKeys) {
+      try { globalShortcut.unregister (k); } catch (e) {}
+    }
+    registeredCrossKeys = null;
+  }
+  const registered = [];
+
+  // 开始跨仓整理：使用保存的配置与角色
+  try {
+    globalShortcut.register (crossKey, async () => {
+      const charId = settings.dnd?.sort_char_id || '';
+      if (!charId) {
+        notifyHome ('dnd:sort-notify', { type: 'error', message: '未配置整理角色，请先在角色仓库页选择角色' });
+        return;
+      }
+      let config = {};
+      try { config = JSON.parse (settings.dnd?.cross_config || '{}') || {}; } catch (e) {}
+      const r = await backend.crossSortStart ({ character_id: charId, config });
+      if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
+    });
+    registered.push (crossKey);
+    logger.info (`Cross-sort hotkey: ${crossKey}`);
+  } catch (e) {
+    logger.error (`Failed to register cross-sort hotkey ${crossKey}: ${e.message}`);
+  }
+
+  registeredCrossKeys = registered;
 }
 
 let registeredSortKeys = null;
