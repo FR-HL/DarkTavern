@@ -16,6 +16,15 @@ class SortStartRequest(BaseModel):
     group_mode: Optional[str] = None
 
 
+class CharacterOnlyRequest(BaseModel):
+    character_id: str
+
+
+class CrossSortRequest(BaseModel):
+    character_id: str
+    config: dict = {}
+
+
 class SortGroupModeUpdate(BaseModel):
     mode: str = "none"
 
@@ -103,6 +112,66 @@ def sort_start(body: SortStartRequest):
     )
 
 
+@router.post("/sort-all")
+def sort_all_start(body: CharacterOnlyRequest):
+    from dnd import uipi
+    from dnd.service import start_sort_all
+
+    status = uipi.check_uipi_status()
+    if status["blocked"]:
+        return {
+            "success": False,
+            "error": (
+                "检测到游戏以管理员权限运行，而 DarkTavern 不是管理员。"
+                "Windows 会拦截鼠标模拟输入，整理将无效。"
+                "请以管理员身份运行 DarkTavern（右键→以管理员身份运行），"
+                "或取消游戏的管理员权限后重试。"
+            ),
+            "uipi": status,
+        }
+    return start_sort_all(character_id=body.character_id)
+
+
+@router.post("/merge-stacks")
+def merge_stacks_start(body: CharacterOnlyRequest):
+    from dnd import uipi
+    from dnd.service import start_merge_stacks
+
+    status = uipi.check_uipi_status()
+    if status["blocked"]:
+        return {
+            "success": False,
+            "error": (
+                "检测到游戏以管理员权限运行，而 DarkTavern 不是管理员。"
+                "Windows 会拦截鼠标模拟输入，合并将无效。"
+                "请以管理员身份运行 DarkTavern（右键→以管理员身份运行），"
+                "或取消游戏的管理员权限后重试。"
+            ),
+            "uipi": status,
+        }
+    return start_merge_stacks(character_id=body.character_id)
+
+
+@router.post("/cross")
+def cross_sort_start(body: CrossSortRequest):
+    from dnd import uipi
+    from dnd.service import start_cross_sort
+
+    status = uipi.check_uipi_status()
+    if status["blocked"]:
+        return {
+            "success": False,
+            "error": (
+                "检测到游戏以管理员权限运行，而 DarkTavern 不是管理员。"
+                "Windows 会拦截鼠标模拟输入，整理将无效。"
+                "请以管理员身份运行 DarkTavern（右键→以管理员身份运行），"
+                "或取消游戏的管理员权限后重试。"
+            ),
+            "uipi": status,
+        }
+    return start_cross_sort(character_id=body.character_id, config=body.config or {})
+
+
 @router.post("/cancel")
 def sort_cancel():
     from dnd.service import cancel_sort
@@ -115,10 +184,19 @@ def sort_status():
     state = get_sort_state()
     return {
         "running": state["running"],
+        "kind": state.get("kind", "single"),
         "character_id": state["character_id"],
         "stash_id": state["stash_id"],
         "result": state["result"],
         "error": state["error"],
+        "sort_all_total": state.get("sort_all_total", 0),
+        "sort_all_current": state.get("sort_all_current", 0),
+        "sort_all_label": state.get("sort_all_label", ""),
+        "sort_all_results": state.get("sort_all_results", []),
+        "cross_steps": state.get("cross_steps", []),
+        "cross_step_index": state.get("cross_step_index", 0),
+        "cross_step_label": state.get("cross_step_label", ""),
+        "cross_results": state.get("cross_results", []),
     }
 
 

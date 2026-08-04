@@ -230,6 +230,18 @@ export async function sortStart (params) {
   return await post ('/sort/start', params) || { error: 'Service unavailable' };
 }
 
+export async function sortAllStart (params) {
+  return await post ('/sort/sort-all', params) || { error: 'Service unavailable' };
+}
+
+export async function mergeStacksStart (params) {
+  return await post ('/sort/merge-stacks', params) || { error: 'Service unavailable' };
+}
+
+export async function crossSortStart (params) {
+  return await post ('/sort/cross', params) || { error: 'Service unavailable' };
+}
+
 export async function sortCancel () {
   return await post ('/sort/cancel') || { error: 'Service unavailable' };
 }

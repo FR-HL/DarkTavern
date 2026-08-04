@@ -279,6 +279,26 @@ app.on ('ready', async () => {
     if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
     return r;
   });
+  ipcMain.handle ('dnd:sort-all-start', async (e, params) => {
+    const r = await backend.sortAllStart (params);
+    if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
+    return r;
+  });
+  ipcMain.handle ('dnd:merge-stacks-start', async (e, params) => {
+    const r = await backend.mergeStacksStart (params);
+    if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
+    return r;
+  });
+  ipcMain.handle ('dnd:cross-sort-start', async (e, params) => {
+    try {
+      const r = await backend.crossSortStart (params);
+      if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
+      return r;
+    } catch (err) {
+      logger.error (`cross-sort-start handler error: ${err?.message}`, err);
+      return { success: false, error: 'handler_error: ' + (err?.message || String (err)) };
+    }
+  });
   ipcMain.handle ('dnd:sort-cancel', () => backend.sortCancel ());
   ipcMain.handle ('dnd:sort-status', () => backend.sortStatus ());
   ipcMain.handle ('dnd:sort-uipi', () => backend.getSortUipiStatus ());
@@ -323,6 +343,9 @@ app.on ('ready', async () => {
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+T',
     stash_next_key: settings.dnd?.stash_next_key || 'Ctrl+E',
     follow_mode: ['off', 'click', 'pixel'].includes (settings.dnd?.follow_mode) ? settings.dnd.follow_mode : 'click',
+    cross_config: (() => {
+      try { return JSON.parse (settings.dnd?.cross_config || 'null') || null; } catch (e) { return null; }
+    })(),
     developer_mode: !!settings.general.developer_mode,
     theme: settings.general.theme === 'dark' ? 'dark' : 'light',
   }));
@@ -352,6 +375,9 @@ app.on ('ready', async () => {
     }
     if (data.follow_mode !== undefined && ['off', 'click', 'pixel'].includes (data.follow_mode)) {
       settings.dnd.follow_mode = data.follow_mode;
+    }
+    if (data.cross_config !== undefined) {
+      settings.dnd.cross_config = typeof data.cross_config === 'string' ? data.cross_config : JSON.stringify (data.cross_config || {});
     }
     if (data.developer_mode !== undefined) {
       settings.general.developer_mode = !!data.developer_mode;

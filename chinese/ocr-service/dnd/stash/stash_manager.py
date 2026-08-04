@@ -1606,6 +1606,374 @@ class StashManager:
 
         return returned
 
+    def merge_stacks_across_stashes(self, character_id, cancel_event=None, overlay_session=None):
+        """Merge stackable items across all stashes (inventory bridge).
+
+        Includes same-stash multi-stacks and bag items: every stackable group
+        (item_id + rarity) is merged into full stacks — same-stash stacks are
+        dragged directly, bag stacks are dropped into stash stacks (the bag is
+        always visible), cross-stash stacks use the inventory as a bridge.
+
+        Returns ``(success, message, summary)``.
+        """
+        import time as _time
+        from dnd.sort import macros
+        from dnd.stash.storage import StashType, Storage
+
+        session = overlay_session or NullOverlaySession()
+        session.update_status("Merging stacks across stashes...", status="info")
+
+        char = self.characters_cache.get(str(character_id))
+        if not char:
+            return False, "Character not found", None
+
+        file_path = os.path.join(self.data_dir, f"{character_id}.json")
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            stashes = parse_stashes(raw)
+        except Exception as e:
+            logger.error(f"Error loading character data for stack merge: {e}")
+            return False, "Unable to read character data", None
+
+        inv_items = stashes.get(StashType.BAG.value, [])
+        owned_ids = [
+            int(s) for s in stashes.keys()
+            if int(s) not in (StashType.BAG.value, StashType.EQUIPMENT.value)
+        ]
+        macros.build_dynamic_tab_mapping([str(s) for s in owned_ids])
+        tab_order = [int(s) for s in macros.TAB_TYPE_ORDER if s in owned_ids]
+
+        storages = {sid: Storage(sid, stashes.get(sid, [])) for sid in tab_order}
+        inventory = Storage(StashType.BAG.value, inv_items)
+
+        groups = self._collect_stack_groups(storages, inventory, tab_order)
+        logger.info(
+            "Stack merge: %d stackable group(s) across %d stash(es): %s",
+            len(groups), len(tab_order),
+            {k: len(v) for k, v in groups.items()},
+        )
+
+        if not macros.force_activate_game_window():
+            return False, "Game window not found", None
+
+        merged, moved, skipped = self._merge_stack_groups(
+            storages, inventory, groups, cancel_event
+        )
+
+        session.update_status("Stack merge complete.", status="info")
+        session.add_log(
+            f"Merged {merged} stack(s), moved {moved} item(s), skipped {skipped}."
+        )
+        summary = {"merged": merged, "moved": moved, "skipped": skipped}
+        if cancel_event and cancel_event.is_set():
+            return False, "Stack merge cancelled", summary
+        return True, f"堆叠合并完成：合并 {merged} 组，跳过 {skipped} 组", summary
+
+    def _collect_stack_groups(self, storages, inventory, tab_order):
+        """Group stackable items by (item_id, rarity) across stashes + bag."""
+        groups = {}
+        all_storages = dict(storages)
+        all_storages[StashType.BAG.value] = inventory
+        for sid in list(all_storages.keys()):
+            for it in all_storages[sid].pq:
+                max_stack = getattr(it, "max_stack_size", 1) or 1
+                if max_stack <= 1:
+                    continue
+                key = (getattr(it, "item_id", ""), getattr(it, "rarity", ""))
+                groups.setdefault(key, []).append((sid, it))
+        return groups
+
+    def _merge_stack_groups(self, storages, inventory, groups, cancel_event):
+        """Merge every stackable group into full stacks. Target pool grows
+        dynamically; targets are stash stacks only (never the bag)."""
+        from dnd.sort.point import Point
+        merged = 0
+        moved = 0
+        skipped = 0
+        for key, entries in groups.items():
+            if cancel_event and cancel_event.is_set():
+                break
+            if len(entries) <= 1:
+                continue
+            max_stack = max(
+                (getattr(it, "max_stack_size", 1) or 1) for _, it in entries
+            )
+            if max_stack <= 1:
+                continue
+            sorted_entries = sorted(
+                entries, key=lambda e: getattr(e[1], "quantity", 1), reverse=True
+            )
+            targets = []  # [stash_id, item, current_qty]
+            for src_sid, item in sorted_entries:
+                if cancel_event and cancel_event.is_set():
+                    break
+                qty = getattr(item, "quantity", 1)
+                fit = None
+                for t in targets:
+                    if t[0] != StashType.BAG.value and t[2] + qty <= max_stack:
+                        fit = t
+                        break
+                if fit is None:
+                    targets.append([src_sid, item, qty])
+                    continue
+                dst_sid, dst_item, _ = fit
+                target_pos = Point(dst_item.position.x, dst_item.position.y)
+                if self._cross_move(storages, inventory, src_sid, item, dst_sid, target_pos, cancel_event):
+                    fit[2] = min(max_stack, fit[2] + qty)
+                    dst_item.quantity = fit[2]
+                    logger.info(
+                        "Stack merge OK: %s qty %d -> stash %d (now %d)",
+                        getattr(item, "name", "?"), qty, dst_sid, dst_item.quantity,
+                    )
+                    merged += 1
+                    moved += 1
+                else:
+                    logger.warning(
+                        "Stack merge failed: %s qty %d (stash %d -> %d)",
+                        getattr(item, "name", "?"), qty, src_sid, dst_sid,
+                    )
+                    skipped += 1
+        return merged, moved, skipped
+
+    def _cross_move(self, storages, inventory, src_sid, item, dst_sid, dst_pos, cancel_event):
+        """Move a single item between stashes with tab switching.
+
+        - bag → stash: switch to the stash tab and drag directly (the bag is
+          always visible in the stash UI).
+        - same stash: drag directly.
+        - cross stash: switch to source, pick into the bag, switch to
+          destination, place (inventory bridge).
+        Returns True on success.
+        """
+        import time as _time
+        from dnd.sort import macros
+
+        try:
+            if src_sid == StashType.BAG.value:
+                if not macros.click_stash_tab(dst_sid):
+                    return False
+                _time.sleep(0.25)
+                inventory.move(item, dst_pos, storages[dst_sid])
+                return True
+            if src_sid == dst_sid:
+                storages[src_sid].move(item, dst_pos, storages[dst_sid])
+                return True
+            # Cross stash: inventory bridge.
+            if not macros.click_stash_tab(src_sid):
+                return False
+            _time.sleep(0.25)
+            inv_slot = inventory.find_empty_slot(item)
+            if inv_slot is None:
+                logger.warning("Cross move: inventory full (need %dx%d)", item.width, item.height)
+                return False
+            storages[src_sid].move(item, inv_slot, inventory)
+            if not macros.click_stash_tab(dst_sid):
+                return False
+            _time.sleep(0.25)
+            inventory.move(item, dst_pos, storages[dst_sid])
+            return True
+        except Exception as e:
+            logger.warning(
+                "Cross move failed (%s in stash %d -> %d): %s",
+                getattr(item, "name", "?"), src_sid, dst_sid, e,
+            )
+            return False
+
+    def _find_stash_slot(self, storages, tab_order, item):
+        """First stash (in tab order) with a free slot for item. Returns
+        (stash_id, Point) or (None, None)."""
+        for sid in tab_order:
+            pos = storages[sid].find_empty_slot(item)
+            if pos is not None:
+                return sid, pos
+        return None, None
+
+    def cross_sort(self, character_id, config, cancel_event=None, overlay_session=None, progress_cb=None):
+        """Configurable cross-stash organisation.
+
+        ``config`` keys (all optional, executed in this order):
+          merge           bool   — merge stackables (same + cross stash + bag)
+          clear_bag       bool   — move bag items into stashes
+          evacuate        bool   — empty the selected stashes
+          evacuate_stashes list   — stash ids to empty
+          categorize      bool   — move items to per-type stash
+          category_map    dict   — item_type -> stash_id (str keys)
+          repack          bool   — move all items toward the front stashes
+
+        Returns ``(success, message, results)``.
+        """
+        import time as _time
+        from dnd.sort import macros
+        from dnd.stash.storage import StashType, Storage
+
+        session = overlay_session or NullOverlaySession()
+        char = self.characters_cache.get(str(character_id))
+        if not char:
+            return False, "Character not found", []
+
+        file_path = os.path.join(self.data_dir, f"{character_id}.json")
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            stashes = parse_stashes(raw)
+        except Exception as e:
+            logger.error(f"Error loading character data for cross sort: {e}")
+            return False, "Unable to read character data", []
+
+        inv_items = stashes.get(StashType.BAG.value, [])
+        owned_ids = [
+            int(s) for s in stashes.keys()
+            if int(s) not in (StashType.BAG.value, StashType.EQUIPMENT.value)
+        ]
+        macros.build_dynamic_tab_mapping([str(s) for s in owned_ids])
+        tab_order = [int(s) for s in macros.TAB_TYPE_ORDER if s in owned_ids]
+        storages = {sid: Storage(sid, stashes.get(sid, [])) for sid in tab_order}
+        inventory = Storage(StashType.BAG.value, inv_items)
+
+        if not macros.force_activate_game_window():
+            return False, "Game window not found", []
+
+        results = []
+
+        def run_step(label, fn):
+            if cancel_event and cancel_event.is_set():
+                return
+            if progress_cb:
+                progress_cb(label)
+            session.update_status(label, status="info")
+            try:
+                detail = fn()
+                results.append({"step": label, "ok": True, "detail": detail or ""})
+            except Exception as e:
+                logger.warning("Cross step %s failed: %s", label, e)
+                results.append({"step": label, "ok": False, "detail": str(e)})
+
+        if config.get("merge"):
+            def _merge_step():
+                groups = self._collect_stack_groups(storages, inventory, tab_order)
+                merged, moved, skipped = self._merge_stack_groups(
+                    storages, inventory, groups, cancel_event
+                )
+                return f"合并 {merged} 组，跳过 {skipped} 组"
+            run_step("堆叠合并", _merge_step)
+
+        if config.get("clear_bag"):
+            def _clear_bag_step():
+                moved = skipped = 0
+                for item in list(inventory.pq):
+                    if cancel_event and cancel_event.is_set():
+                        break
+                    dst_sid, dst_pos = self._find_stash_slot(storages, tab_order, item)
+                    if dst_sid is None:
+                        skipped += 1
+                        continue
+                    if self._cross_move(storages, inventory, StashType.BAG.value, item,
+                                        dst_sid, dst_pos, cancel_event):
+                        moved += 1
+                    else:
+                        skipped += 1
+                return f"搬入仓库 {moved} 件，跳过 {skipped} 件"
+            run_step("背包清空", _clear_bag_step)
+
+        if config.get("evacuate"):
+            evac_ids = [
+                int(s) for s in (config.get("evacuate_stashes") or [])
+                if int(s) in tab_order
+            ]
+            def _evacuate_step():
+                moved = skipped = 0
+                for src_sid in evac_ids:
+                    if cancel_event and cancel_event.is_set():
+                        break
+                    for item in list(storages[src_sid].pq):
+                        if cancel_event and cancel_event.is_set():
+                            break
+                        dst_sid, dst_pos = self._find_stash_slot(
+                            storages, [s for s in tab_order if s != src_sid], item
+                        )
+                        if dst_sid is None:
+                            skipped += 1
+                            continue
+                        if self._cross_move(storages, inventory, src_sid, item,
+                                            dst_sid, dst_pos, cancel_event):
+                            moved += 1
+                        else:
+                            skipped += 1
+                return f"搬出 {moved} 件，跳过 {skipped} 件"
+            run_step("腾空仓库", _evacuate_step)
+
+        if config.get("categorize"):
+            category_map = config.get("category_map") or {}
+            def _categorize_step():
+                from dnd.items.game_data import item_data_manager
+                moved = skipped = 0
+                for src_sid in tab_order:
+                    if cancel_event and cancel_event.is_set():
+                        break
+                    for item in list(storages[src_sid].pq):
+                        if cancel_event and cancel_event.is_set():
+                            break
+                        item_data = item_data_manager.get_item_data(getattr(item, "item_id", "")) or {}
+                        item_type = str(item_data.get("item_type") or "") or "other"
+                        dst_val = category_map.get(item_type) or category_map.get("other")
+                        if dst_val is None:
+                            skipped += 1
+                            continue
+                        try:
+                            dst_sid = int(dst_val)
+                        except (TypeError, ValueError):
+                            skipped += 1
+                            continue
+                        if dst_sid == src_sid or dst_sid not in storages:
+                            continue
+                        dst_pos = storages[dst_sid].find_empty_slot(item)
+                        if dst_pos is None:
+                            skipped += 1
+                            continue
+                        if self._cross_move(storages, inventory, src_sid, item,
+                                            dst_sid, dst_pos, cancel_event):
+                            moved += 1
+                        else:
+                            skipped += 1
+                return f"归类 {moved} 件，跳过 {skipped} 件"
+            run_step("归类整理", _categorize_step)
+
+        if config.get("repack"):
+            def _repack_step():
+                from dnd.items.item import Item
+                items = []
+                for sid in tab_order:
+                    for it in storages[sid].pq:
+                        items.append((sid, it))
+                if Item.sort_order:
+                    try:
+                        comparator = Item.build_sort_comparator(Item.sort_order)
+                        items.sort(key=lambda e: e[1], cmp=comparator)
+                    except Exception:
+                        pass
+                moved = skipped = 0
+                for src_sid, item in items:
+                    if cancel_event and cancel_event.is_set():
+                        break
+                    dst_sid, dst_pos = self._find_stash_slot(storages, tab_order, item)
+                    if dst_sid is None:
+                        skipped += 1
+                        continue
+                    if dst_sid == src_sid:
+                        continue
+                    if self._cross_move(storages, inventory, src_sid, item,
+                                        dst_sid, dst_pos, cancel_event):
+                        moved += 1
+                    else:
+                        skipped += 1
+                return f"前移 {moved} 件，跳过 {skipped} 件"
+            run_step("全局重排", _repack_step)
+
+        if cancel_event and cancel_event.is_set():
+            return False, "跨仓整理已取消", results
+        return True, "跨仓整理完成", results
+
     def _get_character(self, character_id):
         try:
             file_path = os.path.join(self.data_dir, f"{character_id}.json")

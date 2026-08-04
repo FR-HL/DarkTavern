@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 
 const props = defineProps ({
   charId: { type: String, default: '' },
@@ -283,29 +283,32 @@ async function changeSpeed (id) {
   } catch (e) {}
 }
 
+async function confirmCharacter () {
+  const sid = parseInt (props.stashId) || 0;
+  const isPersonal = sid < 20 || (sid >= 100 && sid <= 102);
+  if (!isPersonal || !props.activeCharId || props.activeCharId === props.charId) return true;
+  let liveName = props.activeCharId;
+  let pickedName = props.charId;
+  try {
+    const d = await invoke ('dnd:characters');
+    const list = d?.characters || [];
+    liveName = list.find (c => c.id === props.activeCharId)?.nickname || liveName;
+    pickedName = list.find (c => c.id === props.charId)?.nickname || pickedName;
+  } catch (e) {}
+  return window.confirm (
+    `游戏内当前角色是「${liveName}」，你选择整理的是「${pickedName}」。\n` +
+    '整理会操作游戏内当前打开的仓库界面，角色不一致会整理错仓库。\n' +
+    '请先在游戏中切换到「' + pickedName + '」并打开它的仓库。\n\n仍要继续吗？'
+  );
+}
+
 async function startSort () {
   if (!canStart.value) { error.value = '请选择角色和仓库'; return; }
   error.value = '';
   result.value = null;
-  const sid = parseInt (props.stashId) || 0;
-  const isPersonal = sid < 20 || (sid >= 100 && sid <= 102);
-  if (isPersonal && props.activeCharId && props.activeCharId !== props.charId) {
-    let liveName = props.activeCharId;
-    let pickedName = props.charId;
-    try {
-      const d = await invoke ('dnd:characters');
-      const list = d?.characters || [];
-      liveName = list.find (c => c.id === props.activeCharId)?.nickname || liveName;
-      pickedName = list.find (c => c.id === props.charId)?.nickname || pickedName;
-    } catch (e) {}
-    const ok = window.confirm (
-      `游戏内当前角色是「${liveName}」，你选择整理的是「${pickedName}」。\n` +
-      '整理会操作游戏内当前打开的仓库界面，角色不一致会整理错仓库。\n' +
-      '请先在游戏中切换到「' + pickedName + '」并打开它的仓库。\n\n仍要继续吗？'
-    );
-    if (!ok) return;
-  }
+  if (!(await confirmCharacter ())) return;
   sorting.value = true;
+  kind.value = 'single';
   try {
     const r = await invoke ('dnd:sort-start', {
       character_id: props.charId,
@@ -314,6 +317,118 @@ async function startSort () {
       stack_mode: props.stackMode,
       include_inventory: props.includeInv,
     });
+    if (!r?.success) { error.value = r?.error || '启动失败'; sorting.value = false; }
+  } catch (e) { error.value = '启动失败'; sorting.value = false; }
+}
+
+// ── 全仓库整理 / 跨仓库整理 ──
+const kind = ref ('single');
+const sortAllInfo = ref ({ total: 0, current: 0, label: '', results: [] });
+
+// ── 跨仓整理配置 ──
+const CATEGORY_LABELS = { Weapon: '武器', Armor: '护甲', Utility: '工具', Accessory: '饰品', Misc: '杂物', other: '其他' };
+const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, category_map: {}, repack: false, evacuate: false, evacuate_stashes: [] });
+const crossNote = ref ('');
+const crossSteps = ref ([]);
+const crossStepIndex = ref (0);
+const crossStepLabel = ref ('');
+const crossResults = ref ([]);
+const stashOptions = ref ([]);
+
+const crossPosition = computed ({
+  get: () => crossCfg.value.categorize ? 'category' : crossCfg.value.repack ? 'repack' : 'none',
+  set: v => {
+    crossCfg.value.categorize = v === 'category';
+    crossCfg.value.repack = v === 'repack';
+  },
+});
+
+async function loadStashOptions () {
+  if (!props.charId) { stashOptions.value = []; return; }
+  try {
+    const d = await invoke ('dnd:character', props.charId);
+    const stashes = d?.stashes || {};
+    stashOptions.value = Object.keys (stashes)
+      .filter (id => !['2', '3'].includes (id))
+      .map (id => ({ id, label: stashes[id].label || `仓库${id}` }));
+    const cfg = crossCfg.value;
+    const needDefault = Object.keys (CATEGORY_LABELS).every (t => !cfg.category_map[t]);
+    if (needDefault && stashOptions.value.length) {
+      const s = stashOptions.value;
+      cfg.category_map = {
+        Weapon: String (s[0]?.id ?? ''), Armor: String (s[0]?.id ?? ''),
+        Utility: String (s[1]?.id ?? s[0]?.id ?? ''), Accessory: String (s[1]?.id ?? s[0]?.id ?? ''),
+        Misc: String (s[2]?.id ?? s[0]?.id ?? ''), other: String (s[2]?.id ?? s[0]?.id ?? ''),
+      };
+    }
+  } catch (e) {}
+}
+
+async function loadCrossConfig () {
+  try {
+    const d = await invoke ('settings:get');
+    if (d && d.cross_config) {
+      crossCfg.value = {
+        merge: true, clear_bag: false, categorize: false, category_map: {},
+        repack: false, evacuate: false, evacuate_stashes: [],
+        ...d.cross_config,
+      };
+    }
+  } catch (e) {}
+}
+
+let crossSaveTimer = null;
+watch (crossCfg, () => {
+  clearTimeout (crossSaveTimer);
+  crossSaveTimer = setTimeout (() => {
+    invoke ('settings:save', { cross_config: JSON.stringify (crossCfg.value) });
+  }, 400);
+}, { deep: true });
+
+async function startCrossSort () {
+  if (!props.charId) { crossNote.value = '请先在角色仓库页选择角色'; return; }
+  if (!(await confirmCharacter ())) return;
+  error.value = '';
+  result.value = null;
+  crossNote.value = '';
+  sorting.value = true;
+  kind.value = 'cross';
+  crossResults.value = [];
+  try {
+    const cfg = JSON.parse (JSON.stringify (crossCfg.value));
+    const r = await invoke ('dnd:cross-sort-start', { character_id: props.charId, config: cfg });
+    if (!r?.success) {
+      error.value = r?.error || ('启动失败：' + JSON.stringify (r));
+      sorting.value = false;
+    }
+  } catch (e) {
+    error.value = '启动失败：' + String (e);
+    sorting.value = false;
+  }
+}
+
+async function startSortAll () {
+  if (!props.charId) { error.value = '请先在角色仓库页选择角色'; return; }
+  error.value = '';
+  result.value = null;
+  if (!(await confirmCharacter ())) return;
+  sorting.value = true;
+  kind.value = 'all';
+  sortAllInfo.value = { total: 0, current: 0, label: '', results: [] };
+  try {
+    const r = await invoke ('dnd:sort-all-start', { character_id: props.charId });
+    if (!r?.success) { error.value = r?.error || '启动失败'; sorting.value = false; }
+  } catch (e) { error.value = '启动失败'; sorting.value = false; }
+}
+
+async function startMergeStacks () {
+  if (!props.charId) { error.value = '请先在角色仓库页选择角色'; return; }
+  error.value = '';
+  result.value = null;
+  sorting.value = true;
+  kind.value = 'merge';
+  try {
+    const r = await invoke ('dnd:merge-stacks-start', { character_id: props.charId });
     if (!r?.success) { error.value = r?.error || '启动失败'; sorting.value = false; }
   } catch (e) { error.value = '启动失败'; sorting.value = false; }
 }
@@ -327,6 +442,19 @@ async function pollStatus () {
   if (!sorting.value) return;
   try {
     const s = await invoke ('dnd:sort-status');
+    if (s) {
+      if (s.kind) kind.value = s.kind;
+      sortAllInfo.value = {
+        total: s.sort_all_total || 0,
+        current: s.sort_all_current || 0,
+        label: s.sort_all_label || '',
+        results: s.sort_all_results || [],
+      };
+      crossSteps.value = s.cross_steps || [];
+      crossStepIndex.value = s.cross_step_index || 0;
+      crossStepLabel.value = s.cross_step_label || '';
+      crossResults.value = s.cross_results || [];
+    }
     if (s && !s.running) {
       sorting.value = false;
       result.value = s.result;
@@ -397,6 +525,8 @@ onMounted (async () => {
   loadHotkeys ();
   loadCalibration ();
   loadFollowCal ();
+  loadCrossConfig ();
+  loadStashOptions ();
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
@@ -411,10 +541,13 @@ onMounted (async () => {
 
 onBeforeUnmount (() => {
   if (poll) clearInterval (poll);
+  if (crossSaveTimer) clearTimeout (crossSaveTimer);
   document.removeEventListener ('keydown', onHotkeyKeyDown);
   unsubs.forEach (u => u ());
   unsubs = [];
 });
+
+watch (() => props.charId, () => loadStashOptions ());
 </script>
 
 <template>
@@ -495,7 +628,7 @@ onBeforeUnmount (() => {
             <span class="hint"><span class="kbd">{{ cancelHotkey }}</span> 取消整理</span>
             <span class="hint"><span class="kbd">{{ stashNextKey }}</span> 切换仓库</span>
           </div>
-          <button v-if="!sorting" class="btn primary lg" :disabled="!canStart" @click="startSort">开始整理</button>
+          <button v-if="!sorting || kind !== 'single'" class="btn primary lg" :disabled="!canStart" @click="startSort">开始整理</button>
           <button v-else class="btn danger lg" @click="cancelSort">取消整理</button>
         </div>
 
@@ -535,14 +668,141 @@ onBeforeUnmount (() => {
           </div>
         </div>
 
-        <div v-if="sorting" class="run-progress">
+        <div v-if="sorting && kind === 'single'" class="run-progress">
           <span class="spin"></span>
           <span>整理进行中——请保持 <b>Dark and Darker</b> 窗口在前台，不要移动鼠标。</span>
         </div>
 
-        <div v-if="error" class="status error">{{ error }}</div>
-        <div v-if="result" class="status" :class="result.success ? 'success' : 'error'">
+        <div v-if="kind === 'single' && error" class="status error">{{ error }}</div>
+        <div v-if="kind === 'single' && result" class="status" :class="result.success ? 'success' : 'error'">
           {{ result.success ? '整理完成' : '整理未完成' }}<template v-if="result.message">：{{ result.message }}</template>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">全仓库整理</div>
+      <div class="card">
+        <div class="term-body">
+          <p>按游戏内标签顺序<b>逐个整理该角色的全部仓库</b>：跳过空仓库，背包物品并入第一个仓库；单仓失败自动跳过继续。期间请保持游戏窗口在前台、不要移动鼠标，可随时 <span class="kbd">{{ cancelHotkey }}</span> 取消。</p>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">执行</div>
+            <div class="srow-d">整理全部仓库（约数分钟）</div>
+          </div>
+          <div class="srow-ctl">
+            <button v-if="!(sorting && kind === 'all')" class="btn primary" :disabled="!props.charId || sorting" @click="startSortAll">开始全仓整理</button>
+            <button v-else class="btn danger" @click="cancelSort">取消整理</button>
+          </div>
+        </div>
+        <div v-if="kind === 'all' && sorting" class="run-progress">
+          <span class="spin"></span>
+          <span>全仓库整理中：<b>{{ sortAllInfo.current }}/{{ sortAllInfo.total }}</b> · {{ sortAllInfo.label }}</span>
+        </div>
+        <div v-if="kind === 'all' && error" class="status error">{{ error }}</div>
+        <div v-if="kind === 'all' && result" class="status" :class="result.success ? 'success' : 'error'">{{ result.message }}</div>
+        <div v-if="sortAllInfo.results.length" class="sort-all-results">
+          <div v-for="r in sortAllInfo.results" :key="r.stash_id" class="sar-row" :class="r.success ? 'ok' : 'bad'">
+            <span class="sar-name">{{ r.label }}</span>
+            <span class="sar-msg">{{ r.success ? '✓' : '✗' }} {{ r.message }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">跨仓整理</div>
+      <div class="card">
+        <div class="term-body">
+          <p>组合多个跨仓库操作，按勾选顺序执行（移动以<b>背包为中转</b>；大批量搬运耗时较长，可随时 <span class="kbd">{{ cancelHotkey }}</span> 取消）。配置自动保存。</p>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">堆叠合并</div>
+            <div class="srow-d">同仓 / 跨仓 / 背包的可堆叠物全部合并到满堆</div>
+          </div>
+          <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" v-model="crossCfg.merge"><span class="track"></span></label>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">背包清空</div>
+            <div class="srow-d">背包物品按顺序存入仓库（自动找空位）</div>
+          </div>
+          <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" v-model="crossCfg.clear_bag"><span class="track"></span></label>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">位置策略</div>
+            <div class="srow-d">物品摆放规则（归类与重排互斥）</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button class="seg-opt" :class="{ on: crossPosition === 'none' }" @click="crossPosition = 'none'"><span class="seg-t">不移动</span></button>
+              <button class="seg-opt" :class="{ on: crossPosition === 'category' }" @click="crossPosition = 'category'"><span class="seg-t">按类别归类</span></button>
+              <button class="seg-opt" :class="{ on: crossPosition === 'repack' }" @click="crossPosition = 'repack'"><span class="seg-t">全局重排</span></button>
+            </div>
+          </div>
+        </div>
+        <template v-if="crossCfg.categorize">
+          <div class="srow" v-for="(label, type) in CATEGORY_LABELS" :key="type">
+            <div class="srow-info">
+              <div class="srow-t">{{ label }}</div>
+              <div class="srow-d">该类物品搬入的目标仓库</div>
+            </div>
+            <div class="srow-ctl">
+              <select class="cross-select" v-model="crossCfg.category_map[type]">
+                <option v-for="s in stashOptions" :key="s.id" :value="String(s.id)">{{ s.label }}</option>
+              </select>
+            </div>
+          </div>
+        </template>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">腾空仓库</div>
+            <div class="srow-d">清空勾选的仓库，物品搬到其他仓库</div>
+          </div>
+          <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" v-model="crossCfg.evacuate"><span class="track"></span></label>
+          </div>
+        </div>
+        <template v-if="crossCfg.evacuate">
+          <div class="srow" v-for="s in stashOptions" :key="'e' + s.id">
+            <div class="srow-info">
+              <div class="srow-t">{{ s.label }}</div>
+              <div class="srow-d">整理后该仓库将被清空</div>
+            </div>
+            <div class="srow-ctl">
+              <label class="switch"><input type="checkbox" :value="String(s.id)" v-model="crossCfg.evacuate_stashes"><span class="track"></span></label>
+            </div>
+          </div>
+        </template>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">执行</div>
+            <div class="srow-d">按勾选的步骤依次执行</div>
+          </div>
+          <div class="srow-ctl">
+            <button v-if="!(sorting && kind === 'cross')" class="btn primary" :disabled="!props.charId || sorting" @click="startCrossSort">开始跨仓整理</button>
+            <button v-else class="btn danger" @click="cancelSort">取消整理</button>
+            <span v-if="crossNote" class="cal-note">{{ crossNote }}</span>
+          </div>
+        </div>
+        <div v-if="kind === 'cross' && sorting" class="run-progress">
+          <span class="spin"></span>
+          <span>跨仓整理：<b>{{ crossStepIndex }}/{{ crossSteps.length }}</b> · {{ crossStepLabel }}</span>
+        </div>
+        <div v-if="kind === 'cross' && error" class="status error">{{ error }}</div>
+        <div v-if="kind === 'cross' && result" class="status" :class="result.success ? 'success' : 'error'">{{ result.message }}</div>
+        <div v-if="crossResults.length" class="sort-all-results">
+          <div v-for="(r, i) in crossResults" :key="i" class="sar-row" :class="r.ok ? 'ok' : 'bad'">
+            <span class="sar-name">{{ r.step }}</span>
+            <span class="sar-msg">{{ r.ok ? '✓' : '✗' }} {{ r.detail }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -647,13 +907,28 @@ onBeforeUnmount (() => {
 <style scoped>
 .run-card { padding: 16px 18px; }
 .run-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.run-btns { display: flex; gap: 8px; }
 .run-hints { display: flex; gap: 18px; }
 .hint { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-3); }
 .btn.lg { padding: 9px 24px; font-size: 14px; }
 .btn:disabled { opacity: .45; cursor: default; transform: none; }
 .run-keys { margin-top: 4px; }
+.sort-all-results { margin-top: 12px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
+.sar-row { display: flex; align-items: center; gap: 12px; padding: 5px 2px; font-size: 12.5px; }
+.sar-name { min-width: 110px; font-weight: 600; color: var(--text); }
+.sar-msg { color: var(--text-3); }
+.sar-row.ok .sar-msg { color: var(--green); }
+.sar-row.bad .sar-msg { color: var(--red); }
 .cal-note { font-size: 12.5px; color: var(--green); }
 .cal-sep { margin: 0 6px; color: var(--line); }
+.cross-select {
+  padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card-2); color: var(--text-2);
+  font-size: 13px; font-family: var(--font);
+  cursor: pointer; outline: none;
+}
+.cross-select:hover { border-color: var(--accent-soft); }
 .cal-toggle { cursor: pointer; user-select: none; }
 .cal-toggle:hover .srow-t { color: var(--accent); }
 .cal-arrow {
