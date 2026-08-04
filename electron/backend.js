@@ -184,6 +184,30 @@ export async function tabTest (characterId = '') {
   return await post ('/stash/tabtest', { stash_id: '4', character_id: String (characterId) }) || { error: 'Service unavailable' };
 }
 
+export async function tabScan () {
+  return await post ('/stash/tabscan') || { error: 'Service unavailable' };
+}
+
+export async function followCalibrateStatus () {
+  return await get ('/stash/follow-calibrate');
+}
+
+export async function followCalibrateRecord (index) {
+  return await post ('/stash/follow-calibrate/record', { index }) || { error: 'Service unavailable' };
+}
+
+export async function followCalibrateAuto () {
+  return await post ('/stash/follow-calibrate/auto') || { error: 'Service unavailable' };
+}
+
+export async function followCalibrateSave () {
+  return await post ('/stash/follow-calibrate/save') || { error: 'Service unavailable' };
+}
+
+export async function followCalibrateReset () {
+  return await post ('/stash/follow-calibrate/reset') || { error: 'Service unavailable' };
+}
+
 export async function calibrationStatus () {
   return await get ('/stash/calibration');
 }

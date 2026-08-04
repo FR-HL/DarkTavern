@@ -83,6 +83,113 @@ function selectTab (s) {
   invoke ('stash:switch-in-game', { stash_id: s.id, character_id: props.charId });
 }
 
+// ── 跟随游戏内切换（像素扫描高亮标签） ──
+const followInGame = ref (false);
+const scanBrights = ref ([]);
+const scanLast = ref ('');
+let followTimer = null;
+
+function toggleFollow () {
+  followInGame.value = !followInGame.value;
+  if (followInGame.value) {
+    if (followTimer) clearInterval (followTimer);
+    followTimer = setInterval (pollInGameTab, 800);
+    pollInGameTab ();
+  } else if (followTimer) {
+    clearInterval (followTimer);
+    followTimer = null;
+  }
+}
+
+async function pollInGameTab () {
+  if (!document.hidden) {
+    try {
+      const r = await invoke ('stash:tab-scan');
+      if (r && r.success) {
+        if (Array.isArray (r.brights)) scanBrights.value = r.brights;
+        if (r.stash_id) scanLast.value = String (r.stash_id);
+        if (r.stash_id) {
+          const sid = String (r.stash_id);
+          const hit = stashList.value.find (s => String (s.id) === sid);
+          if (hit && String (props.stashId) !== sid) {
+            emit ('update:stashId', sid);
+            invoke ('stash:set-current', { id: sid, label: hit.label });
+          }
+        }
+      }
+    } catch (e) {}
+  }
+}
+
+// ── 跟随校准（逐 Tab 记录选中态特征） ──
+const calOpen = ref (false);
+const calItems = ref ([]);
+const calPending = ref ([]);
+const calNote = ref ('');
+
+async function loadFollowCal () {
+  try {
+    const r = await invoke ('stash:follow-calibrate-status');
+    if (r && Array.isArray (r.mapping)) {
+      calItems.value = r.mapping.map ((t, i) => ({
+        type: t,
+        label: (r.labels && r.labels[i]) || String (t),
+        saved: r.saved && r.saved[i],
+      }));
+      calPending.value = (r.pending || []).slice ();
+    }
+  } catch (e) {}
+}
+
+async function recordFollowCal (index) {
+  calNote.value = '';
+  const r = await invoke ('stash:follow-calibrate-record', index);
+  if (r && r.success) {
+    const next = calPending.value.slice ();
+    next[index] = { avg: r.avg, gold: r.gold };
+    calPending.value = next;
+  } else {
+    calNote.value = '记录失败，请重试';
+  }
+}
+
+async function saveFollowCal () {
+  const r = await invoke ('stash:follow-calibrate-save');
+  if (r && r.success) { calNote.value = '跟随校准已保存，自动切换到特征匹配'; await loadFollowCal (); }
+  else if (r && Array.isArray (r.missing)) calNote.value = `还有 ${r.missing.length} 个标签未记录`;
+  else calNote.value = '保存失败';
+}
+
+async function resetFollowCal () {
+  calNote.value = '';
+  await invoke ('stash:follow-calibrate-reset');
+  await loadFollowCal ();
+}
+
+// ── 自动校准（一键） ──
+const autoCalBusy = ref (false);
+
+async function autoCalibrate () {
+  if (autoCalBusy.value) return;
+  autoCalBusy.value = true;
+  calNote.value = '自动校准中：程序将依次点击游戏里的每个仓库标签并采样…请勿移动鼠标';
+  try {
+    const r = await invoke ('stash:follow-calibrate-auto');
+    if (r && r.success) {
+      calNote.value = '自动校准完成并已保存，跟随切换现在使用特征匹配';
+      await loadFollowCal ();
+    } else if (r) {
+      const msg = r.error === 'uipi_blocked' ? '鼠标模拟被拦截（需管理员权限运行 DarkTavern）'
+        : r.error === 'game_not_found' ? '未检测到游戏窗口，请先打开游戏仓库界面'
+        : '自动校准失败：' + (r.error || '未知错误');
+      calNote.value = msg;
+    } else {
+      calNote.value = '自动校准失败';
+    }
+  } catch (e) { calNote.value = '自动校准失败'; }
+  autoCalBusy.value = false;
+}
+
 // ── 排序方案 ──
 const SORT_PRESETS = [
   {
@@ -356,6 +463,7 @@ onMounted (async () => {
 });
 
 onBeforeUnmount (() => {
+  if (followTimer) { clearInterval (followTimer); followTimer = null; }
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
@@ -420,9 +528,40 @@ watch (() => props.stashId, () => reportStashState ());
               </button>
             </div>
           </div>
+          <label class="follow-switch" :class="{ on: followInGame }" @click="toggleFollow">
+            <span class="follow-dot"></span>
+            <span class="follow-txt">跟随游戏内切换</span>
+          </label>
+          <button class="follow-cal-btn" @click="calOpen = !calOpen; if (calOpen) loadFollowCal()">{{ calOpen ? '收起校准' : '跟随校准' }}</button>
+          <div v-if="followInGame && scanBrights.length" class="scan-bar" :title="'命中仓库: ' + (scanLast || '无')">
+            <span v-for="(b, i) in scanBrights" :key="i" class="scan-chip" :class="{ hot: b === Math.max(...scanBrights) }" :style="{ opacity: Math.max(0.25, Math.min(1, b / 200)) }">{{ b }}</span>
+          </div>
           <button v-if="!isEquipment" class="debug-btn" :class="{ on: debugPreview }" :disabled="previewLoading" @click="togglePreview">
             {{ previewLoading ? '计算中…' : (debugPreview ? '关闭预览' : '排序预览') }}
           </button>
+        </div>
+
+        <div v-if="calOpen" class="cal-panel">
+          <div class="cal-auto">
+            <button class="btn primary" :disabled="autoCalBusy" @click="autoCalibrate">{{ autoCalBusy ? '自动校准中…' : '一键自动校准' }}</button>
+            <span class="cal-auto-desc">程序自动依次点击游戏里的每个仓库标签并采样，约 8 秒完成。请先在游戏中打开仓库界面。</span>
+          </div>
+          <div class="cal-intro">备用手动校准：先在游戏中<b>选中该仓库标签</b>，再回来点「记录」。</div>
+          <div v-for="(it, i) in calItems" :key="i" class="cal-row">
+            <span class="cal-idx">{{ i + 1 }}</span>
+            <span class="cal-name">{{ it.label }}</span>
+            <span class="cal-pos">
+              <template v-if="calPending[i]">待保存 ({{ calPending[i].avg }}, {{ calPending[i].gold }})</template>
+              <template v-else-if="it.saved">已校准 ({{ it.saved.avg }}, {{ it.saved.gold }})</template>
+              <template v-else>未记录</template>
+            </span>
+            <button class="keybind-btn cal-btn" @click="recordFollowCal(i)">记录</button>
+          </div>
+          <div class="cal-foot">
+            <button class="btn primary" @click="saveFollowCal">保存校准</button>
+            <button class="btn" @click="resetFollowCal">清除</button>
+            <span v-if="calNote" class="cal-note">{{ calNote }}</span>
+          </div>
         </div>
 
         <div class="grid-scroll">
@@ -559,6 +698,68 @@ watch (() => props.stashId, () => reportStashState ());
   background: var(--accent); border-color: var(--accent);
   color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.28);
 }
+.follow-switch {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-left: auto;
+  padding: 5px 12px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card-2); color: var(--text-3);
+  font-size: 12px; font-weight: 600;
+  cursor: pointer; user-select: none;
+  transition: all .15s;
+}
+.follow-switch:hover { border-color: var(--accent-soft); color: var(--text-2); }
+.follow-switch .follow-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-3); transition: all .2s;
+}
+.follow-switch.on { border-color: var(--accent); color: var(--accent); }
+.follow-switch.on .follow-dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); animation: followPulse 1.6s var(--ease) infinite; }
+@keyframes followPulse { 0%,100% { box-shadow: 0 0 0 3px var(--accent-soft); } 50% { box-shadow: 0 0 0 6px rgba(0,113,227,0.12); } }
+.scan-bar { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+.scan-chip {
+  min-width: 26px; padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--field-soft);
+  border: 1px solid var(--line-soft);
+  font-size: 10.5px; font-variant-numeric: tabular-nums;
+  color: var(--text-3); text-align: center;
+}
+.scan-chip.hot { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.follow-cal-btn {
+  flex: none;
+  padding: 5px 12px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--card-2); color: var(--text-2);
+  cursor: pointer; transition: all .15s;
+}
+.follow-cal-btn:hover { border-color: var(--accent-soft); color: var(--accent); }
+.cal-panel {
+  margin: 0 18px; padding: 12px 14px;
+  background: var(--card-2);
+  border: 1px solid var(--line-soft);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+}
+.cal-intro { font-size: 12.5px; color: var(--text-2); line-height: 1.6; margin-bottom: 10px; }
+.cal-intro b { color: var(--text); font-weight: 650; }
+.cal-auto { display: flex; align-items: center; gap: 12px; padding: 4px 2px 12px; border-bottom: 1px solid var(--line-soft); margin-bottom: 10px; }
+.cal-auto-desc { font-size: 12.5px; color: var(--text-3); line-height: 1.55; }
+.cal-row { display: flex; align-items: center; gap: 12px; padding: 7px 2px; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.cal-row:last-of-type { border-bottom: none; }
+.cal-idx {
+  width: 22px; height: 22px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 7px;
+  background: var(--accent-soft); color: var(--accent);
+  font-size: 12px; font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cal-name { font-weight: 600; color: var(--text); min-width: 100px; }
+.cal-pos { flex: 1; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.cal-btn { min-width: 0; padding: 5px 12px; font-size: 12px; flex: none; }
+.cal-foot { display: flex; align-items: center; gap: 10px; padding: 10px 2px 2px; }
+.cal-note { font-size: 12.5px; color: var(--green); }
 
 /* grid */
 .grid-scroll { padding: 20px 18px 24px; overflow-x: auto; }

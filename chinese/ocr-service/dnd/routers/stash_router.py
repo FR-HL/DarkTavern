@@ -17,6 +17,10 @@ class StashSwitchRequest(BaseModel):
     character_id: str = ""
 
 
+class CalibrationRecordRequest(BaseModel):
+    index: int
+
+
 def _load_equipment_slots():
     """Equipment page slot layout (slot id -> grid position/size)."""
     global _EQUIPMENT_SLOTS
@@ -150,6 +154,168 @@ def tab_test(body: StashSwitchRequest):
     return {"success": True, "positions": clicked}
 
 
+@router.post("/tabscan")
+def tab_scan():
+    """Detect which stash tab is highlighted in-game via pixel features.
+
+    The game does not send packets when switching stash tabs, so we sample
+    pixel features of every tab selector: the selected tab is bright gold
+    while unselected tabs are dark bronze. A saved follow calibration
+    (stashTabFeatures) is used for feature matching when available.
+    """
+    from dnd import service
+    from dnd.sort import macros
+
+    owned = _owned_stash_ids(service.last_snapshot_character_id or "")
+    mapping = macros.build_dynamic_tab_mapping(owned)
+    stash_id, brights = macros.scan_active_stash_tab()
+    return {
+        "success": True,
+        "stash_id": stash_id,
+        "mapping": mapping,
+        "labels": [macros.STASH_TYPE_NAMES.get(t, str(t)) for t in mapping],
+        "brights": brights,
+    }
+
+
+# ── Follow calibration (per-tab selected-state features) ──
+
+_follow_buffer = {}
+
+
+@router.get("/follow-calibrate")
+def follow_calibrate_status():
+    """Return the follow calibration state (saved features + pending)."""
+    from dnd import service
+    from dnd.sort import macros
+
+    owned = _owned_stash_ids(service.last_snapshot_character_id or "")
+    mapping = macros.build_dynamic_tab_mapping(owned)
+    cal = None
+    try:
+        cal = macros.settings_manager.get("calibrationOverride") or {}
+    except Exception:
+        pass
+    saved = cal.get("stashTabFeatures") or []
+    return {
+        "mapping": mapping,
+        "labels": [macros.STASH_TYPE_NAMES.get(t, str(t)) for t in mapping],
+        "saved": saved,
+        "pending": [None if i not in _follow_buffer else _follow_buffer[i]
+                    for i in range(len(mapping))],
+    }
+
+
+@router.post("/follow-calibrate/auto")
+def follow_calibrate_auto():
+    """One-click automatic calibration.
+
+    Clicks every mapped stash tab in turn (in-game order) and captures its
+    selected-state features right after each click, then persists them.
+    The user only needs the in-game stash UI open; no manual recording.
+    """
+    from dnd import service, uipi
+    from dnd.sort import macros
+    import time as _time
+
+    owned = _owned_stash_ids(service.last_snapshot_character_id or "")
+    mapping = macros.build_dynamic_tab_mapping(owned)
+    if not mapping:
+        return {"success": False, "error": "no_tabs"}
+
+    status = uipi.check_uipi_status()
+    if status["blocked"]:
+        return {"success": False, "error": "uipi_blocked"}
+
+    if not macros.force_activate_game_window():
+        return {"success": False, "error": "game_not_found"}
+
+    features = [None] * len(mapping)
+    for i, stash_type in enumerate(mapping):
+        try:
+            macros.click_stash_tab(stash_type)
+        except Exception as exc:
+            logger.warning("Auto follow-calibrate click %d failed: %s", i, exc)
+            return {"success": False, "error": f"click_failed_{i}", "detail": str(exc)}
+        _time.sleep(0.6)  # let the game render the selected state
+        _, samples = macros._tab_samples()
+        if i < len(samples):
+            features[i] = {"avg": samples[i][0], "gold": samples[i][1]}
+        else:
+            return {"success": False, "error": f"sample_failed_{i}"}
+        _time.sleep(0.3)
+
+    if not all(features):
+        return {"success": False, "error": "incomplete"}
+
+    cal = macros.settings_manager.get("calibrationOverride") or {}
+    cal = dict(cal)
+    cal["stashTabFeatures"] = features
+    macros.settings_manager.update({"calibrationOverride": cal})
+    logger.info("Auto follow-calibration saved: %s", features)
+    return {"success": True, "features": features}
+
+
+@router.post("/follow-calibrate/record")
+def follow_calibrate_record(body: CalibrationRecordRequest):
+    """Capture the current feature sample of tab ``index``.
+
+    The user selects the corresponding stash tab in-game first; this
+    endpoint samples it right away (the selection stays active even while
+    the game window is unfocused).
+    """
+    from dnd import service
+    from dnd.sort import macros
+
+    owned = _owned_stash_ids(service.last_snapshot_character_id or "")
+    macros.build_dynamic_tab_mapping(owned)
+    mapping, features = macros._tab_samples()
+    index = int(body.index)
+    if index < 0 or index >= len(features):
+        return {"success": False, "error": "index_out_of_range"}
+    avg, gold = features[index]
+    _follow_buffer[index] = {"avg": avg, "gold": gold}
+    logger.info("Follow calibration recorded tab %d: avg=%s gold=%s", index, avg, gold)
+    return {"success": True, "index": index, "avg": avg, "gold": gold}
+
+
+@router.post("/follow-calibrate/save")
+def follow_calibrate_save():
+    """Persist the recorded per-tab features into calibrationOverride."""
+    from dnd import service
+    from dnd.sort import macros
+
+    owned = _owned_stash_ids(service.last_snapshot_character_id or "")
+    mapping = macros.build_dynamic_tab_mapping(owned)
+    features = [_follow_buffer.get(i) for i in range(len(mapping))]
+    if not all(features):
+        missing = [i for i, f in enumerate(features) if f is None]
+        return {"success": False, "missing": missing}
+
+    cal = macros.settings_manager.get("calibrationOverride") or {}
+    cal = dict(cal)
+    cal["stashTabFeatures"] = features
+    macros.settings_manager.update({"calibrationOverride": cal})
+    logger.info("Follow calibration saved: %s", features)
+    return {"success": True, "features": features}
+
+
+@router.post("/follow-calibrate/reset")
+def follow_calibrate_reset():
+    """Clear the saved follow calibration."""
+    from dnd.sort import macros
+
+    _follow_buffer.clear()
+    try:
+        cal = macros.settings_manager.get("calibrationOverride") or {}
+        if cal:
+            cal.pop("stashTabFeatures", None)
+            macros.settings_manager.update({"calibrationOverride": cal})
+    except Exception:
+        pass
+    return {"success": True}
+
+
 @router.post("/switch")
 def switch_stash(body: StashSwitchRequest):
     """Click the corresponding stash tab in the game UI for a stash type.
@@ -233,10 +399,6 @@ def _owned_stash_ids(character_id: str):
 # In-memory coordinates collected during a calibration session, keyed by
 # tab index in the *active* mapping order. Saved via /stash/calibration/save.
 _calibration_buffer = {}
-
-
-class CalibrationRecordRequest(BaseModel):
-    index: int
 
 
 @router.get("/calibration")

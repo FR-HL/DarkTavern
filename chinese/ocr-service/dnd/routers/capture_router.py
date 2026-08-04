@@ -107,9 +107,12 @@ def capture_update_settings(body: CaptureSettingsUpdate):
 
     if body.wireshark_path is not None:
         resolved = resolve_tshark_executable(body.wireshark_path)
+        # Always persist the user's pick (even when it does not resolve yet —
+        # e.g. Wireshark was moved/updated after the dialog) so the next
+        # backend start can retry it instead of silently dropping it.
+        updates["wiresharkPath"] = body.wireshark_path
         if resolved:
             capture.set_wireshark_path(body.wireshark_path)
-            updates["wiresharkPath"] = body.wireshark_path
             need_restart = True
 
     if updates:
@@ -119,9 +122,12 @@ def capture_update_settings(body: CaptureSettingsUpdate):
         capture.stop_capture_switch(persist_running_state=True)
         capture.start_capture_switch()
 
+    from dnd.settings import detect_wireshark_installation as _detect
     return {
         "success": True,
         "running": capture.is_active(),
         "interface": capture.interface,
         "port_range": {"low": capture.port_range[0], "high": capture.port_range[1]},
+        "tshark_path": getattr(capture, "tshark_path", "") or "",
+        "tshark_detected": _detect(),
     }

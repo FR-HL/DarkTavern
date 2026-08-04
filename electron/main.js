@@ -222,6 +222,12 @@ app.on ('ready', async () => {
     return await switchInGameStash (String (data.stash_id), data.character_id ? String (data.character_id) : '');
   });
   ipcMain.handle ('stash:tab-test', (e, characterId = '') => backend.tabTest (characterId));
+  ipcMain.handle ('stash:tab-scan', () => backend.tabScan ());
+  ipcMain.handle ('stash:follow-calibrate-status', () => backend.followCalibrateStatus ());
+  ipcMain.handle ('stash:follow-calibrate-record', (e, index) => backend.followCalibrateRecord (Number (index)));
+  ipcMain.handle ('stash:follow-calibrate-auto', () => backend.followCalibrateAuto ());
+  ipcMain.handle ('stash:follow-calibrate-save', () => backend.followCalibrateSave ());
+  ipcMain.handle ('stash:follow-calibrate-reset', () => backend.followCalibrateReset ());
   ipcMain.handle ('stash:calibration-status', () => backend.calibrationStatus ());
   ipcMain.handle ('stash:calibration-record', (e, index) => backend.calibrationRecord (Number (index)));
   ipcMain.handle ('stash:calibration-save', (e, resolution = '') => backend.calibrationSave (resolution));

@@ -685,6 +685,114 @@ def click_stash_tab(stash_type_value: int) -> bool:
     return True
 
 
+def _tab_samples():
+    """Sample every mapped stash tab selector.
+
+    Returns ``(mapping, features)`` where ``features`` is a list of
+    ``(avg_brightness, gold_ratio)`` tuples in mapping order. The gold ratio
+    is the fraction of pixels that look like bright gold (R high, G mid,
+    B low) — the selected tab is rendered bright gold while unselected tabs
+    are dark bronze, so this is a strong, icon-style-agnostic feature.
+    """
+    try:
+        import numpy as np
+        import mss
+    except Exception as exc:
+        logger.warning("mss/numpy unavailable for tab scan: %s", exc)
+        return [], []
+
+    mapping = list(STASH_TYPE_TO_TAB_INDEX.keys())
+    if not mapping:
+        return [], []
+    positions = get_stash_tab_positions()
+
+    sample = 40
+    features = []
+    try:
+        sct_cls = mss.MSS
+    except AttributeError:
+        sct_cls = mss.mss
+    with sct_cls() as sct:
+        for pos in positions:
+            region = {
+                "left": max(0, int(pos.x) - sample // 2),
+                "top": max(0, int(pos.y) - sample // 2),
+                "width": sample,
+                "height": sample,
+            }
+            try:
+                shot = np.asarray(sct.grab(region), dtype=np.float32)
+                bgr = shot[:, :, :3]
+                avg = round(float(bgr.mean()), 1)
+                r, g, b = bgr[:, :, 2], bgr[:, :, 1], bgr[:, :, 0]
+                gold_mask = (r > 140) & (g > 110) & (b < 130)
+                gold_ratio = round(float(gold_mask.mean()), 4)
+                features.append((avg, gold_ratio))
+            except Exception:
+                features.append((0.0, 0.0))
+    return mapping, features
+
+
+def scan_active_stash_tab():
+    """Detect which stash tab is currently highlighted in the game UI.
+
+    Preferred: match the current per-tab features against a saved follow
+    calibration (``calibrationOverride.stashTabFeatures``) — the tab whose
+    features are closest (and close enough) wins, which tolerates wildly
+    different baseline brightness per tab (e.g. the dark Shared tab).
+
+    Fallback (no calibration): the selected tab is rendered bright gold
+    while unselected tabs are dark bronze, so the brightest tab wins if the
+    margin is clear.
+
+    Returns ``(stash_type, diagnostics)`` — ``stash_type`` is None when the
+    stash tabs are not visible / no confident match, and ``diagnostics``
+    carries per-tab brightness for the UI debug bar.
+    """
+    mapping, features = _tab_samples()
+    if not mapping or len(features) < 2:
+        return None, []
+    brights = [f[0] for f in features]
+
+    saved = None
+    try:
+        cal = settings_manager.get("calibrationOverride") or {}
+        saved = cal.get("stashTabFeatures")
+    except Exception:
+        saved = None
+
+    if saved and isinstance(saved, list) and len(saved) >= len(mapping):
+        # Feature matching against the saved selected-state references.
+        dists = []
+        for i, feat in enumerate(features[:len(saved)]):
+            ref = saved[i]
+            if not ref:
+                dists.append(None)
+                continue
+            d = abs(feat[0] - float(ref.get("avg", 0))) / 40.0 + abs(feat[1] - float(ref.get("gold", 0))) * 3.0
+            dists.append(d)
+        valid = [(i, d) for i, d in enumerate(dists) if d is not None]
+        if valid:
+            best_i, best_d = min(valid, key=lambda kv: kv[1])
+            second_d = min((d for i, d in valid if i != best_i), default=None)
+            # Confident only when the best match is clearly closer than the
+            # runner-up and reasonably close to the reference.
+            if second_d is not None and best_d + 0.25 < second_d and best_d < 0.55:
+                return mapping[best_i], brights
+            return None, brights
+
+    # Fallback: brightness margin heuristic.
+    order = sorted(range(len(brights)), key=lambda k: brights[k], reverse=True)
+    top, second = order[0], order[1]
+    # Selected tab is visibly brighter than the dim unselected bronze tabs.
+    # Measured on a real game session: selected ≈ 69, unselected ≈ 40-48
+    # (mouse-hover can push the hovered tab to ≈ 82), so require a clear
+    # margin between the brightest and second-brightest tab.
+    if brights[top] - brights[second] >= 12 and brights[top] >= 55:
+        return mapping[top], brights
+    return None, brights
+
+
 _initial_positions = get_screen_positions()
 stash_screen_pos = _initial_positions['stash']
 inv_screen_pos = _initial_positions['inv']
