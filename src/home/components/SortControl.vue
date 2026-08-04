@@ -373,7 +373,7 @@ const MISC_LABELS = {
   gem: '宝石', ore: '矿石与金属', material: '材料',
   consumable: '消耗品', junk: '杂物',
 };
-const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
+const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, categorize_mode: 'auto', category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
 const miscOpen = ref (false);
 const crossNote = ref ('');
 const crossSteps = ref ([]);
@@ -383,9 +383,12 @@ const crossResults = ref ([]);
 const stashOptions = ref ([]);
 
 const crossPosition = computed ({
-  get: () => crossCfg.value.categorize ? 'category' : crossCfg.value.repack ? (crossCfg.value.repack_mode === 'balanced' ? 'balanced' : 'front') : 'none',
+  get: () => crossCfg.value.categorize
+    ? (crossCfg.value.categorize_mode === 'manual' ? 'category' : 'auto')
+    : crossCfg.value.repack ? (crossCfg.value.repack_mode === 'balanced' ? 'balanced' : 'front') : 'none',
   set: v => {
-    crossCfg.value.categorize = v === 'category';
+    crossCfg.value.categorize = v === 'category' || v === 'auto';
+    crossCfg.value.categorize_mode = v === 'category' ? 'manual' : 'auto';
     crossCfg.value.repack = v === 'front' || v === 'balanced';
     if (crossCfg.value.repack) crossCfg.value.repack_mode = v;
   },
@@ -417,7 +420,7 @@ async function loadCrossConfig () {
     const d = await invoke ('settings:get');
     if (d && d.cross_config) {
       crossCfg.value = {
-        merge: true, clear_bag: false, categorize: false, category_map: {},
+        merge: true, clear_bag: false, categorize: false, categorize_mode: 'auto', category_map: {},
         misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true,
         ...d.cross_config,
       };
@@ -935,13 +938,17 @@ watch (() => props.charId, () => loadStashOptions ());
           <div class="srow-ctl">
             <div class="seg">
               <button class="seg-opt" :class="{ on: crossPosition === 'none' }" @click="crossPosition = 'none'"><span class="seg-t">不移动</span></button>
+              <button class="seg-opt" :class="{ on: crossPosition === 'auto' }" @click="crossPosition = 'auto'"><span class="seg-t">自动归类</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'category' }" @click="crossPosition = 'category'"><span class="seg-t">按类别归类</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'front' }" @click="crossPosition = 'front'"><span class="seg-t">前移集中</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'balanced' }" @click="crossPosition = 'balanced'"><span class="seg-t">均衡分散</span></button>
             </div>
           </div>
         </div>
-        <template v-if="crossCfg.categorize">
+        <div v-if="crossCfg.categorize && crossCfg.categorize_mode === 'auto'" class="auto-note">
+          无需配置：按仓库顺序给每类物品（武器/护甲/工具/饰品/杂物/其他）各分一个仓库；目标仓库放满时，会自动溢出到其他有空位的仓库。
+        </div>
+        <template v-if="crossCfg.categorize && crossCfg.categorize_mode === 'manual'">
           <div class="cat-grid">
             <label v-for="(label, type) in CATEGORY_LABELS" :key="type" class="cat-cell">
               <span class="cat-name">{{ label }}</span>
@@ -1007,6 +1014,7 @@ watch (() => props.charId, () => loadStashOptions ());
 .cal-note { font-size: 12.5px; color: var(--green); }
 .cal-sep { margin: 0 6px; color: var(--line); }
 .qp-note { padding: 0 18px 12px; font-size: 12.5px; color: var(--accent); line-height: 1.5; }
+.auto-note { padding: 0 18px 12px; font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

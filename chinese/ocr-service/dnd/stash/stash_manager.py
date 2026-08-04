@@ -122,6 +122,27 @@ def _resolve_category_target(item_data, slot_map, category_map, misc_map):
             continue
     return None
 
+
+# Category ordering used by auto-categorize (matches the frontend labels).
+_AUTO_CATEGORY_ORDER = ["Weapon", "Armor", "Utility", "Accessory", "Misc", "other"]
+
+
+def _build_auto_category_map(tab_order):
+    """Distribute the 6 item categories across the available stashes in order.
+
+    One category per stash while stashes last; when there are fewer stashes
+    than categories the extra categories wrap around and share stashes.  Any
+    leftover stashes simply stay free (they become natural overflow room).
+    Returns {category_name: stash_id}.
+    """
+    if not tab_order:
+        return {}
+    n = len(tab_order)
+    return {
+        cat: int(tab_order[i % n])
+        for i, cat in enumerate(_AUTO_CATEGORY_ORDER)
+    }
+
 class StashManager:
     def __init__(self, resource_dir: str, defer_loading=False):
         self.data_dir = get_characters_dir()
@@ -2065,13 +2086,21 @@ class StashManager:
             run_step("腾空仓库", _evacuate_step)
 
         if config.get("categorize"):
-            category_map = config.get("category_map") or {}
-            slot_map = config.get("slot_type_map") or {}
-            misc_map = config.get("misc_map") or {}
+            categorize_mode = str(config.get("categorize_mode") or "manual")
+            if categorize_mode == "auto":
+                # Zero-config: distribute categories across stashes in order.
+                category_map = _build_auto_category_map(tab_order)
+                slot_map = {}
+                misc_map = {}
+            else:
+                category_map = config.get("category_map") or {}
+                slot_map = config.get("slot_type_map") or {}
+                misc_map = config.get("misc_map") or {}
             def _categorize_step():
                 from dnd.items.game_data import item_data_manager
                 sims = self._sim_snapshot(storages, tab_order)
                 moves = []
+                overflowed = 0
                 for src_sid in tab_order:
                     if cancel_event and cancel_event.is_set():
                         break
@@ -2085,10 +2114,25 @@ class StashManager:
                         if dst_sid is None or dst_sid == src_sid or dst_sid not in storages:
                             continue
                         pos = self._sim_find(sims[dst_sid], item)
+                        if pos is None:
+                            # Target stash is full — overflow to the first other
+                            # stash (in tab order) that still has room, so the
+                            # item is placed instead of silently skipped.
+                            for alt_sid in tab_order:
+                                if alt_sid == src_sid or alt_sid == dst_sid:
+                                    continue
+                                pos = self._sim_find(sims[alt_sid], item)
+                                if pos is not None:
+                                    dst_sid = alt_sid
+                                    overflowed += 1
+                                    break
                         if pos is not None:
                             moves.append((src_sid, item, dst_sid, pos))
                 done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
-                return f"归类 {done}/{len(moves)} 件"
+                detail = f"归类 {done}/{len(moves)} 件"
+                if overflowed:
+                    detail += f"（溢出 {overflowed} 件）"
+                return detail
             run_step("归类整理", _categorize_step)
 
         if config.get("repack"):
