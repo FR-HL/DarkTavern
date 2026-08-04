@@ -40,6 +40,7 @@ const defaults = {
     sort_char_id: '',
     sort_stash_id: '',
     sort_include_inv: false,
+    follow_mode: 'click',
   },
 };
 
@@ -83,6 +84,7 @@ settings.dnd.wireshark_path = settings.dnd.wireshark_path || '';
 settings.dnd.sort_speed = parseFloat (settings.dnd.sort_speed) || 0.2;
 settings.dnd.pack_mode = toBool (settings.dnd.pack_mode);
 settings.dnd.stack_mode = toBool (settings.dnd.stack_mode);
+settings.dnd.follow_mode = ['off', 'click', 'pixel'].includes (settings.dnd.follow_mode) ? settings.dnd.follow_mode : 'click';
 
 function toBool (s) {
   if (s === true || s === 'true') return true;

@@ -130,7 +130,112 @@ async function loadHotkeys () {
     if (d?.sort_hotkey) sortHotkey.value = d.sort_hotkey;
     if (d?.cancel_hotkey) cancelHotkey.value = d.cancel_hotkey;
     if (d?.stash_next_key) stashNextKey.value = d.stash_next_key;
+    if (d?.follow_mode) followMode.value = d.follow_mode;
   } catch (e) {}
+}
+
+// ── 仓库跟随模式（关闭 / 点击识别 / 像素识别） ──
+const followMode = ref ('click');
+const FOLLOW_OPTIONS = [
+  { id: 'off', label: '关闭', desc: '不跟随' },
+  { id: 'click', label: '点击识别', desc: '鼠标钩子 · 即时' },
+  { id: 'pixel', label: '像素识别', desc: '像素扫描 · 手柄可用' },
+];
+
+async function changeFollowMode (id) {
+  followMode.value = id;
+  await invoke ('settings:save', { follow_mode: id });
+}
+
+// ── 仓库标签校准（可折叠） ──
+const calExpand = ref (false);
+
+// ── 跟随校准（像素识别用，逐 Tab 记录选中态特征） ──
+const fCalItems = ref ([]);
+const fCalPending = ref ([]);
+const autoCalBusy = ref (false);
+
+async function loadFollowCal () {
+  try {
+    const r = await invoke ('stash:follow-calibrate-status');
+    if (r && Array.isArray (r.mapping)) {
+      fCalItems.value = r.mapping.map ((t, i) => ({
+        type: t,
+        label: (r.labels && r.labels[i]) || String (t),
+        saved: r.saved && r.saved[i],
+      }));
+      fCalPending.value = (r.pending || []).slice ();
+    }
+  } catch (e) {}
+}
+
+async function autoCalibrate () {
+  if (autoCalBusy.value) return;
+  autoCalBusy.value = true;
+  calNote.value = '自动校准中：程序将依次点击游戏里的每个仓库标签并采样…请勿移动鼠标';
+  try {
+    const r = await invoke ('stash:follow-calibrate-auto');
+    if (r && r.success) {
+      calNote.value = '自动校准完成并已保存（特征）';
+      await loadFollowCal ();
+    } else if (r) {
+      const msg = r.error === 'uipi_blocked' ? '鼠标模拟被拦截（需管理员权限运行 DarkTavern）'
+        : r.error === 'game_not_found' ? '未检测到游戏窗口，请先打开游戏仓库界面'
+        : '自动校准失败：' + (r.error || '未知错误');
+      calNote.value = msg;
+    } else {
+      calNote.value = '自动校准失败';
+    }
+  } catch (e) { calNote.value = '自动校准失败'; }
+  autoCalBusy.value = false;
+}
+
+// ── 合并记录 / 保存 / 清除（坐标 + 特征一次完成） ──
+async function recordBothCal (index) {
+  calNote.value = '';
+  const r1 = await invoke ('stash:calibration-record', index);
+  const r2 = await invoke ('stash:follow-calibrate-record', index);
+  if (r1 && r1.success) {
+    const next = calPending.value.slice ();
+    next[index] = { x: r1.x, y: r1.y };
+    calPending.value = next;
+  }
+  if (r2 && r2.success) {
+    const next = fCalPending.value.slice ();
+    next[index] = { avg: r2.avg, gold: r2.gold };
+    fCalPending.value = next;
+  }
+  if ((!r1 || !r1.success) && (!r2 || !r2.success)) calNote.value = '记录失败，请重试';
+}
+
+async function saveAllCal () {
+  if (calSaving.value) return;
+  calSaving.value = true;
+  calNote.value = '';
+  try {
+    const pixel = followMode.value === 'pixel';
+    const r1 = await invoke ('stash:calibration-save', '');
+    const r2 = pixel ? await invoke ('stash:follow-calibrate-save') : null;
+    if (r1 && r1.success && (!pixel || (r2 && r2.success))) {
+      calNote.value = pixel ? '校准已保存（坐标 + 特征）' : '坐标校准已保存';
+      await loadCalibration ();
+      if (pixel) await loadFollowCal ();
+    } else {
+      const parts = [];
+      if (r1 && Array.isArray (r1.missing)) parts.push (`坐标还有 ${r1.missing.length} 项未记录`);
+      if (pixel && r2 && Array.isArray (r2.missing)) parts.push (`特征还有 ${r2.missing.length} 项未记录`);
+      calNote.value = parts.join ('；') || '保存失败';
+    }
+  } catch (e) { calNote.value = '保存失败'; }
+  calSaving.value = false;
+}
+
+async function resetAllCal () {
+  calNote.value = '';
+  await invoke ('stash:calibration-reset');
+  await invoke ('stash:follow-calibrate-reset');
+  await loadCalibration ();
+  await loadFollowCal ();
 }
 
 function samePreset (a, b) {
@@ -259,41 +364,6 @@ async function loadCalibration () {
   } catch (e) {}
 }
 
-async function recordCalTab (index) {
-  calNote.value = '';
-  const r = await invoke ('stash:calibration-record', index);
-  if (r && r.success) {
-    const next = calPending.value.slice ();
-    next[index] = { x: r.x, y: r.y };
-    calPending.value = next;
-  } else {
-    calNote.value = '记录失败，请重试';
-  }
-}
-
-async function saveCalibration () {
-  calSaving.value = true;
-  calNote.value = '';
-  try {
-    const r = await invoke ('stash:calibration-save', '');
-    if (r && r.success) {
-      calNote.value = '校准已保存，之后点击将使用校准坐标';
-      await loadCalibration ();
-    } else if (r && Array.isArray (r.missing)) {
-      calNote.value = `还有 ${r.missing.length} 个标签未记录`;
-    } else {
-      calNote.value = '保存失败';
-    }
-  } catch (e) { calNote.value = '保存失败'; }
-  calSaving.value = false;
-}
-
-async function resetCalibration () {
-  calNote.value = '';
-  await invoke ('stash:calibration-reset');
-  await loadCalibration ();
-}
-
 // ── 标签点测（诊断） ──
 const tabTesting = ref (false);
 const tabTestNote = ref ('');
@@ -326,6 +396,7 @@ onMounted (async () => {
   loadSortOrder ();
   loadHotkeys ();
   loadCalibration ();
+  loadFollowCal ();
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
@@ -477,32 +548,97 @@ onBeforeUnmount (() => {
     </div>
 
     <div class="sec">
-      <div class="sec-label">仓库标签校准</div>
+      <div class="sec-label">仓库跟随</div>
       <div class="card">
-        <div class="term-body cal-intro">
-          <p>若游戏内切换/整理时点错仓库标签，请校准一次：<b>在游戏中打开仓库界面</b>，按下面的顺序点击游戏里的仓库标签，点完一个后回到这里点对应的「记录当前位置」按钮（记录的是鼠标此刻的位置）。</p>
-        </div>
-        <div class="cal-list">
-          <div v-for="(it, i) in calItems" :key="i" class="cal-row">
-            <span class="cal-idx">{{ i + 1 }}</span>
-            <span class="cal-name">{{ it.label }}</span>
-            <span class="cal-pos">
-              <template v-if="calPending[i]">待保存 ({{ calPending[i].x }}, {{ calPending[i].y }})</template>
-              <template v-else-if="it.saved">已校准 ({{ it.saved.x }}, {{ it.saved.y }})</template>
-              <template v-else>未校准</template>
-            </span>
-            <button class="keybind-btn cal-btn" @click="recordCalTab(i)">记录当前位置</button>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">跟随模式</div>
+            <div class="srow-d">游戏内切换仓库时，软件自动识别并跟随当前仓库</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in FOLLOW_OPTIONS" :key="o.id"
+                      class="seg-opt" :class="{ on: followMode === o.id }"
+                      @click="changeFollowMode(o.id)">
+                <span class="seg-t">{{ o.label }}</span>
+                <span class="seg-d">{{ o.desc }}</span>
+              </button>
+            </div>
           </div>
         </div>
-        <div class="cal-foot">
-          <button class="btn primary" :disabled="calSaving" @click="saveCalibration">{{ calSaving ? '保存中…' : '保存校准' }}</button>
-          <button class="btn" @click="resetCalibration">清除校准</button>
-          <span v-if="calNote" class="cal-note">{{ calNote }}</span>
+
+        <div class="srow cal-toggle" @click="calExpand = !calExpand">
+          <div class="srow-info">
+            <div class="srow-t">仓库标签校准</div>
+            <div class="srow-d" v-if="followMode === 'pixel'">点击坐标（切换/整理用）+ 选中态特征（像素识别用）{{ calExpand ? '' : ' —— 点击展开' }}</div>
+            <div class="srow-d" v-else>点击坐标（游戏内切换、整理自动选 Tab 用）{{ calExpand ? '' : ' —— 点击展开' }}</div>
+          </div>
+          <div class="srow-ctl">
+            <span class="cal-arrow" :class="{ open: calExpand }">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+          </div>
         </div>
-        <div class="cal-test">
-          <button class="btn" :disabled="tabTesting" @click="runTabTest">{{ tabTesting ? '点测中…' : '标签点测（诊断）' }}</button>
-          <span v-if="tabTestNote" class="cal-note">{{ tabTestNote }}</span>
-        </div>
+
+        <template v-if="calExpand">
+          <div class="term-body">
+            <p v-if="followMode === 'pixel'">手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」——一次同时记录坐标与特征；也可用「一键自动校准」自动采集特征。</p>
+            <p v-else>手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」记录其坐标（坐标校准需手动完成，程序无法得知游戏内标签的真实位置）。</p>
+          </div>
+          <div v-if="followMode === 'pixel'" class="srow">
+            <div class="srow-info">
+              <div class="srow-t">一键自动校准</div>
+              <div class="srow-d">程序自动依次点击游戏里的每个标签并采样选中态特征，约 8 秒完成，请先打开游戏仓库界面</div>
+            </div>
+            <div class="srow-ctl">
+              <button class="btn primary" :disabled="autoCalBusy" @click="autoCalibrate">{{ autoCalBusy ? '自动校准中…' : '一键自动校准' }}</button>
+            </div>
+          </div>
+          <div class="srow" v-for="(it, i) in calItems" :key="i">
+            <div class="srow-info">
+              <div class="srow-t">{{ it.label }}</div>
+              <div class="srow-d">
+                坐标：
+                <template v-if="calPending[i]">待保存 ({{ calPending[i].x }}, {{ calPending[i].y }})</template>
+                <template v-else-if="it.saved">已校准 ({{ it.saved.x }}, {{ it.saved.y }})</template>
+                <template v-else>未校准</template>
+                <template v-if="followMode === 'pixel'">
+                  <span class="cal-sep">·</span>特征：
+                  <template v-if="fCalPending[i]">待保存 ({{ fCalPending[i].avg }}, {{ fCalPending[i].gold }})</template>
+                  <template v-else-if="fCalItems[i] && fCalItems[i].saved">已校准 ({{ fCalItems[i].saved.avg }}, {{ fCalItems[i].saved.gold }})</template>
+                  <template v-else>未记录</template>
+                </template>
+              </div>
+            </div>
+            <div class="srow-ctl">
+              <button class="btn sm" @click="recordBothCal(i)">记录</button>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="srow-info">
+              <div class="srow-t">保存 / 清除</div>
+              <div class="srow-d" v-if="followMode === 'pixel'">全部记录后保存生效；清除后回退到内置坐标与亮度阈值识别</div>
+              <div class="srow-d" v-else>全部记录后保存生效；清除后回退到内置坐标</div>
+            </div>
+            <div class="srow-ctl">
+              <button class="btn primary" :disabled="calSaving" @click="saveAllCal">{{ calSaving ? '保存中…' : '保存校准' }}</button>
+              <button class="btn subtle" @click="resetAllCal">清除校准</button>
+              <span v-if="calNote" class="cal-note">{{ calNote }}</span>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="srow-info">
+              <div class="srow-t">标签点测（诊断）</div>
+              <div class="srow-d">自动依次点击游戏里的每个标签，核对实际切换顺序</div>
+            </div>
+            <div class="srow-ctl">
+              <button class="btn sm" :disabled="tabTesting" @click="runTabTest">{{ tabTesting ? '点测中…' : '开始点测' }}</button>
+            </div>
+          </div>
+          <div v-if="tabTestNote" class="term-body">
+            <p>{{ tabTestNote }}</p>
+          </div>
+        </template>
       </div>
     </div>
   </div>
@@ -516,31 +652,17 @@ onBeforeUnmount (() => {
 .btn.lg { padding: 9px 24px; font-size: 14px; }
 .btn:disabled { opacity: .45; cursor: default; transform: none; }
 .run-keys { margin-top: 4px; }
-
-.cal-intro p { margin: 0 0 6px; }
-.cal-intro b { color: var(--text); font-weight: 650; }
-.cal-list { display: flex; flex-direction: column; padding: 2px 0 6px; }
-.cal-row {
-  display: flex; align-items: center; gap: 12px;
-  padding: 8px 2px;
-  border-bottom: 1px solid var(--line-soft);
-  font-size: 13px;
-}
-.cal-row:last-child { border-bottom: none; }
-.cal-idx {
-  width: 22px; height: 22px; flex: none;
-  display: grid; place-items: center;
-  border-radius: 7px;
-  background: var(--accent-soft); color: var(--accent);
-  font-size: 12px; font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.cal-name { font-weight: 600; color: var(--text); min-width: 110px; }
-.cal-pos { flex: 1; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.cal-btn { min-width: 0; padding: 5px 12px; font-size: 12px; flex: none; }
-.cal-foot { display: flex; align-items: center; gap: 10px; padding: 10px 2px 2px; }
-.cal-test { display: flex; align-items: center; gap: 10px; padding: 8px 2px 2px; border-top: 1px solid var(--line-soft); margin-top: 8px; }
 .cal-note { font-size: 12.5px; color: var(--green); }
+.cal-sep { margin: 0 6px; color: var(--line); }
+.cal-toggle { cursor: pointer; user-select: none; }
+.cal-toggle:hover .srow-t { color: var(--accent); }
+.cal-arrow {
+  display: inline-flex; align-items: center;
+  color: var(--text-3);
+  transition: transform .22s var(--ease);
+}
+.cal-arrow svg { width: 15px; height: 15px; }
+.cal-arrow.open { transform: rotate(180deg); color: var(--accent); }
 
 .uipi-warn {
   display: flex; flex-direction: column; gap: 6px;

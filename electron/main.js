@@ -322,6 +322,7 @@ app.on ('ready', async () => {
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+R',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+T',
     stash_next_key: settings.dnd?.stash_next_key || 'Ctrl+E',
+    follow_mode: ['off', 'click', 'pixel'].includes (settings.dnd?.follow_mode) ? settings.dnd.follow_mode : 'click',
     developer_mode: !!settings.general.developer_mode,
     theme: settings.general.theme === 'dark' ? 'dark' : 'light',
   }));
@@ -348,6 +349,9 @@ app.on ('ready', async () => {
     if (data.stash_next_key !== undefined && data.stash_next_key !== settings.dnd.stash_next_key) {
       settings.dnd.stash_next_key = data.stash_next_key;
       needStashReregister = true;
+    }
+    if (data.follow_mode !== undefined && ['off', 'click', 'pixel'].includes (data.follow_mode)) {
+      settings.dnd.follow_mode = data.follow_mode;
     }
     if (data.developer_mode !== undefined) {
       settings.general.developer_mode = !!data.developer_mode;
