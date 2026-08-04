@@ -23,6 +23,81 @@ logger = logging.getLogger(__name__)
 
 PRIORITY_STASH_IDS: Tuple[str, ...] = ('3', '2')  # equipment first, then bag
 
+
+# Player-facing subgroups for Misc (junk-type) items, matched against the
+# item archetype (e.g. "id.item.diamond").
+_MISC_SUBGROUP_KEYWORDS = {
+    "gem": (
+        "diamond", "ruby", "emerald", "sapphire", "pearl", "gem_",
+        "gold_band", "gold_bangle", "gold_bowl", "gold_chalice",
+        "gold_crown", "gold_candelabra", "gold_candle", "gold_waterpot",
+        "silver_chalice", "metal_cup", "bangle", "crown", "necklace", "ring",
+    ),
+    # Consumables are checked before materials: "throwing_knife" contains
+    # "wing", so the generic material keywords must not shadow it.
+    "consumable": (
+        "potion", "ale", "bandage", "bolt", "arrow", "lockpick",
+        "campfire", "bolas", "throwing", "torch", "trap",
+    ),
+    "ore": (
+        "ore", "ingot", "powder", "coal", "brimstone", "charcoal",
+        "billet", "scrap", "remnant",
+    ),
+    "material": (
+        "essence", "wing", "claw", "eyeball", "tusk", "fang", "hoof",
+        "scale", "tail", "egg", "feather", "shell", "silk", "pelt", "hair",
+        "bone", "skull", "heart", "fluid", "ember", "flakes", "vine",
+        "weed", "flower", "mushroom", "leaf", "rose", "thread", "spool",
+    ),
+}
+
+
+def _misc_subgroup(item_data) -> str:
+    """Classify a Misc item into a player-facing subgroup.
+
+    Returns one of: gem / ore / material / consumable / junk.
+    """
+    arch = str(item_data.get("archetype") or "").lower()
+    for group, keywords in _MISC_SUBGROUP_KEYWORDS.items():
+        if any(k in arch for k in keywords):
+            return group
+    return "junk"
+
+
+def _resolve_category_target(item_data, slot_map, category_map, misc_map):
+    """Resolve the destination stash id for one item during categorize.
+
+    Walk-down fallback chain (each level may be unset / empty / invalid and
+    falls through to the next):
+      1. misc subgroup        (Misc / Utility items only)
+      2. misc "junk" fallback (Misc / Utility items only)
+      3. equipment slot type
+      4. slot "other"
+      5. item_type category
+      6. category "other"
+    Returns an int stash id, or None when nothing is configured.
+    """
+    item_type = str(item_data.get("item_type") or "") or "other"
+    is_junk_type = item_type in ("Misc", "Utility", "other")
+
+    candidates = []
+    if is_junk_type:
+        candidates.append(misc_map.get(_misc_subgroup(item_data)))
+        candidates.append(misc_map.get("junk"))
+    candidates.append(slot_map.get(str(item_data.get("slot_type") or "") or "other"))
+    candidates.append(slot_map.get("other"))
+    candidates.append(category_map.get(item_type))
+    candidates.append(category_map.get("other"))
+
+    for c in candidates:
+        if not c:
+            continue
+        try:
+            return int(c)
+        except (TypeError, ValueError):
+            continue
+    return None
+
 class StashManager:
     def __init__(self, resource_dir: str, defer_loading=False):
         self.data_dir = get_characters_dir()
@@ -1906,6 +1981,8 @@ class StashManager:
 
         if config.get("categorize"):
             category_map = config.get("category_map") or {}
+            slot_map = config.get("slot_type_map") or {}
+            misc_map = config.get("misc_map") or {}
             def _categorize_step():
                 from dnd.items.game_data import item_data_manager
                 sims = self._sim_snapshot(storages, tab_order)
@@ -1917,15 +1994,10 @@ class StashManager:
                         if cancel_event and cancel_event.is_set():
                             break
                         item_data = item_data_manager.get_item_data(getattr(item, "item_id", "")) or {}
-                        item_type = str(item_data.get("item_type") or "") or "other"
-                        dst_val = category_map.get(item_type) or category_map.get("other")
-                        if dst_val is None:
-                            continue
-                        try:
-                            dst_sid = int(dst_val)
-                        except (TypeError, ValueError):
-                            continue
-                        if dst_sid == src_sid or dst_sid not in storages:
+                        dst_sid = _resolve_category_target(
+                            item_data, slot_map, category_map, misc_map
+                        )
+                        if dst_sid is None or dst_sid == src_sid or dst_sid not in storages:
                             continue
                         pos = self._sim_find(sims[dst_sid], item)
                         if pos is not None:

@@ -329,7 +329,12 @@ const sortAllInfo = ref ({ total: 0, current: 0, label: '', results: [] });
 
 // ── 跨仓整理配置 ──
 const CATEGORY_LABELS = { Weapon: '武器', Armor: '护甲', Utility: '工具', Accessory: '饰品', Misc: '杂物', other: '其他' };
-const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, category_map: {}, repack: false, evacuate: false, evacuate_stashes: [], arrange: true });
+const MISC_LABELS = {
+  gem: '宝石', ore: '矿石与金属', material: '材料',
+  consumable: '消耗品', junk: '杂物',
+};
+const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, category_map: {}, misc_map: {}, repack: false, evacuate: false, evacuate_stashes: [], arrange: true });
+const miscOpen = ref (false);
 const crossNote = ref ('');
 const crossSteps = ref ([]);
 const crossStepIndex = ref (0);
@@ -372,7 +377,7 @@ async function loadCrossConfig () {
     if (d && d.cross_config) {
       crossCfg.value = {
         merge: true, clear_bag: false, categorize: false, category_map: {},
-        repack: false, evacuate: false, evacuate_stashes: [], arrange: true,
+        misc_map: {}, repack: false, evacuate: false, evacuate_stashes: [], arrange: true,
         ...d.cross_config,
       };
     }
@@ -618,6 +623,95 @@ watch (() => props.charId, () => loadStashOptions ());
             <label class="switch"><input type="checkbox" :checked="props.includeInv" @change="emit('update:includeInv', $event.target.checked)"><span class="track"></span></label>
           </div>
         </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">游戏仓库跟随</div>
+            <div class="srow-d">游戏内切换仓库时，软件自动识别并跟随当前仓库</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in FOLLOW_OPTIONS" :key="o.id"
+                      class="seg-opt" :class="{ on: followMode === o.id }"
+                      @click="changeFollowMode(o.id)">
+                <span class="seg-t">{{ o.label }}</span>
+                <span class="seg-d">{{ o.desc }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="srow cal-toggle" @click="calExpand = !calExpand">
+          <div class="srow-info">
+            <div class="srow-t">仓库标签校准</div>
+            <div class="srow-d" v-if="followMode === 'pixel'">点击坐标（切换/整理用）+ 选中态特征（像素识别用）{{ calExpand ? '' : ' —— 点击展开' }}</div>
+            <div class="srow-d" v-else>点击坐标（游戏内切换、整理自动选 Tab 用）{{ calExpand ? '' : ' —— 点击展开' }}</div>
+          </div>
+          <div class="srow-ctl">
+            <span class="cal-arrow" :class="{ open: calExpand }">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <template v-if="calExpand">
+          <div class="term-body">
+            <p v-if="followMode === 'pixel'">手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」——一次同时记录坐标与特征；也可用「一键自动校准」自动采集特征。</p>
+            <p v-else>手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」记录其坐标（坐标校准需手动完成，程序无法得知游戏内标签的真实位置）。</p>
+          </div>
+          <div v-if="followMode === 'pixel'" class="srow">
+            <div class="srow-info">
+              <div class="srow-t">一键自动校准</div>
+              <div class="srow-d">程序自动依次点击游戏里的每个标签并采样选中态特征，约 8 秒完成，请先打开游戏仓库界面</div>
+            </div>
+            <div class="srow-ctl">
+              <button class="btn primary" :disabled="autoCalBusy" @click="autoCalibrate">{{ autoCalBusy ? '自动校准中…' : '一键自动校准' }}</button>
+            </div>
+          </div>
+          <div class="srow" v-for="(it, i) in calItems" :key="i">
+            <div class="srow-info">
+              <div class="srow-t">{{ it.label }}</div>
+              <div class="srow-d">
+                坐标：
+                <template v-if="calPending[i]">待保存 ({{ calPending[i].x }}, {{ calPending[i].y }})</template>
+                <template v-else-if="it.saved">已校准 ({{ it.saved.x }}, {{ it.saved.y }})</template>
+                <template v-else>未校准</template>
+                <template v-if="followMode === 'pixel'">
+                  <span class="cal-sep">·</span>特征：
+                  <template v-if="fCalPending[i]">待保存 ({{ fCalPending[i].avg }}, {{ fCalPending[i].gold }})</template>
+                  <template v-else-if="fCalItems[i] && fCalItems[i].saved">已校准 ({{ fCalItems[i].saved.avg }}, {{ fCalItems[i].saved.gold }})</template>
+                  <template v-else>未记录</template>
+                </template>
+              </div>
+            </div>
+            <div class="srow-ctl">
+              <button class="btn sm" @click="recordBothCal(i)">记录</button>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="srow-info">
+              <div class="srow-t">保存 / 清除</div>
+              <div class="srow-d" v-if="followMode === 'pixel'">全部记录后保存生效；清除后回退到内置坐标与亮度阈值识别</div>
+              <div class="srow-d" v-else>全部记录后保存生效；清除后回退到内置坐标</div>
+            </div>
+            <div class="srow-ctl">
+              <button class="btn primary" :disabled="calSaving" @click="saveAllCal">{{ calSaving ? '保存中…' : '保存校准' }}</button>
+              <button class="btn subtle" @click="resetAllCal">清除校准</button>
+              <span v-if="calNote" class="cal-note">{{ calNote }}</span>
+            </div>
+          </div>
+          <div class="srow">
+            <div class="srow-info">
+              <div class="srow-t">标签点测（诊断）</div>
+              <div class="srow-d">自动依次点击游戏里的每个标签，核对实际切换顺序</div>
+            </div>
+            <div class="srow-ctl">
+              <button class="btn sm" :disabled="tabTesting" @click="runTabTest">{{ tabTesting ? '点测中…' : '开始点测' }}</button>
+            </div>
+          </div>
+          <div v-if="tabTestNote" class="term-body">
+            <p>{{ tabTestNote }}</p>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -751,16 +845,33 @@ watch (() => props.charId, () => loadStashOptions ());
           </div>
         </div>
         <template v-if="crossCfg.categorize">
-          <div class="srow" v-for="(label, type) in CATEGORY_LABELS" :key="type">
-            <div class="srow-info">
-              <div class="srow-t">{{ label }}</div>
-              <div class="srow-d">该类物品搬入的目标仓库</div>
-            </div>
-            <div class="srow-ctl">
+          <div class="cat-grid">
+            <label v-for="(label, type) in CATEGORY_LABELS" :key="type" class="cat-cell">
+              <span class="cat-name">{{ label }}</span>
               <select class="cross-select" v-model="crossCfg.category_map[type]">
                 <option v-for="s in stashOptions" :key="s.id" :value="String(s.id)">{{ s.label }}</option>
               </select>
+            </label>
+          </div>
+          <div class="srow cal-toggle" @click="miscOpen = !miscOpen">
+            <div class="srow-info">
+              <div class="srow-t">杂物细分（宝石 / 材料 / 消耗品）</div>
+              <div class="srow-d">杂物类物品按子类指定目标仓库，优先于大类{{ miscOpen ? '' : ' —— 点击展开' }}</div>
             </div>
+            <div class="srow-ctl">
+              <span class="cal-arrow" :class="{ open: miscOpen }">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </span>
+            </div>
+          </div>
+          <div v-if="miscOpen" class="cat-grid">
+            <label v-for="(label, type) in MISC_LABELS" :key="'m' + type" class="cat-cell">
+              <span class="cat-name">{{ label }}</span>
+              <select class="cross-select" v-model="crossCfg.misc_map[type]">
+                <option value="">沿用大类</option>
+                <option v-for="s in stashOptions" :key="s.id" :value="String(s.id)">{{ s.label }}</option>
+              </select>
+            </label>
           </div>
         </template>
         <div class="srow">
@@ -818,100 +929,6 @@ watch (() => props.charId, () => loadStashOptions ());
       </div>
     </div>
 
-    <div class="sec">
-      <div class="sec-label">仓库跟随</div>
-      <div class="card">
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">跟随模式</div>
-            <div class="srow-d">游戏内切换仓库时，软件自动识别并跟随当前仓库</div>
-          </div>
-          <div class="srow-ctl">
-            <div class="seg">
-              <button v-for="o in FOLLOW_OPTIONS" :key="o.id"
-                      class="seg-opt" :class="{ on: followMode === o.id }"
-                      @click="changeFollowMode(o.id)">
-                <span class="seg-t">{{ o.label }}</span>
-                <span class="seg-d">{{ o.desc }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="srow cal-toggle" @click="calExpand = !calExpand">
-          <div class="srow-info">
-            <div class="srow-t">仓库标签校准</div>
-            <div class="srow-d" v-if="followMode === 'pixel'">点击坐标（切换/整理用）+ 选中态特征（像素识别用）{{ calExpand ? '' : ' —— 点击展开' }}</div>
-            <div class="srow-d" v-else>点击坐标（游戏内切换、整理自动选 Tab 用）{{ calExpand ? '' : ' —— 点击展开' }}</div>
-          </div>
-          <div class="srow-ctl">
-            <span class="cal-arrow" :class="{ open: calExpand }">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </span>
-          </div>
-        </div>
-
-        <template v-if="calExpand">
-          <div class="term-body">
-            <p v-if="followMode === 'pixel'">手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」——一次同时记录坐标与特征；也可用「一键自动校准」自动采集特征。</p>
-            <p v-else>手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」记录其坐标（坐标校准需手动完成，程序无法得知游戏内标签的真实位置）。</p>
-          </div>
-          <div v-if="followMode === 'pixel'" class="srow">
-            <div class="srow-info">
-              <div class="srow-t">一键自动校准</div>
-              <div class="srow-d">程序自动依次点击游戏里的每个标签并采样选中态特征，约 8 秒完成，请先打开游戏仓库界面</div>
-            </div>
-            <div class="srow-ctl">
-              <button class="btn primary" :disabled="autoCalBusy" @click="autoCalibrate">{{ autoCalBusy ? '自动校准中…' : '一键自动校准' }}</button>
-            </div>
-          </div>
-          <div class="srow" v-for="(it, i) in calItems" :key="i">
-            <div class="srow-info">
-              <div class="srow-t">{{ it.label }}</div>
-              <div class="srow-d">
-                坐标：
-                <template v-if="calPending[i]">待保存 ({{ calPending[i].x }}, {{ calPending[i].y }})</template>
-                <template v-else-if="it.saved">已校准 ({{ it.saved.x }}, {{ it.saved.y }})</template>
-                <template v-else>未校准</template>
-                <template v-if="followMode === 'pixel'">
-                  <span class="cal-sep">·</span>特征：
-                  <template v-if="fCalPending[i]">待保存 ({{ fCalPending[i].avg }}, {{ fCalPending[i].gold }})</template>
-                  <template v-else-if="fCalItems[i] && fCalItems[i].saved">已校准 ({{ fCalItems[i].saved.avg }}, {{ fCalItems[i].saved.gold }})</template>
-                  <template v-else>未记录</template>
-                </template>
-              </div>
-            </div>
-            <div class="srow-ctl">
-              <button class="btn sm" @click="recordBothCal(i)">记录</button>
-            </div>
-          </div>
-          <div class="srow">
-            <div class="srow-info">
-              <div class="srow-t">保存 / 清除</div>
-              <div class="srow-d" v-if="followMode === 'pixel'">全部记录后保存生效；清除后回退到内置坐标与亮度阈值识别</div>
-              <div class="srow-d" v-else>全部记录后保存生效；清除后回退到内置坐标</div>
-            </div>
-            <div class="srow-ctl">
-              <button class="btn primary" :disabled="calSaving" @click="saveAllCal">{{ calSaving ? '保存中…' : '保存校准' }}</button>
-              <button class="btn subtle" @click="resetAllCal">清除校准</button>
-              <span v-if="calNote" class="cal-note">{{ calNote }}</span>
-            </div>
-          </div>
-          <div class="srow">
-            <div class="srow-info">
-              <div class="srow-t">标签点测（诊断）</div>
-              <div class="srow-d">自动依次点击游戏里的每个标签，核对实际切换顺序</div>
-            </div>
-            <div class="srow-ctl">
-              <button class="btn sm" :disabled="tabTesting" @click="runTabTest">{{ tabTesting ? '点测中…' : '开始点测' }}</button>
-            </div>
-          </div>
-          <div v-if="tabTestNote" class="term-body">
-            <p>{{ tabTestNote }}</p>
-          </div>
-        </template>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -932,11 +949,22 @@ watch (() => props.charId, () => loadStashOptions ());
 .sar-row.bad .sar-msg { color: var(--red); }
 .cal-note { font-size: 12.5px; color: var(--green); }
 .cal-sep { margin: 0 6px; color: var(--line); }
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 14px;
+  padding: 10px 18px 14px;
+  background: var(--card-2);
+  border-top: 1px solid var(--line-soft);
+}
+.cat-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cat-name { font-size: 11.5px; font-weight: 650; color: var(--text-2); }
 .cross-select {
-  padding: 6px 10px;
-  border: 1px solid var(--line); border-radius: 8px;
-  background: var(--card-2); color: var(--text-2);
-  font-size: 13px; font-family: var(--font);
+  width: 100%;
+  padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--card); color: var(--text-2);
+  font-size: 12px; font-family: var(--font);
   cursor: pointer; outline: none;
 }
 .cross-select:hover { border-color: var(--accent-soft); }
