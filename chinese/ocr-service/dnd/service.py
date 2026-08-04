@@ -527,6 +527,8 @@ def _cross_step_labels(config: dict) -> list:
         labels.append("归类整理")
     if config.get("repack"):
         labels.append("全局重排")
+    if config.get("arrange"):
+        labels.append("仓内整理")
     return labels
 
 

@@ -1851,10 +1851,15 @@ class StashManager:
 
         if config.get("merge"):
             def _merge_step():
+                from dnd.stash.storage import StashType as _ST
                 groups = self._collect_stack_groups(storages, inventory, tab_order)
                 merged, moved, skipped = self._merge_stack_groups(
                     storages, inventory, groups, cancel_event
                 )
+                # Merges also drag stacks around — refresh every model's pq.
+                for sid in list(storages.keys()):
+                    storages[sid].rebuild_pq()
+                inventory.rebuild_pq()
                 return f"合并 {merged} 组，跳过 {skipped} 组"
             run_step("堆叠合并", _merge_step)
 
@@ -1957,6 +1962,16 @@ class StashManager:
                 return f"前移 {done}/{len(moves)} 件"
             run_step("全局重排", _repack_step)
 
+        if config.get("arrange"):
+            def _arrange_step():
+                total = 0
+                for sid in tab_order:
+                    if cancel_event and cancel_event.is_set():
+                        break
+                    total += self._arrange_stash(storages, inventory, sid, cancel_event)
+                return f"整理 {total} 件"
+            run_step("仓内整理", _arrange_step)
+
         if cancel_event and cancel_event.is_set():
             return False, "跨仓整理已取消", results
         return True, "跨仓整理完成", results
@@ -2037,9 +2052,12 @@ class StashManager:
             groups[(src, dst)].append((item, pos))
 
         done = 0
+        touched = set()
         for (src_sid, dst_sid), items in groups.items():
             if cancel_event and cancel_event.is_set():
                 break
+            touched.add(src_sid)
+            touched.add(dst_sid)
             batches = []
             batch, cells = [], 0
             for item, pos in items:
@@ -2064,11 +2082,13 @@ class StashManager:
                         for item, pos in batch:
                             if not self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
                                 break
+                            _time.sleep(0.15)
                             done += 1
                     elif src_sid == dst_sid:
                         for item, pos in batch:
                             if not self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
                                 break
+                            _time.sleep(0.15)
                             done += 1
                     else:
                         # Cross stash: switch to source, pick the whole batch
@@ -2085,6 +2105,7 @@ class StashManager:
                                 storages[src_sid].move(item, inv_slot, inventory)
                             except Exception:
                                 break
+                            _time.sleep(0.15)
                             picked.append((item, pos))
                         if not picked:
                             break
@@ -2094,12 +2115,67 @@ class StashManager:
                         for item, pos in picked:
                             if self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
                                 done += 1
+                            _time.sleep(0.15)
                 except Exception as e:
                     logger.warning(
                         "Batch move failed (stash %d -> %d): %s", src_sid, dst_sid, e
                     )
                     break
+        # Rebuild the pq of every stash involved so later steps (and the
+        # in-stash arrange) see the post-move item set.
+        for sid in touched:
+            if sid == StashType.BAG.value:
+                inventory.rebuild_pq()
+            elif sid in storages:
+                storages[sid].rebuild_pq()
         return done
+
+    def _arrange_stash(self, storages, inventory, sid, cancel_event):
+        """Full in-stash sort for one stash via the shared StashSorter, run
+        against the in-memory models so it stays consistent after cross-stash
+        moves (the disk snapshot is stale at that point). Returns the number
+        of items in the stash afterwards (0 if nothing to do or it failed).
+        """
+        import time as _time
+        from dnd.sort import macros as _macros
+        from dnd.sort.sorter import StashSorter
+        from dnd.settings import settings_manager
+
+        stash = storages[sid]
+        stash.rebuild_pq()
+        if not stash.pq:
+            return 0
+
+        # The sorter assumes the game UI is showing this stash — cross-stash
+        # moves leave the game on whatever tab was used last, so switch first.
+        if not _macros.click_stash_tab(sid):
+            logger.warning("Arrange: cannot switch to stash tab %d", sid)
+            return 0
+        _time.sleep(0.5)
+
+        pack_mode = bool(settings_manager.get('stashPackMode', False))
+        stack_mode = bool(settings_manager.get('stashStackMode', False))
+        group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+
+        sorter = StashSorter(
+            stash,
+            inventory,
+            pack_mode=pack_mode,
+            stack_mode=stack_mode,
+            character_id=None,
+            stash_id=sid,
+            group_mode=group_mode,
+        )
+        sorter.cancel_event = cancel_event
+        try:
+            ok = sorter.sort(cancel_event, overlay_session=NullOverlaySession())
+        except Exception as e:
+            logger.warning("Arrange stash %d failed: %s", sid, e)
+            return 0
+        if not ok:
+            return 0
+        stash.rebuild_pq()
+        return len(stash.pq)
 
     def _get_character(self, character_id):
         try:

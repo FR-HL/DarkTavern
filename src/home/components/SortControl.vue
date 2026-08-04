@@ -275,7 +275,7 @@ async function changePreset (id) {
 async function changeSpeed (id) {
   const opt = SPEED_OPTIONS.find (o => o.id === id);
   if (!opt) return;
-  const speeds = { slow: 0.4, medium: 0.2, instant: 0 };
+  const speeds = { slow: 0.4, medium: 0.1, instant: 0 };
   sortSpeed.value = id;
   try {
     const r = await invoke ('dnd:sort-speed-set', speeds[id]);
@@ -327,7 +327,7 @@ const sortAllInfo = ref ({ total: 0, current: 0, label: '', results: [] });
 
 // ── 跨仓整理配置 ──
 const CATEGORY_LABELS = { Weapon: '武器', Armor: '护甲', Utility: '工具', Accessory: '饰品', Misc: '杂物', other: '其他' };
-const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, category_map: {}, repack: false, evacuate: false, evacuate_stashes: [] });
+const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, category_map: {}, repack: false, evacuate: false, evacuate_stashes: [], arrange: true });
 const crossNote = ref ('');
 const crossSteps = ref ([]);
 const crossStepIndex = ref (0);
@@ -370,7 +370,7 @@ async function loadCrossConfig () {
     if (d && d.cross_config) {
       crossCfg.value = {
         merge: true, clear_bag: false, categorize: false, category_map: {},
-        repack: false, evacuate: false, evacuate_stashes: [],
+        repack: false, evacuate: false, evacuate_stashes: [], arrange: true,
         ...d.cross_config,
       };
     }
@@ -768,6 +768,15 @@ watch (() => props.charId, () => loadStashOptions ());
           </div>
           <div class="srow-ctl">
             <label class="switch"><input type="checkbox" v-model="crossCfg.evacuate"><span class="track"></span></label>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">仓内整理</div>
+            <div class="srow-d">最后对所有非空仓库做内部摆放优化（按排序方案排列）</div>
+          </div>
+          <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" v-model="crossCfg.arrange"><span class="track"></span></label>
           </div>
         </div>
         <template v-if="crossCfg.evacuate">
