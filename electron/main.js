@@ -493,10 +493,10 @@ function registerStashHotkeys () {
   }
   const registered = [];
 
-  // 循环切换：列表中当前页 → 下一个
+  // 循环切换：列表中当前页 → 下一个（跳过背包/装备，它们无游戏内标签）
   try {
     globalShortcut.register (nextKey, () => {
-      const list = frontStashList;
+      const list = frontStashList.filter (s => !['2', '3'].includes (String (s.id)));
       if (!list.length) { switchFrontStash (null); return; }
       const cur = frontStash?.id != null ? String (frontStash.id) : null;
       const idx = cur ? list.findIndex (s => String (s.id) === cur) : -1;
