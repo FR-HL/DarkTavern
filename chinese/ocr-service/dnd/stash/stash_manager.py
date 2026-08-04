@@ -2082,13 +2082,11 @@ class StashManager:
                         for item, pos in batch:
                             if not self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
                                 break
-                            _time.sleep(0.15)
                             done += 1
                     elif src_sid == dst_sid:
                         for item, pos in batch:
                             if not self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
                                 break
-                            _time.sleep(0.15)
                             done += 1
                     else:
                         # Cross stash: switch to source, pick the whole batch
@@ -2105,7 +2103,6 @@ class StashManager:
                                 storages[src_sid].move(item, inv_slot, inventory)
                             except Exception:
                                 break
-                            _time.sleep(0.15)
                             picked.append((item, pos))
                         if not picked:
                             break
@@ -2115,7 +2112,6 @@ class StashManager:
                         for item, pos in picked:
                             if self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
                                 done += 1
-                            _time.sleep(0.15)
                 except Exception as e:
                     logger.warning(
                         "Batch move failed (stash %d -> %d): %s", src_sid, dst_sid, e
