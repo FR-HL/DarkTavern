@@ -136,6 +136,45 @@ class Storage:
 
         item.position = end_pos
         
+    def move_quick(self, item, end_pos, end_stash):
+        """Move ``item`` from this storage (the bag) into ``end_stash`` using
+        the game's quick-place (Shift+Right-Click) instead of a drag.
+
+        The caller must already have verified that the game's auto-place will
+        land the item at ``end_pos`` (see simulate_stash_autoplace).  Mirrors
+        ``move`` for grid bookkeeping and cancel-revert behaviour.
+        """
+        original_stash = item.stash
+        original_position = Point(item.position.x, item.position.y)
+
+        # Clear old location
+        for dx in range(item.width):
+            for dy in range(item.height):
+                self.grid[item.position.x + dx][item.position.y + dy] = 0
+
+        # Place item in new location
+        for dx in range(item.width):
+            for dy in range(item.height):
+                end_stash.grid[end_pos.x + dx][end_pos.y + dy] = item
+
+        item.stash = end_stash
+        try:
+            cx, cy = macros.item_center(self, original_position, item.width, item.height)
+            macros.shift_right_click_at(cx, cy)
+        except macros.MacroCancelled:
+            # Revert grid changes so our internal state matches the game state.
+            for dx in range(item.width):
+                for dy in range(item.height):
+                    end_stash.grid[end_pos.x + dx][end_pos.y + dy] = 0
+            for dx in range(item.width):
+                for dy in range(item.height):
+                    self.grid[original_position.x + dx][original_position.y + dy] = item
+            item.stash = original_stash
+            item.position = original_position
+            raise
+
+        item.position = end_pos
+
     def find_empty_slot(self, item):
         for y in range(self.height - item.height, -1, -1):  # bottom to top
             for x in range(self.width - item.width, -1, -1):  # right to left

@@ -311,6 +311,9 @@ app.on ('ready', async () => {
   ipcMain.handle ('dnd:sort-order-set', (e, order) => backend.updateSortOrder (order));
   ipcMain.handle ('dnd:sort-group-get', () => backend.getSortGroupMode ());
   ipcMain.handle ('dnd:sort-group-set', (e, mode) => backend.setSortGroupMode (mode));
+  ipcMain.handle ('dnd:quickplace-get', () => backend.getQuickPlace ());
+  ipcMain.handle ('dnd:quickplace-set', (e, enabled) => backend.setQuickPlace (enabled));
+  ipcMain.handle ('dnd:quickplace-test', (e, characterId, stashId) => backend.quickPlaceTest (characterId, stashId));
   ipcMain.handle ('dnd:sort-preview', (e, params) => backend.sortPreview (params));
   ipcMain.handle ('dnd:sort-config-get', () => ({
     character_id: settings.dnd?.sort_char_id || '',

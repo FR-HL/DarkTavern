@@ -280,10 +280,13 @@ MOUSEEVENTF_MOVE = 0x0001
 MOUSEEVENTF_ABSOLUTE = 0x8000
 MOUSEEVENTF_LEFTDOWN = 0x0002
 MOUSEEVENTF_LEFTUP = 0x0004
+MOUSEEVENTF_RIGHTDOWN = 0x0008
+MOUSEEVENTF_RIGHTUP = 0x0010
 
 # Virtual key codes
 VK_MENU = 0x12     # Alt key
 VK_CONTROL = 0x11  # Ctrl key
+VK_SHIFT = 0x10    # Shift key
 
 # Key event constants
 INPUT_KEYBOARD = 1
@@ -399,6 +402,79 @@ def mouse_up():
         dwExtraInfo=None
     )
     SendInput(1, ctypes.byref(mouse_input), ctypes.sizeof(mouse_input))
+
+
+def right_down():
+    mouse_input = INPUT(type=0)
+    mouse_input.union.mi = MOUSEINPUT(
+        dx=0, dy=0, mouseData=0,
+        dwFlags=MOUSEEVENTF_RIGHTDOWN,
+        time=0, dwExtraInfo=None
+    )
+    SendInput(1, ctypes.byref(mouse_input), ctypes.sizeof(mouse_input))
+
+
+def right_up():
+    mouse_input = INPUT(type=0)
+    mouse_input.union.mi = MOUSEINPUT(
+        dx=0, dy=0, mouseData=0,
+        dwFlags=MOUSEEVENTF_RIGHTUP,
+        time=0, dwExtraInfo=None
+    )
+    SendInput(1, ctypes.byref(mouse_input), ctypes.sizeof(mouse_input))
+
+
+def shift_down():
+    _send_shift(False)
+
+
+def shift_up():
+    _send_shift(True)
+
+
+def _send_shift(key_up: bool):
+    """Send Shift with an explicit scan code — some games only register the
+    modifier when the hardware scan code is present."""
+    flags = KEYEVENTF_KEYUP if key_up else 0
+    key_input = INPUT(type=INPUT_KEYBOARD)
+    key_input.union.ki = KEYBDINPUT(
+        wVk=VK_SHIFT,
+        wScan=0x2A,  # left shift scan code
+        dwFlags=flags,
+        time=0,
+        dwExtraInfo=None
+    )
+    SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+
+
+def item_center(storage, pos, width=1, height=1):
+    """Screen-space centre of the item cell at ``pos`` inside ``storage``."""
+    return (
+        storage.base_screen_pos.x + (jump * pos.x) + (jump * width) / 2,
+        storage.base_screen_pos.y + (jump * pos.y) + (jump * height) / 2,
+    )
+
+
+def shift_right_click_at(x, y):
+    """Move to (x, y) and perform Shift + Right-Click (the game's quick-place).
+
+    Shift must be HELD for the game to register the quick-place, so it is
+    pressed well before the right-click and kept held through the whole click.
+    """
+    _ensure_not_cancelled()
+    move_mouse(x, y)
+    _sleep_with_cancel(0.03)
+    shift_down()
+    try:
+        # Give the game time to register the modifier before clicking.
+        _sleep_with_cancel(0.08)
+        _ensure_not_cancelled()
+        right_down()
+        _sleep_with_cancel(0.05)
+        right_up()
+        _sleep_with_cancel(0.04)
+    finally:
+        shift_up()
 
 
 def get_game_resolution():

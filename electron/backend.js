@@ -286,6 +286,18 @@ export async function setSortGroupMode (mode) {
   return await post ('/sort/group-mode', { mode }) || { error: 'Service unavailable' };
 }
 
+export async function getQuickPlace () {
+  return await get ('/sort/quickplace');
+}
+
+export async function setQuickPlace (enabled) {
+  return await post ('/sort/quickplace', { enabled: !!enabled }) || { error: 'Service unavailable' };
+}
+
+export async function quickPlaceTest (characterId, stashId) {
+  return await post ('/stash/quickplace-test', { character_id: String (characterId), stash_id: Number (stashId) }) || { error: 'Service unavailable' };
+}
+
 export async function sortPreview (params) {
   const q = new URLSearchParams ({ character_id: params.character_id, stash_id: params.stash_id });
   if (params.pack_mode !== undefined) q.set ('pack_mode', params.pack_mode ? 'true' : 'false');

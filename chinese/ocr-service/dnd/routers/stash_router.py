@@ -26,6 +26,11 @@ class StashLockRequest(BaseModel):
     locked: bool
 
 
+class QuickPlaceTestRequest(BaseModel):
+    character_id: str
+    stash_id: int
+
+
 def _load_equipment_slots():
     """Equipment page slot layout (slot id -> grid position/size)."""
     global _EQUIPMENT_SLOTS
@@ -651,3 +656,65 @@ def set_stash_lock(body: StashLockRequest):
     ordered = sorted(locked)
     settings_manager.update({"lockedStashes": ordered}, persist=True)
     return {"success": True, "locked": ordered}
+
+
+@router.post("/quickplace-test")
+def quickplace_test(body: QuickPlaceTestRequest):
+    """Calibration helper: quick-place ONE bag item into the target stash and
+    report the predicted landing cell so it can be compared with the game.
+
+    This really moves the item in-game (bag -> target stash).  Open the target
+    stash in the game first.  After running, check where the item actually
+    landed versus ``predicted``.
+    """
+    import json as _json
+    import os
+    import time as _time
+    from dnd.sort import macros
+    from dnd.stash.storage import Storage, StashType
+    from dnd.stash.stash_preview import parse_stashes
+    from dnd.stash.stash_manager import simulate_stash_autoplace
+    from dnd.appdirs import get_characters_dir
+
+    char_id = str(body.character_id)
+    dst_sid = int(body.stash_id)
+    file_path = os.path.join(get_characters_dir(), f"{char_id}.json")
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            raw = _json.load(f)
+        stashes = parse_stashes(raw)
+    except Exception as e:
+        return {"success": False, "error": f"Unable to load character: {e}"}
+
+    dst = Storage(dst_sid, stashes.get(dst_sid, []))
+    bag = Storage(StashType.BAG.value, stashes.get(StashType.BAG.value, []))
+    item = next((it for it in bag.pq if it.stash is bag), None)
+    if item is None:
+        return {"success": False, "error": "背包里没有可用于测试的物品"}
+
+    predicted = simulate_stash_autoplace(dst.grid, dst.width, dst.height, item.width, item.height)
+    if predicted is None:
+        return {"success": False, "error": "目标仓库放不下该物品"}
+
+    if not macros.force_activate_game_window():
+        return {"success": False, "error": "未找到游戏窗口"}
+    owned_ids = [
+        int(s) for s in stashes.keys()
+        if int(s) not in (StashType.BAG.value, StashType.EQUIPMENT.value)
+    ]
+    macros.build_dynamic_tab_mapping([str(s) for s in owned_ids])
+    if not macros.click_stash_tab(dst_sid):
+        return {"success": False, "error": "无法切换到目标仓库标签"}
+    _time.sleep(0.4)
+
+    cx, cy = macros.item_center(bag, item.position, item.width, item.height)
+    macros.shift_right_click_at(cx, cy)
+
+    return {
+        "success": True,
+        "item": getattr(item, "name", "?"),
+        "size": [item.width, item.height],
+        "bag_pos": {"x": item.position.x, "y": item.position.y},
+        "predicted": {"x": predicted.x, "y": predicted.y},
+        "note": "物品已从背包快速放置到目标仓库。请在游戏里核对它的实际落点是否与 predicted 一致。",
+    }

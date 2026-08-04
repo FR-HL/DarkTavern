@@ -13,7 +13,7 @@ const props = defineProps ({
 });
 const emit = defineEmits ([ 'update:packMode', 'update:stackMode', 'update:includeInv', 'update:keepInPlace' ]);
 
-const invoke = (ch, d) => window.electron.invoke (ch, d);
+const invoke = (ch, ...args) => window.electron.invoke (ch, ...args);
 
 const sorting = ref (false);
 const result = ref (null);
@@ -27,6 +27,40 @@ const stashNextKey = ref ('Ctrl+E');
 const crossHotkey = ref ('Ctrl+F12');
 const listeningFor = ref (null);
 const newHotkey = ref (null);
+const quickPlace = ref (true);
+
+async function loadQuickPlace () {
+  try {
+    const r = await invoke ('dnd:quickplace-get');
+    if (r && typeof r.enabled === 'boolean') quickPlace.value = r.enabled;
+  } catch (e) {}
+}
+
+async function toggleQuickPlace () {
+  const next = !quickPlace.value;
+  try {
+    const r = await invoke ('dnd:quickplace-set', next);
+    if (r && typeof r.enabled === 'boolean') quickPlace.value = r.enabled;
+    else quickPlace.value = next;
+  } catch (e) { quickPlace.value = next; }
+}
+
+const qpTesting = ref (false);
+const qpTestNote = ref ('');
+async function quickPlaceCalibrate () {
+  if (!props.charId || !props.stashId) { qpTestNote.value = '请先选择角色和仓库'; return; }
+  qpTesting.value = true;
+  qpTestNote.value = '';
+  try {
+    const r = await invoke ('dnd:quickplace-test', props.charId, props.stashId);
+    if (r && r.success) {
+      qpTestNote.value = `已快速放置「${r.item}」(${r.size[0]}x${r.size[1]})。预测落点 x=${r.predicted.x}, y=${r.predicted.y}。请在游戏里核对实际落点是否一致。`;
+    } else {
+      qpTestNote.value = '校准失败：' + (r?.error || '未知错误');
+    }
+  } catch (e) { qpTestNote.value = '校准失败'; }
+  qpTesting.value = false;
+}
 
 const SPEED_OPTIONS = [
   { id: 'slow', label: '慢', desc: '最稳，每步约 1.5s' },
@@ -541,6 +575,7 @@ onMounted (async () => {
   loadFollowCal ();
   loadCrossConfig ();
   loadStashOptions ();
+  loadQuickPlace ();
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
@@ -639,6 +674,27 @@ watch (() => props.charId, () => loadStashOptions ());
             <label class="switch"><input type="checkbox" :checked="props.keepInPlace" @change="emit('update:keepInPlace', $event.target.checked)"><span class="track"></span></label>
           </div>
         </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">快速放置（Shift+右键）</div>
+            <div class="srow-d">跨仓放置时用游戏快速放置代替拖动，更快；落点与规划一致才启用，否则自动退回拖动</div>
+          </div>
+          <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" :checked="quickPlace" @change="toggleQuickPlace()"><span class="track"></span></label>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">校准快速放置</div>
+            <div class="srow-d">把 1 个背包物品快速放入当前仓库并给出预测落点；请先在游戏里打开该仓库界面，再点此校准，核对实际落点</div>
+          </div>
+          <div class="srow-ctl">
+            <button class="btn subtle" :disabled="qpTesting || !props.charId || !props.stashId" @click="quickPlaceCalibrate">
+              {{ qpTesting ? '校准中…' : '校准' }}
+            </button>
+          </div>
+        </div>
+        <div v-if="qpTestNote" class="qp-note">{{ qpTestNote }}</div>
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">游戏仓库跟随</div>
@@ -950,6 +1006,7 @@ watch (() => props.charId, () => loadStashOptions ());
 .sar-row.bad .sar-msg { color: var(--red); }
 .cal-note { font-size: 12.5px; color: var(--green); }
 .cal-sep { margin: 0 6px; color: var(--line); }
+.qp-note { padding: 0 18px 12px; font-size: 12.5px; color: var(--accent); line-height: 1.5; }
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -24,6 +24,30 @@ logger = logging.getLogger(__name__)
 PRIORITY_STASH_IDS: Tuple[str, ...] = ('3', '2')  # equipment first, then bag
 
 
+def simulate_stash_autoplace(grid, width, height, item_w, item_h):
+    """Predict where the game's quick-place (Shift+Right-Click) drops an item.
+
+    The stash auto-place is horizontal-priority first-fit: scan rows top to
+    bottom, left to right, and take the first cell that fits the item's
+    ``item_w`` x ``item_h`` footprint.  Returns a Point or None.  The exact
+    scan order is an assumption that must be calibrated against the game.
+    """
+    from dnd.sort.point import Point
+    for y in range(0, height - item_h + 1):
+        for x in range(0, width - item_w + 1):
+            fits = True
+            for dx in range(item_w):
+                for dy in range(item_h):
+                    if grid[x + dx][y + dy] != 0:
+                        fits = False
+                        break
+                if not fits:
+                    break
+            if fits:
+                return Point(x, y)
+    return None
+
+
 # Player-facing subgroups for Misc (junk-type) items, matched against the
 # item archetype (e.g. "id.item.diamond").
 _MISC_SUBGROUP_KEYWORDS = {
@@ -1847,7 +1871,7 @@ class StashManager:
                 if not macros.click_stash_tab(dst_sid):
                     return False
                 _time.sleep(0.25)
-                inventory.move(item, dst_pos, storages[dst_sid])
+                self._quick_or_drag_place(inventory, item, storages[dst_sid], dst_pos)
                 return True
             if src_sid == dst_sid:
                 storages[src_sid].move(item, dst_pos, storages[dst_sid])
@@ -1864,7 +1888,7 @@ class StashManager:
             if not macros.click_stash_tab(dst_sid):
                 return False
             _time.sleep(0.25)
-            inventory.move(item, dst_pos, storages[dst_sid])
+            self._quick_or_drag_place(inventory, item, storages[dst_sid], dst_pos)
             return True
         except macros.MacroCancelled:
             raise
@@ -2152,18 +2176,49 @@ class StashManager:
 
     def _sim_find(self, sim, item):
         """Find a free slot on the simulated grid and reserve it. Returns a
-        Point or None."""
+        Point or None.
+
+        When quick-place is enabled this scans top-left first (row-major) to
+        match the game's Shift+Right-Click auto-fill, so planned targets
+        coincide with where quick-place drops the item and the fast path hits.
+        Otherwise it keeps the original bottom-right-first scan.
+        """
         from dnd.sort.point import Point
+        from dnd.settings import settings_manager
         grid = sim["grid"]
         w, h = item.width, item.height
-        for y in range(sim["height"] - h, -1, -1):
-            for x in range(sim["width"] - w, -1, -1):
+        if bool(settings_manager.get("useQuickPlace", True)):
+            ys = range(0, sim["height"] - h + 1)
+            xs = range(0, sim["width"] - w + 1)
+        else:
+            ys = range(sim["height"] - h, -1, -1)
+            xs = range(sim["width"] - w, -1, -1)
+        for y in ys:
+            for x in xs:
                 if all(grid[x + dx][y + dy] == 0 for dx in range(w) for dy in range(h)):
                     for dx in range(w):
                         for dy in range(h):
                             grid[x + dx][y + dy] = 1
                     return Point(x, y)
         return None
+
+    def _quick_or_drag_place(self, inventory, item, dst, pos):
+        """Place ``item`` (currently in the bag) into ``dst`` at ``pos``.
+
+        Uses the game's quick-place (Shift+Right-Click) when the predicted
+        auto-place landing spot equals ``pos`` — no aiming needed.  Otherwise
+        falls back to the precise drag, so correctness is never compromised.
+        """
+        from dnd.settings import settings_manager
+        if bool(settings_manager.get("useQuickPlace", True)):
+            predicted = simulate_stash_autoplace(
+                dst.grid, dst.width, dst.height, item.width, item.height
+            )
+            if predicted is not None and predicted.x == pos.x and predicted.y == pos.y:
+                inventory.move_quick(item, pos, dst)
+                return True
+        inventory.move(item, pos, dst)
+        return True
 
     def _place_at(self, storages, inventory, src_sid, item, dst_sid, planned_pos):
         """Place item into dst stash. Same-stash moves drag directly; other
@@ -2188,7 +2243,7 @@ class StashManager:
             if src_sid == dst_sid:
                 dst.move(item, pos, dst)
             else:
-                inventory.move(item, pos, dst)
+                self._quick_or_drag_place(inventory, item, dst, pos)
             return True
         except macros.MacroCancelled:
             raise

@@ -32,6 +32,10 @@ class SortGroupModeUpdate(BaseModel):
     mode: str = "none"
 
 
+class QuickPlaceUpdate(BaseModel):
+    enabled: bool = True
+
+
 class SortOrderItem(BaseModel):
     field: str
     direction: str = "desc"
@@ -232,6 +236,20 @@ def update_sort_group_mode(body: SortGroupModeUpdate):
     mode = body.mode if body.mode in ("none", "category", "sized", "neat") else "none"
     settings_manager.update({"sortGroupMode": mode}, persist=True)
     return {"success": True, "mode": mode}
+
+
+@router.get("/quickplace")
+def get_quick_place():
+    from dnd.settings import settings_manager
+    return {"enabled": bool(settings_manager.get("useQuickPlace", True))}
+
+
+@router.post("/quickplace")
+def set_quick_place(body: QuickPlaceUpdate):
+    from dnd.settings import settings_manager
+    enabled = bool(body.enabled)
+    settings_manager.update({"useQuickPlace": enabled}, persist=True)
+    return {"success": True, "enabled": enabled}
 
 
 @router.post("/order")
