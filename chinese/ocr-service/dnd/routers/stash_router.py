@@ -21,6 +21,11 @@ class CalibrationRecordRequest(BaseModel):
     index: int
 
 
+class StashLockRequest(BaseModel):
+    stash_id: int
+    locked: bool
+
+
 def _load_equipment_slots():
     """Equipment page slot layout (slot id -> grid position/size)."""
     global _EQUIPMENT_SLOTS
@@ -625,3 +630,24 @@ def clear_characters():
         "removed_count": len(removed),
         "failed_count": len(failed),
     }
+
+
+@router.get("/locks")
+def get_stash_locks():
+    from dnd.settings import settings_manager
+    locked = settings_manager.get("lockedStashes", []) or []
+    return {"locked": [int(s) for s in locked]}
+
+
+@router.post("/locks")
+def set_stash_lock(body: StashLockRequest):
+    from dnd.settings import settings_manager
+    locked = set(int(s) for s in (settings_manager.get("lockedStashes", []) or []))
+    sid = int(body.stash_id)
+    if body.locked:
+        locked.add(sid)
+    else:
+        locked.discard(sid)
+    ordered = sorted(locked)
+    settings_manager.update({"lockedStashes": ordered}, persist=True)
+    return {"success": True, "locked": ordered}

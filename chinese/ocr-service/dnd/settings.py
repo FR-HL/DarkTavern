@@ -107,6 +107,7 @@ class SettingsManager:
             "stashPackMode": False,
             "stashStackMode": False,
             "sortKeepInPlace": True,
+            "lockedStashes": [],
             "sortLearningEnabled": False,
         }
 

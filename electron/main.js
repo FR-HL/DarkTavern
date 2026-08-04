@@ -273,6 +273,8 @@ app.on ('ready', async () => {
   ipcMain.handle ('dnd:character', (e, id) => backend.getCharacter (id));
   ipcMain.handle ('dnd:service-port', () => backend.getServicePort ());
   ipcMain.handle ('dnd:clear-characters', () => backend.clearCharacters ());
+  ipcMain.handle ('dnd:stash-locks-get', () => backend.getStashLocks ());
+  ipcMain.handle ('dnd:stash-locks-set', (e, stashId, locked) => backend.setStashLock (stashId, locked));
 
   ipcMain.handle ('dnd:sort-start', async (e, params) => {
     const r = await backend.sortStart (params);

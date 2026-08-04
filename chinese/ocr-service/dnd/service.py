@@ -418,6 +418,11 @@ def start_sort_all(character_id: str, pack_mode: Optional[bool] = None,
             macros.build_dynamic_tab_mapping(owned_ids)
             tab_order = [str(s) for s in macros.TAB_TYPE_ORDER if str(s) in stashes]
             tab_order = [s for s in tab_order if stashes.get(s)]  # skip empty
+            # Skip locked stashes (user opts them out of full-stash sorting).
+            from dnd.settings import settings_manager as _sm
+            _locked = set(int(x) for x in (_sm.get("lockedStashes", []) or []))
+            if _locked:
+                tab_order = [s for s in tab_order if int(s) not in _locked]
             with _sort_lock:
                 _sort_state["sort_all_total"] = len(tab_order)
 

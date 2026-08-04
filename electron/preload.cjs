@@ -31,7 +31,7 @@ contextBridge.exposeInMainWorld ('electron', {
     ipcRenderer.once (channel, (event, ... args) => func (... args));
   },
 
-  invoke: (channel, data) => ipcRenderer.invoke (channel, data),
+  invoke: (channel, ...args) => ipcRenderer.invoke (channel, ...args),
   clipboardWriteText: (text) => clipboard.writeText (text),
   openExternal: (url) => shell.openExternal (url)
 });

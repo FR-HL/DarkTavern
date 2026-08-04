@@ -12,7 +12,7 @@ const props = defineProps ({
 });
 const emit = defineEmits ([ 'update:charId', 'update:stashId', 'update:equipment', 'update:active' ]);
 
-const invoke = (ch, d) => window.electron.invoke (ch, d);
+const invoke = (ch, ...args) => window.electron.invoke (ch, ...args);
 
 // ── 仓库状态上报（悬浮球同步） ──
 function reportStashState () {
@@ -82,6 +82,35 @@ watch (currentStash, (s) => emit ('update:equipment', !!(s && s.layout === 'equi
 // 选择仓库：仅切换前端显示，不联动游戏内标签（游戏内切换由鼠标钩子反向识别）
 function selectTab (s) {
   emit ('update:stashId', s.id);
+}
+
+// ── 仓库锁定：锁定后全仓/跨仓整理跳过该仓库，单页整理不受影响 ──
+const lockedSet = ref (new Set ());
+
+function isLocked (id) {
+  return lockedSet.value.has (parseInt (id));
+}
+
+async function loadLocks () {
+  try {
+    const r = await invoke ('dnd:stash-locks-get');
+    lockedSet.value = new Set ((r?.locked || []).map (x => parseInt (x)));
+  } catch (e) {}
+}
+
+async function toggleLock (id) {
+  const sid = parseInt (id);
+  const next = !lockedSet.value.has (sid);
+  try {
+    const r = await invoke ('dnd:stash-locks-set', sid, next);
+    if (r && Array.isArray (r.locked)) {
+      lockedSet.value = new Set (r.locked.map (x => parseInt (x)));
+    } else {
+      const s = new Set (lockedSet.value);
+      if (next) s.add (sid); else s.delete (sid);
+      lockedSet.value = s;
+    }
+  } catch (e) {}
 }
 
 // ── 跟随模式（在「仓库配置」页设置）：off=关闭 / click=鼠标钩子识别 / pixel=像素扫描识别
@@ -416,6 +445,7 @@ onMounted (async () => {
   }
   loadSortOrder ();
   await loadFollowMode ();
+  await loadLocks ();
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
   connectEvents ();
   reportStashState ();
@@ -465,7 +495,7 @@ watch (() => props.stashId, () => reportStashState ());
       <div class="stash-layout">
         <div class="stash-side">
           <button v-for="s in stashList" :key="s.id" class="side-tab"
-                  :class="{ active: props.stashId === s.id }" @click="selectTab(s)"
+                  :class="{ active: props.stashId === s.id, locked: isLocked(s.id) }" @click="selectTab(s)"
                   :title="`${s.items.length} 件物品`">
             <span class="tab-ic">
               <svg v-if="tabIconType(s.label) === 'chest'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M3 12h18"/><path d="M8 8V6a4 4 0 0 1 8 0v2"/><circle cx="12" cy="15" r="1" fill="currentColor" stroke="none"/></svg>
@@ -473,6 +503,18 @@ watch (() => props.stashId, () => reportStashState ());
             </span>
             <span class="tab-label">{{ s.label }}</span>
             <span class="count">{{ s.items.length }}</span>
+            <span v-if="parseInt(s.id) >= 4" class="lock-btn" :class="{ on: isLocked(s.id) }"
+                  :title="isLocked(s.id) ? '已锁定：全仓/跨仓整理会跳过此仓库（仍可单页整理）。点击解锁' : '锁定后，全仓/跨仓整理会跳过此仓库（仍可单页整理）'"
+                  @click.stop="toggleLock(s.id)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <template v-if="isLocked(s.id)">
+                  <rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+                </template>
+                <template v-else>
+                  <rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/>
+                </template>
+              </svg>
+            </span>
           </button>
         </div>
 
@@ -608,6 +650,19 @@ watch (() => props.stashId, () => reportStashState ());
 .side-tab .count { color: var(--text-3); font-size: 14px; font-variant-numeric: tabular-nums; flex: none; }
 .side-tab.active .count { color: rgba(255,255,255,0.85); }
 .side-tab.active .tab-ic { color: rgba(255,255,255,0.9); }
+.lock-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: none; width: 20px; height: 20px; border-radius: 5px;
+  color: var(--text-3); opacity: 0.35;
+  transition: all .15s var(--ease);
+}
+.lock-btn svg { width: 14px; height: 14px; }
+.side-tab:hover .lock-btn { opacity: 0.8; }
+.lock-btn:hover { background: rgba(120,140,170,0.18); }
+.lock-btn.on { color: var(--accent); opacity: 1; }
+.side-tab.active .lock-btn { color: rgba(255,255,255,0.75); opacity: 0.85; }
+.side-tab.active .lock-btn.on { color: #fff; opacity: 1; }
+.side-tab.locked { border-style: dashed; }
 .stash-body { padding: 0; flex: 1; min-width: 0; }
 .stash-meta {
   display: flex; align-items: center; gap: 22px;

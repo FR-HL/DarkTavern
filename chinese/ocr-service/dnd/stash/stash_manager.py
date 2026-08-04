@@ -1720,6 +1720,11 @@ class StashManager:
         ]
         macros.build_dynamic_tab_mapping([str(s) for s in owned_ids])
         tab_order = [int(s) for s in macros.TAB_TYPE_ORDER if s in owned_ids]
+        # Skip locked stashes — they take no part in cross-stash merging.
+        from dnd.settings import settings_manager as _sm
+        _locked = set(int(x) for x in (_sm.get("lockedStashes", []) or []))
+        if _locked:
+            tab_order = [s for s in tab_order if s not in _locked]
 
         storages = {sid: Storage(sid, stashes.get(sid, [])) for sid in tab_order}
         inventory = Storage(StashType.BAG.value, inv_items)
@@ -1954,6 +1959,11 @@ class StashManager:
         ]
         macros.build_dynamic_tab_mapping([str(s) for s in owned_ids])
         tab_order = [int(s) for s in macros.TAB_TYPE_ORDER if s in owned_ids]
+        # Skip locked stashes — they take no part in cross-stash sorting.
+        from dnd.settings import settings_manager as _sm
+        _locked = set(int(x) for x in (_sm.get("lockedStashes", []) or []))
+        if _locked:
+            tab_order = [s for s in tab_order if s not in _locked]
         storages = {sid: Storage(sid, stashes.get(sid, [])) for sid in tab_order}
         inventory = Storage(StashType.BAG.value, inv_items)
 
