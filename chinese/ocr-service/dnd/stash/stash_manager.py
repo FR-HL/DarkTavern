@@ -1765,52 +1765,63 @@ class StashManager:
         """Merge every stackable group into full stacks. Target pool grows
         dynamically; targets are stash stacks only (never the bag)."""
         from dnd.sort.point import Point
+        from dnd.sort import macros
         merged = 0
         moved = 0
         skipped = 0
-        for key, entries in groups.items():
-            if cancel_event and cancel_event.is_set():
-                break
-            if len(entries) <= 1:
-                continue
-            max_stack = max(
-                (getattr(it, "max_stack_size", 1) or 1) for _, it in entries
-            )
-            if max_stack <= 1:
-                continue
-            sorted_entries = sorted(
-                entries, key=lambda e: getattr(e[1], "quantity", 1), reverse=True
-            )
-            targets = []  # [stash_id, item, current_qty]
-            for src_sid, item in sorted_entries:
+        # Make every merge drag cancellable via the shared cancel event.
+        macros.push_cancel_event(cancel_event)
+        try:
+            for key, entries in groups.items():
                 if cancel_event and cancel_event.is_set():
                     break
-                qty = getattr(item, "quantity", 1)
-                fit = None
-                for t in targets:
-                    if t[0] != StashType.BAG.value and t[2] + qty <= max_stack:
-                        fit = t
-                        break
-                if fit is None:
-                    targets.append([src_sid, item, qty])
+                if len(entries) <= 1:
                     continue
-                dst_sid, dst_item, _ = fit
-                target_pos = Point(dst_item.position.x, dst_item.position.y)
-                if self._cross_move(storages, inventory, src_sid, item, dst_sid, target_pos, cancel_event):
-                    fit[2] = min(max_stack, fit[2] + qty)
-                    dst_item.quantity = fit[2]
-                    logger.info(
-                        "Stack merge OK: %s qty %d -> stash %d (now %d)",
-                        getattr(item, "name", "?"), qty, dst_sid, dst_item.quantity,
-                    )
-                    merged += 1
-                    moved += 1
-                else:
-                    logger.warning(
-                        "Stack merge failed: %s qty %d (stash %d -> %d)",
-                        getattr(item, "name", "?"), qty, src_sid, dst_sid,
-                    )
-                    skipped += 1
+                max_stack = max(
+                    (getattr(it, "max_stack_size", 1) or 1) for _, it in entries
+                )
+                if max_stack <= 1:
+                    continue
+                sorted_entries = sorted(
+                    entries, key=lambda e: getattr(e[1], "quantity", 1), reverse=True
+                )
+                targets = []  # [stash_id, item, current_qty]
+                for src_sid, item in sorted_entries:
+                    if cancel_event and cancel_event.is_set():
+                        break
+                    qty = getattr(item, "quantity", 1)
+                    fit = None
+                    for t in targets:
+                        if t[0] != StashType.BAG.value and t[2] + qty <= max_stack:
+                            fit = t
+                            break
+                    if fit is None:
+                        targets.append([src_sid, item, qty])
+                        continue
+                    dst_sid, dst_item, _ = fit
+                    target_pos = Point(dst_item.position.x, dst_item.position.y)
+                    try:
+                        ok = self._cross_move(storages, inventory, src_sid, item, dst_sid, target_pos, cancel_event)
+                    except macros.MacroCancelled:
+                        ok = False
+                    if ok:
+                        fit[2] = min(max_stack, fit[2] + qty)
+                        dst_item.quantity = fit[2]
+                        logger.info(
+                            "Stack merge OK: %s qty %d -> stash %d (now %d)",
+                            getattr(item, "name", "?"), qty, dst_sid, dst_item.quantity,
+                        )
+                        merged += 1
+                        moved += 1
+                    else:
+                        if not (cancel_event and cancel_event.is_set()):
+                            logger.warning(
+                                "Stack merge failed: %s qty %d (stash %d -> %d)",
+                                getattr(item, "name", "?"), qty, src_sid, dst_sid,
+                            )
+                        skipped += 1
+        finally:
+            macros.pop_cancel_event(cancel_event)
         return merged, moved, skipped
 
     def _cross_move(self, storages, inventory, src_sid, item, dst_sid, dst_pos, cancel_event):
@@ -1850,6 +1861,8 @@ class StashManager:
             _time.sleep(0.25)
             inventory.move(item, dst_pos, storages[dst_sid])
             return True
+        except macros.MacroCancelled:
+            raise
         except Exception as e:
             logger.warning(
                 "Cross move failed (%s in stash %d -> %d): %s",
@@ -2167,6 +2180,8 @@ class StashManager:
             else:
                 inventory.move(item, pos, dst)
             return True
+        except macros.MacroCancelled:
+            raise
         except Exception as e:
             logger.warning(
                 "Place failed (%s -> stash %d): %s",
@@ -2191,6 +2206,8 @@ class StashManager:
 
         done = 0
         touched = set()
+        # Make every drag in this batch cancellable via the shared cancel event.
+        macros.push_cancel_event(cancel_event)
         for (src_sid, dst_sid), items in groups.items():
             if cancel_event and cancel_event.is_set():
                 break
@@ -2250,6 +2267,8 @@ class StashManager:
                         for item, pos in picked:
                             if self._place_at(storages, inventory, src_sid, item, dst_sid, pos):
                                 done += 1
+                except macros.MacroCancelled:
+                    break
                 except Exception as e:
                     logger.warning(
                         "Batch move failed (stash %d -> %d): %s", src_sid, dst_sid, e
@@ -2262,6 +2281,7 @@ class StashManager:
                 inventory.rebuild_pq()
             elif sid in storages:
                 storages[sid].rebuild_pq()
+        macros.pop_cancel_event(cancel_event)
         return done
 
     def _arrange_stash(self, storages, inventory, sid, cancel_event):

@@ -20,21 +20,29 @@ class MacroCancelled(RuntimeError):
 
 
 _active_cancel_event = None
+_cancel_event_refs = 0
 
 
 def push_cancel_event(event):
-    """Register a threading.Event that signals macro cancellation."""
-    global _active_cancel_event
+    """Register a threading.Event that signals macro cancellation.
+
+    Reference-counted so nested workers (e.g. cross-sort arranging a stash via
+    StashSorter) can push/pop the same event without clearing it prematurely.
+    """
+    global _active_cancel_event, _cancel_event_refs
     if event is None:
         return
     _active_cancel_event = event
+    _cancel_event_refs += 1
 
 
 def pop_cancel_event(event=None):
     """Clear the registered cancellation event if it matches the provided one."""
-    global _active_cancel_event
+    global _active_cancel_event, _cancel_event_refs
     if event is None or _active_cancel_event is event:
-        _active_cancel_event = None
+        _cancel_event_refs = max(0, _cancel_event_refs - 1)
+        if _cancel_event_refs == 0:
+            _active_cancel_event = None
 
 
 def is_cancelled():
