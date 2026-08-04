@@ -716,16 +716,42 @@ watch (() => props.charId, () => loadStashOptions ());
     </div>
 
     <div class="sec">
-      <div class="sec-label">执行</div>
+      <div class="sec-label">仓库整理</div>
       <div class="card run-card">
-        <div class="run-row">
-          <div class="run-hints">
-            <span class="hint"><span class="kbd">{{ sortHotkey }}</span> 开始整理</span>
-            <span class="hint"><span class="kbd">{{ cancelHotkey }}</span> 取消整理</span>
-            <span class="hint"><span class="kbd">{{ stashNextKey }}</span> 切换仓库</span>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">单仓库整理</div>
+            <div class="srow-d">整理当前选中的仓库（快捷键 <span class="kbd">{{ sortHotkey }}</span>）</div>
           </div>
-          <button v-if="!sorting || kind !== 'single'" class="btn primary lg" :disabled="!canStart" @click="startSort">开始整理</button>
-          <button v-else class="btn danger lg" @click="cancelSort">取消整理</button>
+          <div class="srow-ctl">
+            <template v-if="sorting && kind === 'single'">
+              <span class="run-inline"><span class="spin"></span> 整理中…</span>
+              <button class="btn danger" @click="cancelSort">取消</button>
+            </template>
+            <button v-else class="btn primary" :disabled="!canStart || sorting" @click="startSort">开始整理</button>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">全仓库顺序整理</div>
+            <div class="srow-d">按游戏内标签顺序逐个整理全部仓库：跳过空仓，背包物品并入首个仓库，单仓失败自动跳过</div>
+          </div>
+          <div class="srow-ctl">
+            <template v-if="sorting && kind === 'all'">
+              <span class="run-inline"><span class="spin"></span> <b>{{ sortAllInfo.current }}/{{ sortAllInfo.total }}</b> · {{ sortAllInfo.label }}</span>
+              <button class="btn danger" @click="cancelSort">取消</button>
+            </template>
+            <button v-else class="btn primary" :disabled="!props.charId || sorting" @click="startSortAll">开始全仓整理</button>
+          </div>
+        </div>
+
+        <div v-if="error" class="status error">{{ error }}</div>
+        <div v-if="result" class="status" :class="result.success ? 'success' : 'error'">{{ result.message }}</div>
+        <div v-if="sortAllInfo.results.length" class="sort-all-results">
+          <div v-for="r in sortAllInfo.results" :key="r.stash_id" class="sar-row" :class="r.success ? 'ok' : 'bad'">
+            <span class="sar-name">{{ r.label }}</span>
+            <span class="sar-msg">{{ r.success ? '✓' : '✗' }} {{ r.message }}</span>
+          </div>
         </div>
 
         <div class="run-keys">
@@ -761,47 +787,6 @@ watch (() => props.charId, () => loadStashOptions ());
               <button class="keybind-btn" :class="{ listening: listeningFor === 'stash' }" @click="startHotkeyListen('stash')">{{ hotkeyLabel('stash') }}</button>
               <button class="btn primary" @click="saveHotkey('stash')">保存</button>
             </div>
-          </div>
-        </div>
-
-        <div v-if="sorting && kind === 'single'" class="run-progress">
-          <span class="spin"></span>
-          <span>整理进行中——请保持 <b>Dark and Darker</b> 窗口在前台，不要移动鼠标。</span>
-        </div>
-
-        <div v-if="kind === 'single' && error" class="status error">{{ error }}</div>
-        <div v-if="kind === 'single' && result" class="status" :class="result.success ? 'success' : 'error'">
-          {{ result.success ? '整理完成' : '整理未完成' }}<template v-if="result.message">：{{ result.message }}</template>
-        </div>
-      </div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-label">全仓库整理</div>
-      <div class="card">
-        <div class="term-body">
-          <p>按游戏内标签顺序<b>逐个整理该角色的全部仓库</b>：跳过空仓库，背包物品并入第一个仓库；单仓失败自动跳过继续。期间请保持游戏窗口在前台、不要移动鼠标，可随时 <span class="kbd">{{ cancelHotkey }}</span> 取消。</p>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">执行</div>
-            <div class="srow-d">整理全部仓库（约数分钟）</div>
-          </div>
-          <div class="srow-ctl">
-            <button v-if="!(sorting && kind === 'all')" class="btn primary" :disabled="!props.charId || sorting" @click="startSortAll">开始全仓整理</button>
-            <button v-else class="btn danger" @click="cancelSort">取消整理</button>
-          </div>
-        </div>
-        <div v-if="kind === 'all' && sorting" class="run-progress">
-          <span class="spin"></span>
-          <span>全仓库整理中：<b>{{ sortAllInfo.current }}/{{ sortAllInfo.total }}</b> · {{ sortAllInfo.label }}</span>
-        </div>
-        <div v-if="kind === 'all' && error" class="status error">{{ error }}</div>
-        <div v-if="kind === 'all' && result" class="status" :class="result.success ? 'success' : 'error'">{{ result.message }}</div>
-        <div v-if="sortAllInfo.results.length" class="sort-all-results">
-          <div v-for="r in sortAllInfo.results" :key="r.stash_id" class="sar-row" :class="r.success ? 'ok' : 'bad'">
-            <span class="sar-name">{{ r.label }}</span>
-            <span class="sar-msg">{{ r.success ? '✓' : '✗' }} {{ r.message }}</span>
           </div>
         </div>
       </div>
