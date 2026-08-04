@@ -223,6 +223,7 @@ class LayoutPlanner:
         *,
         stash: Optional[Storage] = None,
         stack_mode: bool = False,
+        keep_in_place: bool = False,
         learning_manager: Optional["SortLearningManager"] = None,
         learning_session_id: Optional[str] = None,
     ):
@@ -231,6 +232,7 @@ class LayoutPlanner:
         self.prefer_dense = prefer_dense
         self.stash_ref = stash
         self.stack_mode = bool(stack_mode)
+        self.keep_in_place = bool(keep_in_place)
         self.learning_manager = learning_manager
         self.learning_session_id = learning_session_id
         self._learning_cache: Dict[int, Dict[str, Any]] = {}
@@ -252,15 +254,33 @@ class LayoutPlanner:
         positions: Dict[int, Point] = {}
         learning_payload: Dict[int, Dict[str, Any]] = {}
 
-        for itm in ordered_items:
-            slot = self._find_slot_for(itm)
-            if slot is None:
-                raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
-            self._mark(slot, itm)
-            positions[id(itm)] = slot
-            record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
-            if record:
-                learning_payload[id(itm)] = record
+        # Assign targets group by group. A run of the same item kind
+        # (same name + dimensions — rarities are interchangeable) only needs
+        # its band of scanline cells occupied; items already inside the band
+        # stay put and only stragglers move in: the shortest possible moves.
+        # Everything else is placed scanline.
+        idx = 0
+        while idx < len(ordered_items):
+            end = idx
+            while end + 1 < len(ordered_items) and self._segment_key(ordered_items[idx]) == self._segment_key(ordered_items[end + 1]):
+                end += 1
+            if (
+                end - idx >= 4
+                and (not self.prefer_dense or self.keep_in_place)
+                and self._assign_equivalent_band(ordered_items[idx:end + 1], positions, learning_payload, comparator_used=bool(comparator))
+            ):
+                idx = end + 1
+                continue
+            for itm in ordered_items[idx:end + 1]:
+                slot = self._find_slot_for(itm)
+                if slot is None:
+                    raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
+                self._mark(slot, itm)
+                positions[id(itm)] = slot
+                record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+                if record:
+                    learning_payload[id(itm)] = record
+            idx = end + 1
 
         execution_order = sorted(
             [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
@@ -271,6 +291,151 @@ class LayoutPlanner:
             ),
         )
         return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
+
+    def _segment_key(self, item: Item) -> Tuple[str, int, int]:
+        """Items with the same name and dimensions form one interchangeable
+        band — rarities/quantities inside it may be arranged freely, so the
+        planner never drags them around just to re-order variants."""
+        return (getattr(item, "name", "") or "", getattr(item, "width", 1), getattr(item, "height", 1))
+
+    def _assign_equivalent_band(
+        self,
+        segment: List[Item],
+        positions: Dict[int, Point],
+        learning_payload: Dict[int, Dict[str, Any]],
+        *,
+        comparator_used: bool,
+    ) -> bool:
+        """Place an interchangeable (sort-equivalent) item run.
+
+        Pre-simulates the scanline band the segment occupies, then keeps every
+        item that already sits inside that band where it is — only the items
+        outside the band are moved into the free band cells.  Returns False
+        when the band cannot be built (caller falls back to plain scanline).
+        """
+        # 1. Pre-simulate the band. The anchor is the segment's own longest
+        #    run of contiguous current positions — items already gathered in
+        #    a block stay exactly where they are, only stragglers join it.
+        #    Without any real cluster the band starts at the scanline origin.
+        anchor = self._contiguous_run_anchor(segment)
+        if anchor is not None and self._assign_band_with_anchor(
+            segment, positions, learning_payload, comparator_used, anchor
+        ):
+            return True
+        # Cluster anchor failed (e.g. too close to the stash edge) — retry
+        # from the scanline origin before giving up to plain scanline.
+        return self._assign_band_with_anchor(
+            segment, positions, learning_payload, comparator_used, None
+        )
+
+    def _assign_band_with_anchor(
+        self,
+        segment: List[Item],
+        positions: Dict[int, Point],
+        learning_payload: Dict[int, Dict[str, Any]],
+        comparator_used: bool,
+        anchor: Optional[int],
+    ) -> bool:
+        occ_snapshot = [row[:] for row in self.occupancy]
+        sim_occ = [row[:] for row in self.occupancy]
+        if anchor is not None:
+            for i in range(anchor):
+                sim_occ[i % self.width][i // self.width] = True
+        region: List[Tuple[int, int]] = []
+        for itm in segment:
+            slot = self._find_slot_for_with_occ(sim_occ, itm)
+            if slot is None:
+                self.occupancy = occ_snapshot
+                return False
+            for dx in range(itm.width):
+                for dy in range(itm.height):
+                    x, y = slot.x + dx, slot.y + dy
+                    sim_occ[x][y] = True
+                    region.append((x, y))
+
+        region_set = set(region)
+        used: Set[Tuple[int, int]] = set()
+
+        def assign(itm, point):
+            self._mark(point, itm)
+            positions[id(itm)] = point
+            for dx in range(itm.width):
+                for dy in range(itm.height):
+                    used.add((point.x + dx, point.y + dy))
+            record = self._record_learning_assignment(itm, point, comparator_used=comparator_used)
+            if record:
+                learning_payload[id(itm)] = record
+
+        # 2. Items already inside the band keep their spot.
+        pending: List[Item] = []
+        for itm in segment:
+            cells = {
+                (itm.position.x + dx, itm.position.y + dy)
+                for dx in range(itm.width) for dy in range(itm.height)
+            }
+            if cells <= region_set and not (cells & used):
+                assign(itm, itm.position)
+            else:
+                pending.append(itm)
+
+        # 3. Stragglers fill the remaining band cells (scanline order).
+        for itm in pending:
+            for (x, y) in region:
+                if (x, y) in used:
+                    continue
+                cells = {(x + dx, y + dy) for dx in range(itm.width) for dy in range(itm.height)}
+                if cells <= region_set and not (cells & used):
+                    assign(itm, Point(x, y))
+                    break
+            else:
+                self.occupancy = occ_snapshot
+                return False
+        return True
+
+    def _contiguous_run_anchor(self, segment: List[Item]) -> Optional[int]:
+        """Scanline index where the segment's own cluster starts.
+
+        Finds the longest run of scanline-contiguous current positions among
+        the segment's items; returns its start index, or None when the items
+        are scattered (no meaningful cluster)."""
+        pts = sorted(
+            (itm.position.x + itm.position.y * self.width)
+            for itm in segment
+        )
+        if len(pts) < 5:
+            return None
+        best_start = 0
+        best_len = 1
+        cur_start = 0
+        cur_len = 1
+        for k in range(1, len(pts)):
+            if pts[k] == pts[k - 1] + 1:
+                cur_len += 1
+                if cur_len > best_len:
+                    best_len = cur_len
+                    best_start = cur_start
+            else:
+                cur_start = k
+                cur_len = 1
+        if best_len < 5:
+            return None
+        return pts[best_start]
+
+    def _find_slot_for_with_occ(self, occ, item: Item) -> Optional[Point]:
+        """Scanline first fit against an explicit occupancy grid."""
+        for y in range(0, self.height - item.height + 1):
+            for x in range(0, self.width - item.width + 1):
+                fits = True
+                for dx in range(item.width):
+                    for dy in range(item.height):
+                        if occ[x + dx][y + dy]:
+                            fits = False
+                            break
+                    if not fits:
+                        break
+                if fits:
+                    return Point(x, y)
+        return None
 
     def _group_key(self, item: Item) -> Tuple[str, str]:
         """Category key: equipment by slot, everything else in one shared band."""
@@ -461,6 +626,13 @@ class LayoutPlanner:
                 for (w, h) in size_keys:
                     items_for_size = size_groups[(w, h)]
                     n = len(items_for_size)
+                    # 同尺寸段若已聚拢成块则就地保留（同种物品互换无差别），
+                    # 避免列式重排造成无谓拖动。
+                    if n >= 5 and (not self.prefer_dense or self.keep_in_place) and self._assign_equivalent_band(
+                        items_for_size, positions, learning_payload,
+                        comparator_used=bool(comparator),
+                    ):
+                        continue
                     avail_h = max(1, self.height - anchor)
                     k = max(1, avail_h // h)
                     cols = (n + k - 1) // k
@@ -1651,8 +1823,15 @@ class ExecutionOrderOptimizer:
 
         # Detect swap chains
         swap_participants: Set[int] = set()
+        equivalent_chains: Set[int] = set()
         chains = self._detect_swap_chains(entries, grid_occupants)
         for chain in chains:
+            if self._is_equivalent_chain(chain):
+                # Swapping identical items changes nothing visually — skip
+                # the whole chain instead of dragging everything back.
+                for item in chain:
+                    equivalent_chains.add(id(item))
+                continue
             for item in chain:
                 swap_participants.add(id(item))
 
@@ -1663,6 +1842,11 @@ class ExecutionOrderOptimizer:
         for entry in entries:
             # Classify: already at target?
             if entry.item.position == entry.target and entry.item.stash is self._stash:
+                entry.needs_move = False
+                already_placed.append(entry)
+                continue
+
+            if id(entry.item) in equivalent_chains:
                 entry.needs_move = False
                 already_placed.append(entry)
                 continue
@@ -1708,6 +1892,19 @@ class ExecutionOrderOptimizer:
             )
 
         return optimized
+
+    def _is_equivalent_chain(self, chain: List[Item]) -> bool:
+        """True when every item in the chain is interchangeable (same name
+        and dimensions) — swapping them changes nothing visually."""
+        if len(chain) < 2:
+            return False
+        first = chain[0]
+        first_key = (getattr(first, "name", "") or "", getattr(first, "width", 1), getattr(first, "height", 1))
+        for other in chain[1:]:
+            other_key = (getattr(other, "name", "") or "", getattr(other, "width", 1), getattr(other, "height", 1))
+            if first_key != other_key:
+                return False
+        return True
 
     def _detect_swap_chains(
         self,
@@ -1816,6 +2013,7 @@ class StashSorter:
         stash_id: Optional[int] = None,
         feedback_manager=None,
         group_mode: str = "none",
+        keep_in_place: bool = False,
     ):
         self.stash = stash
         self.inv = inv
@@ -1823,6 +2021,7 @@ class StashSorter:
         self.pack_mode = bool(pack_mode)
         self.stack_mode = bool(stack_mode)
         self.group_mode = group_mode if group_mode in ("none", "category", "sized", "neat") else "none"
+        self.keep_in_place = bool(keep_in_place)
         self.character_id = character_id
         self.stash_id = stash_id
         self.overlay_session: Optional[Union[SortOverlaySession, NullOverlaySession]] = None
@@ -2045,6 +2244,71 @@ class StashSorter:
             start_width, start_height, end_width, end_height,
         ))
 
+    def count_planned_drags(self) -> int:
+        """Dry-run the exact sort simulation (no game interaction) and return
+        the number of item drags it would perform.
+
+        The preview endpoint uses this so its step count always equals the
+        real sort's drag count — including blocker parking and workspace
+        buffering that a naive ``needs_move`` count would miss.
+        """
+        if self.overlay_session is None:
+            self.overlay_session = NullOverlaySession()
+        self._reset_move_tracking()
+        self._planned_moves = []
+        self._snapshot_grid_state()
+
+        original_macro = macros.move_from_to_reliable
+
+        def _recording_macro(start_stash, start_pos, end_stash, end_pos,
+                             start_width=1, start_height=1, end_width=1, end_height=1):
+            self._record_planned_move(
+                start_stash, start_pos, end_stash, end_pos,
+                start_width, start_height, end_width, end_height,
+            )
+
+        macros.move_from_to_reliable = _recording_macro
+        self._simulating = True
+        self._planning_started_at = time.monotonic()
+        try:
+            if self._stacking_engine.has_instructions:
+                self._stacking_engine.execute()
+
+            def _collect_active_items():
+                unique_items: Dict[int, Item] = {}
+                for itm in self.stash.pq:
+                    if itm.stash is self.stash or getattr(itm, "_buffered_by_sort", False):
+                        unique_items[id(itm)] = itm
+                for itm in self._buffer_tracker.buffered_items.values():
+                    unique_items[id(itm)] = itm
+                return list(unique_items.values())
+
+            active_items = _collect_active_items()
+            total_items = len(active_items)
+            if not total_items and not self._buffer_tracker.buffered_items:
+                return 0
+            plan = self._build_sort_plan(active_items)
+            if plan is not None and not self._buffer_tracker.buffered_items:
+                needs_workspace = any(
+                    getattr(e, "blockers_count", 0) > 0 for e in plan.order
+                )
+                if needs_workspace:
+                    self._workspace_mgr.ensure_initial_workspace(self._workspace_mgr.workspace_min_free_cells)
+                    active_items = _collect_active_items()
+                    total_items = len(active_items)
+                    plan = self._build_sort_plan(active_items)
+            if plan is None:
+                return 0
+            self._execute_plan(plan, total_items)
+            return len(self._planned_moves)
+        except Exception as exc:
+            logger.debug("count_planned_drags simulation failed: %s", exc, exc_info=True)
+            return -1
+        finally:
+            macros.move_from_to_reliable = original_macro
+            self._simulating = False
+            self._planning_started_at = None
+
     def sort(
         self,
         cancel_event=None,
@@ -2089,17 +2353,18 @@ class StashSorter:
                         self._overlay_log("Stacking phase failed; aborting sort.")
                         return False
 
-                self._overlay_update("Planning workspace preparation...", status="info")
-                self._workspace_mgr.ensure_initial_workspace(self._workspace_mgr.workspace_min_free_cells)
                 self._overlay_update("Analyzing stash contents...", status="info")
 
-                unique_items: Dict[int, Item] = {}
-                for itm in self.stash.pq:
-                    if itm.stash is self.stash or getattr(itm, "_buffered_by_sort", False):
+                def _collect_active_items():
+                    unique_items: Dict[int, Item] = {}
+                    for itm in self.stash.pq:
+                        if itm.stash is self.stash or getattr(itm, "_buffered_by_sort", False):
+                            unique_items[id(itm)] = itm
+                    for itm in self._buffer_tracker.buffered_items.values():
                         unique_items[id(itm)] = itm
-                for itm in self._buffer_tracker.buffered_items.values():
-                    unique_items[id(itm)] = itm
-                active_items = list(unique_items.values())
+                    return list(unique_items.values())
+
+                active_items = _collect_active_items()
                 total_items = len(active_items)
                 if not total_items and not self._buffer_tracker.buffered_items:
                     self._overlay_log("No items detected in stash; nothing to sort.")
@@ -2107,6 +2372,21 @@ class StashSorter:
 
                 self._overlay_update("Calculating deterministic layout...", status="info")
                 plan = self._build_sort_plan(active_items)
+
+                # Only prepare workspace (buffer items into the inventory)
+                # when the plan actually needs to resolve blocked targets —
+                # otherwise the buffering + restore round-trips are pure
+                # wasted dragging.
+                if plan is not None and not self._buffer_tracker.buffered_items:
+                    needs_workspace = any(
+                        getattr(e, "blockers_count", 0) > 0 for e in plan.order
+                    )
+                    if needs_workspace:
+                        self._overlay_update("Planning workspace preparation...", status="info")
+                        self._workspace_mgr.ensure_initial_workspace(self._workspace_mgr.workspace_min_free_cells)
+                        active_items = _collect_active_items()
+                        total_items = len(active_items)
+                        plan = self._build_sort_plan(active_items)
 
                 if plan and self.learning_manager and self._learning_session_id:
                     try:
@@ -2665,6 +2945,7 @@ class StashSorter:
                 prefer_dense=self.pack_mode,
                 stash=self.stash,
                 stack_mode=self.stack_mode,
+                keep_in_place=self.keep_in_place,
                 learning_manager=self.learning_manager,
                 learning_session_id=self._learning_session_id,
             )
@@ -2730,6 +3011,13 @@ class StashSorter:
             if not self._safety_check():
                 return False
 
+            if not entry.needs_move:
+                # Marked as already placed / interchangeable chain — skip it
+                # entirely, otherwise items whose planned slot differs from
+                # their current spot (equivalent swap chains) would be dragged
+                # for nothing, making the real move count exceed the plan.
+                continue
+
             if entry.item.position == entry.target and entry.item.stash is self.stash:
                 logger.debug("%s already at %s", entry.item, entry.target)
                 self._log_learning_outcome(entry.item, True, "already_aligned")
@@ -2757,7 +3045,9 @@ class StashSorter:
 
         lineage.add(token)
         blockers = self._collect_blocking_items(item, target_point)
-        for blocker in list(blockers):
+        # Deterministic order (scanline) so the drag count is stable and the
+        # preview always matches the real sort.
+        for blocker in sorted(blockers, key=lambda b: (b.position.y, b.position.x)):
             blocker_token = id(blocker)
             if blocker_token in lineage:
                 if not self._blocker_resolver.park(blocker):

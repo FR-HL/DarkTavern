@@ -5,6 +5,10 @@ import StashPane from './StashPane.vue';
 const props = defineProps ({
   charId: { type: String, default: '' },
   stashId: { type: String, default: '' },
+  packMode: { type: Boolean, default: false },
+  stackMode: { type: Boolean, default: false },
+  includeInv: { type: Boolean, default: false },
+  keepInPlace: { type: Boolean, default: true },
 });
 const emit = defineEmits ([ 'update:charId', 'update:stashId', 'update:equipment', 'update:active' ]);
 
@@ -198,24 +202,46 @@ const bgCells = computed (() => {
 const debugPreview = ref (false);
 const previewItems = ref ([]);
 const previewLoading = ref (false);
+const previewSteps = ref (null);
 
-async function togglePreview () {
-  if (debugPreview.value) {
-    debugPreview.value = false;
-    previewItems.value = [];
-    return;
-  }
+async function loadPreview () {
   if (!props.charId || !props.stashId) return;
   previewLoading.value = true;
+  previewSteps.value = null;
   try {
-    const r = await invoke ('dnd:sort-preview', { character_id: props.charId, stash_id: props.stashId });
+    const r = await invoke ('dnd:sort-preview', {
+      character_id: props.charId,
+      stash_id: props.stashId,
+      pack_mode: props.packMode,
+      stack_mode: props.stackMode,
+      include_inventory: props.includeInv,
+      keep_in_place: props.keepInPlace,
+    });
     if (r && Array.isArray (r.items)) {
       previewItems.value = r.items;
+      previewSteps.value = typeof r.steps === 'number' ? r.steps : null;
       debugPreview.value = true;
     }
   } catch (e) {}
   previewLoading.value = false;
 }
+
+async function togglePreview () {
+  if (debugPreview.value) {
+    debugPreview.value = false;
+    previewItems.value = [];
+    previewSteps.value = null;
+    return;
+  }
+  await loadPreview ();
+}
+
+// If the sort modes change while the preview is open, refresh it so the step
+// count keeps matching what the real sort will do.
+watch (
+  () => [props.packMode, props.stackMode, props.includeInv, props.keepInPlace],
+  () => { if (debugPreview.value) loadPreview (); }
+);
 
 function previewStyle (it) {
   return {
@@ -468,6 +494,7 @@ watch (() => props.stashId, () => reportStashState ());
           <button v-if="!isEquipment" class="debug-btn" :class="{ on: debugPreview }" :disabled="previewLoading" @click="togglePreview">
             {{ previewLoading ? '计算中…' : (debugPreview ? '关闭预览' : '排序预览') }}
           </button>
+          <span v-if="debugPreview && previewSteps !== null" class="preview-steps">移动 {{ previewSteps }} 步</span>
         </div>
 
         <div class="grid-scroll">
@@ -662,6 +689,12 @@ html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 .debug-btn:hover { border-color: var(--accent-soft); }
 .debug-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .debug-btn:disabled { opacity: .5; cursor: default; }
+.preview-steps {
+  flex: none; margin-left: 8px;
+  padding: 4px 10px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--accent-soft); border-radius: 6px;
+  background: rgba(255, 140, 0, 0.12); color: var(--accent);
+}
 .preview-item {
   position: absolute; display: grid; place-items: center;
   background: rgba(255, 140, 0, 0.22);

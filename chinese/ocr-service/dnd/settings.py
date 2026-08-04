@@ -106,6 +106,7 @@ class SettingsManager:
             "autoStashSelection": True,
             "stashPackMode": False,
             "stashStackMode": False,
+            "sortKeepInPlace": True,
             "sortLearningEnabled": False,
         }
 

@@ -9,8 +9,9 @@ const props = defineProps ({
   packMode: { type: Boolean, default: true },
   stackMode: { type: Boolean, default: true },
   includeInv: { type: Boolean, default: true },
+  keepInPlace: { type: Boolean, default: true },
 });
-const emit = defineEmits ([ 'update:packMode', 'update:stackMode', 'update:includeInv' ]);
+const emit = defineEmits ([ 'update:packMode', 'update:stackMode', 'update:includeInv', 'update:keepInPlace' ]);
 
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
@@ -322,6 +323,7 @@ async function startSort () {
       pack_mode: props.packMode,
       stack_mode: props.stackMode,
       include_inventory: props.includeInv,
+      keep_in_place: props.keepInPlace,
     });
     if (!r?.success) { error.value = r?.error || '启动失败'; sorting.value = false; }
   } catch (e) { error.value = '启动失败'; sorting.value = false; }
@@ -626,6 +628,15 @@ watch (() => props.charId, () => loadStashOptions ());
           </div>
           <div class="srow-ctl">
             <label class="switch"><input type="checkbox" :checked="props.includeInv" @change="emit('update:includeInv', $event.target.checked)"><span class="track"></span></label>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">保留相同物品原位</div>
+            <div class="srow-d">已放好的相同物品不移动，减少无谓拖动；关闭后按排序彻底重排</div>
+          </div>
+          <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" :checked="props.keepInPlace" @change="emit('update:keepInPlace', $event.target.checked)"><span class="track"></span></label>
           </div>
         </div>
         <div class="srow">

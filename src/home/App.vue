@@ -114,6 +114,7 @@ const sortActiveCharId = ref ('');
 const sortPack = ref (true);
 const sortStack = ref (true);
 const sortIncludeInv = ref (true);
+const sortKeepInPlace = ref (true);
 
 async function saveSortConfig () {
   try {
@@ -123,6 +124,7 @@ async function saveSortConfig () {
       pack_mode: sortPack.value,
       stack_mode: sortStack.value,
       include_inventory: sortIncludeInv.value,
+      keep_in_place: sortKeepInPlace.value,
     });
   } catch (e) {}
 }
@@ -136,10 +138,11 @@ async function restoreSortConfig () {
     sortPack.value = !!cfg.pack_mode;
     sortStack.value = !!cfg.stack_mode;
     sortIncludeInv.value = !!cfg.include_inventory;
+    sortKeepInPlace.value = cfg.keep_in_place !== false;
   } catch (e) {}
 }
 
-watch ([sortCharId, sortStashId, sortPack, sortStack, sortIncludeInv], saveSortConfig);
+watch ([sortCharId, sortStashId, sortPack, sortStack, sortIncludeInv, sortKeepInPlace], saveSortConfig);
 
 let lastMappings = -1;
 let toastTimer = null;
@@ -1020,6 +1023,10 @@ onBeforeUnmount (() => {
         <StashView
           :char-id="sortCharId"
           :stash-id="sortStashId"
+          :pack-mode="sortPack"
+          :stack-mode="sortStack"
+          :include-inv="sortIncludeInv"
+          :keep-in-place="sortKeepInPlace"
           @update:char-id="v => sortCharId = v"
           @update:stash-id="v => sortStashId = v"
           @update:equipment="v => sortEquipment = v"
@@ -1037,9 +1044,11 @@ onBeforeUnmount (() => {
           :pack-mode="sortPack"
           :stack-mode="sortStack"
           :include-inv="sortIncludeInv"
+          :keep-in-place="sortKeepInPlace"
           @update:pack-mode="v => sortPack = v"
           @update:stack-mode="v => sortStack = v"
           @update:include-inv="v => sortIncludeInv = v"
+          @update:keep-in-place="v => sortKeepInPlace = v"
         />
       </div>
 

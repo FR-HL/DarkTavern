@@ -288,8 +288,8 @@ def get_sort_state():
 
 
 def start_sort(character_id: str, stash_id: str, pack_mode: Optional[bool] = None,
-               stack_mode: Optional[bool] = None, include_inventory: bool = False,
-               group_mode: Optional[str] = None):
+                stack_mode: Optional[bool] = None, include_inventory: bool = False,
+                group_mode: Optional[str] = None, keep_in_place: Optional[bool] = None):
     from dnd.settings import settings_manager
 
     if pack_mode is None:
@@ -298,6 +298,8 @@ def start_sort(character_id: str, stash_id: str, pack_mode: Optional[bool] = Non
         stack_mode = bool(settings_manager.get('stashStackMode', False))
     if group_mode is None:
         group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+    if keep_in_place is None:
+        keep_in_place = bool(settings_manager.get('sortKeepInPlace', True))
 
     with _sort_lock:
         if _sort_state["running"]:
@@ -330,6 +332,7 @@ def start_sort(character_id: str, stash_id: str, pack_mode: Optional[bool] = Non
                 stack_mode=stack_mode,
                 include_inventory=include_inventory,
                 group_mode=group_mode,
+                keep_in_place=keep_in_place,
             )
             if isinstance(result, tuple):
                 if len(result) == 3:

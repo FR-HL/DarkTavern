@@ -194,11 +194,10 @@ class Item:
         if fallback:
             return fallback
 
-        left_id = id(left)
-        right_id = id(right)
-        if left_id == right_id:
-            return 0
-        return -1 if left_id < right_id else 1
+        # Items that are fully equivalent (same name/rarity/size/slot) are
+        # treated as equal — sorting stays stable and identical items keep
+        # their input order instead of being ordered by memory address.
+        return 0
 
     @staticmethod
     def _compare_numeric(a, b, direction):

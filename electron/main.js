@@ -316,6 +316,7 @@ app.on ('ready', async () => {
     pack_mode: !!settings.dnd?.pack_mode,
     stack_mode: !!settings.dnd?.stack_mode,
     include_inventory: !!settings.dnd?.sort_include_inv,
+    keep_in_place: settings.dnd?.keep_in_place !== false,
   }));
   ipcMain.handle ('dnd:sort-config-save', (e, data = {}) => {
     const dnd = settings.dnd || {};
@@ -324,6 +325,7 @@ app.on ('ready', async () => {
     if (data.pack_mode !== undefined) dnd.pack_mode = !!data.pack_mode;
     if (data.stack_mode !== undefined) dnd.stack_mode = !!data.stack_mode;
     if (data.include_inventory !== undefined) dnd.sort_include_inv = !!data.include_inventory;
+    if (data.keep_in_place !== undefined) dnd.keep_in_place = !!data.keep_in_place;
     settings.dnd = dnd;
     saveSettings ();
     return { success: true };
@@ -619,6 +621,7 @@ function registerSortHotkeys () {
           pack_mode: !!settings.dnd?.pack_mode,
           stack_mode: !!settings.dnd?.stack_mode,
           include_inventory: !!settings.dnd?.sort_include_inv,
+          keep_in_place: settings.dnd?.keep_in_place !== false,
         });
         logger.info (`Sort hotkey: char=${charId} stash=${stashId} -> ${r?.success ? 'started' : (r?.error || 'failed')}`);
         notifyHome ('dnd:sort-notify', r?.success

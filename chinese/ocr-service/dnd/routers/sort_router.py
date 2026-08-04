@@ -3,6 +3,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, List
 
+from dnd.sort.sorter import LayoutPlanError
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
@@ -14,6 +16,7 @@ class SortStartRequest(BaseModel):
     stack_mode: Optional[bool] = None
     include_inventory: bool = False
     group_mode: Optional[str] = None
+    keep_in_place: Optional[bool] = None
 
 
 class CharacterOnlyRequest(BaseModel):
@@ -118,6 +121,7 @@ def sort_start(body: SortStartRequest):
         stack_mode=body.stack_mode,
         include_inventory=body.include_inventory,
         group_mode=body.group_mode,
+        keep_in_place=body.keep_in_place,
     )
 
 
@@ -242,12 +246,16 @@ def update_sort_order(body: SortOrderUpdate):
 
 
 @router.get("/preview")
-def sort_preview(character_id: str, stash_id: str):
+def sort_preview(character_id: str, stash_id: str,
+                  pack_mode: Optional[bool] = None,
+                  stack_mode: Optional[bool] = None,
+                  include_inventory: Optional[bool] = None,
+                  keep_in_place: Optional[bool] = None):
     import json as _json
     from pathlib import Path as _Path
     from dnd.items.item import Item
     from dnd.sort.sorter import LayoutPlanner
-    from dnd.stash.storage import Storage
+    from dnd.stash.storage import Storage, StashType
     from dnd.settings import settings_manager
     from dnd.service import get_stash_manager
     from dnd.appdirs import get_base_path
@@ -261,10 +269,21 @@ def sort_preview(character_id: str, stash_id: str):
         return {"error": "Stash not found"}
     stash_obj = stash_raw if isinstance(stash_raw, list) else stash_raw.get('items', [])
 
+    # Resolve the sort modes exactly like the real sort does: request params
+    # (the UI toggles) override the persisted settings.  The preview MUST use
+    # the same modes as the sort or the step count will not match.
+    if pack_mode is None:
+        pack_mode = bool(settings_manager.get('stashPackMode', False))
+    if stack_mode is None:
+        stack_mode = bool(settings_manager.get('stashStackMode', False))
+    if keep_in_place is None:
+        keep_in_place = bool(settings_manager.get('sortKeepInPlace', True))
+    include_inventory = bool(include_inventory)
+
     storage = Storage(int(stash_id), stash_obj)
     items = list(storage.pq)
     if not items:
-        return {"items": [], "width": 0, "height": 0}
+        return {"items": [], "width": 0, "height": 0, "steps": 0}
 
     en_to_cn: dict[str, str] = {}
     try:
@@ -277,22 +296,77 @@ def sort_preview(character_id: str, stash_id: str):
 
     group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
 
-    comparator = None
+    # Same planner fallback chain as StashSorter._build_sort_plan so the
+    # preview layout matches what an actual sort will produce.
+    plan = None
+    comparators: list = []
     if Item.sort_order:
-        comparator = Item.build_sort_comparator(Item.sort_order)
+        comparators.append(Item.build_sort_comparator(Item.sort_order))
+    comparators.append(None)
+    for comparator in comparators:
+        planner = LayoutPlanner(
+            storage.width, storage.height,
+            prefer_dense=pack_mode, stash=storage, stack_mode=stack_mode,
+            keep_in_place=keep_in_place,
+        )
+        try:
+            if group_mode == "sized":
+                plan = planner.build_sized_groups(items, comparator=comparator)
+            elif group_mode == "neat":
+                plan = planner.build_neat_groups(items, comparator=comparator)
+            elif group_mode == "category":
+                plan = planner.build_grouped(items, comparator=comparator)
+            else:
+                plan = planner.build(items, comparator=comparator)
+            break
+        except LayoutPlanError:
+            if comparator is None:
+                try:
+                    plan = planner.build(items)
+                except Exception:
+                    plan = None
+                break
+            continue
+    if plan is None:
+        return {"error": "layout_plan_failed", "items": [], "width": 0, "height": 0, "steps": 0}
 
-    planner = LayoutPlanner(storage.width, storage.height, stash=storage)
+    # Steps = the exact drag count from running the same simulation the real
+    # sort uses (stacking, transfer, blocker parking and workspace buffering
+    # included), so the badge always matches what the user actually sees.
+    steps = 0
     try:
-        if group_mode == "sized":
-            plan = planner.build_sized_groups(items, comparator=comparator)
-        elif group_mode == "neat":
-            plan = planner.build_neat_groups(items, comparator=comparator)
-        elif group_mode == "category":
-            plan = planner.build_grouped(items, comparator=comparator)
+        from dnd.sort.sorter import StashSorter
+
+        class _NullFeedback:
+            def begin_session(self, **kwargs):
+                return None
+
+        sim_storage = Storage(int(stash_id), stash_obj)
+        if include_inventory:
+            bag_raw = char.get('stashes', {}).get(str(StashType.BAG.value)) or []
+            bag_obj = bag_raw if isinstance(bag_raw, list) else bag_raw.get('items', [])
+            # Drop Supplied items exactly like sort_stash does.
+            bag_obj = [
+                it for it in bag_obj
+                if not (isinstance(it, dict) and it.get("data", {}).get("lootState") == 1)
+            ]
+            sim_inv = Storage(StashType.BAG.value, bag_obj)
         else:
-            plan = planner.build(items, comparator=comparator)
+            sim_inv = Storage(StashType.BAG.value, [])
+        sim_sorter = StashSorter(
+            sim_storage, sim_inv,
+            pack_mode=pack_mode, stack_mode=stack_mode,
+            group_mode=group_mode, keep_in_place=keep_in_place,
+            feedback_manager=_NullFeedback(),
+        )
+        sim_sorter._safety_monitor = None
+        if include_inventory and sim_inv.pq:
+            sim_sorter.mark_items_for_transfer(list(sim_inv.pq))
+        steps = sim_sorter.count_planned_drags()
+        if steps < 0:
+            steps = 0
     except Exception:
-        plan = planner.build(items)
+        steps = sum(1 for itm in items if plan.positions.get(id(itm)) != itm.position)
 
     result = []
     for itm in items:
@@ -304,4 +378,4 @@ def sort_preview(character_id: str, stash_id: str):
                 "width": itm.width, "height": itm.height,
                 "name": cn_name,
             })
-    return {"items": result, "width": storage.width, "height": storage.height}
+    return {"items": result, "width": storage.width, "height": storage.height, "steps": steps}

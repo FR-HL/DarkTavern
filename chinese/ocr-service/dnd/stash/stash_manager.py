@@ -1002,6 +1002,7 @@ class StashManager:
         overlay_session: Union[SortOverlaySession, NullOverlaySession, None] = None,
         include_inventory=False,
         group_mode: str = "none",
+        keep_in_place=False,
     ):
         logger.info(f"Sorting stash {stash_id} for character {character_id}")
         session_summary = None
@@ -1132,6 +1133,7 @@ class StashManager:
             character_id=str(character_id),
             stash_id=int(stash_id) if stash_id is not None else None,
             group_mode=group_mode,
+            keep_in_place=keep_in_place,
         )
         session.add_log(
             f"Pack mode: {'On' if sorter.pack_mode else 'Off'} · Stack mode: {'On' if sorter.stack_mode else 'Off'}"
@@ -2288,6 +2290,7 @@ class StashManager:
         pack_mode = bool(settings_manager.get('stashPackMode', False))
         stack_mode = bool(settings_manager.get('stashStackMode', False))
         group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+        keep_in_place = bool(settings_manager.get('sortKeepInPlace', True))
 
         sorter = StashSorter(
             stash,
@@ -2297,6 +2300,7 @@ class StashManager:
             character_id=None,
             stash_id=sid,
             group_mode=group_mode,
+            keep_in_place=keep_in_place,
         )
         sorter.cancel_event = cancel_event
         try:
