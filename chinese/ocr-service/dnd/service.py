@@ -15,6 +15,10 @@ _sort_lock = threading.Lock()
 # the game only pushes full snapshots when entering the character-select
 # / lobby flow, so this is the character currently being played.
 last_snapshot_character_id: Optional[str] = None
+# Stash id of the most recent S2C_STORAGE_INFO_RES — the game requests the
+# stash contents every time the player switches stash tabs in-game, so this
+# tracks which stash the player currently has open.
+last_snapshot_stash_id: Optional[str] = None
 _sort_state = {
     "running": False,
     "character_id": None,
@@ -136,6 +140,34 @@ def _handle_character(message):
     return saved
 
 
+def _handle_storage_info(message):
+    """Detect which stash the player opened in-game.
+
+    The game sends S2C_STORAGE_INFO_RES (the requested stash's items) every
+    time a stash tab is switched, so the dominant inventoryId among the
+    returned items tells us the stash the player currently has open.
+    """
+    global last_snapshot_stash_id
+    try:
+        items = message.storageItems or []
+        counts = {}
+        for item in items:
+            inv_id = item.inventoryId
+            if inv_id:
+                counts[inv_id] = counts.get(inv_id, 0) + 1
+        if not counts:
+            return
+        stash_id = str(max(counts, key=counts.get))
+        if stash_id == last_snapshot_stash_id:
+            return
+        last_snapshot_stash_id = stash_id
+        logger.info("In-game stash switched (detected): %s", stash_id)
+        from dnd import events
+        events.broadcast({"type": "stash_switched", "stash_id": stash_id})
+    except Exception as e:
+        logger.debug("Failed to detect stash switch: %s", e)
+
+
 def get_packet_capture():
     global _packet_capture
     with _capture_lock:
@@ -157,6 +189,7 @@ def get_packet_capture():
             )
             capture.capture_info = {
                 _PacketCommand_pb2.PacketCommand.S2C_LOBBY_CHARACTER_INFO_RES: _handle_character,
+                _PacketCommand_pb2.PacketCommand.S2C_STORAGE_INFO_RES: _handle_storage_info,
             }
             _packet_capture = capture
         return _packet_capture

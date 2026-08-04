@@ -309,6 +309,13 @@ async function connectEvents () {
         const m = JSON.parse (ev.data);
         if (m.type === 'current_character') {
           activeCharacterId.value = m.character_id || '';
+        } else if (m.type === 'stash_switched') {
+          const sid = String (m.stash_id || '');
+          const hit = stashList.value.find (s => String (s.id) === sid);
+          if (hit) {
+            emit ('update:stashId', sid);
+            invoke ('stash:set-current', { id: sid, label: hit.label });
+          }
         } else if (m.type === 'character_updated') {
           const cid = m.character_id || '';
           activeCharacterId.value = cid;

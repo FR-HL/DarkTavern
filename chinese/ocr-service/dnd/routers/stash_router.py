@@ -329,9 +329,11 @@ def calibration_reset():
 
 @router.get("/current")
 def current_character():
-    """Currently active character (last snapshot seen by the packet capture)."""
+    """Currently active character and in-game stash (last snapshots seen by
+    the packet capture)."""
     from dnd import service
     char_id = service.last_snapshot_character_id
+    stash_id = service.last_snapshot_stash_id
     if not char_id:
         return {"current": None}
     mgr = service.get_stash_manager()
@@ -348,6 +350,7 @@ def current_character():
         "stash_count": len(stashes),
         "total_items": total_items,
         "updated_at": char_data.get("lastUpdate", ""),
+        "stash_id": stash_id,
     }}
 
 
