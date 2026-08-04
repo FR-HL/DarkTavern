@@ -44,7 +44,9 @@ class SortSpeedUpdate(BaseModel):
 
 SPEED_PRESETS = {
     "slow": 0.4,
-    "medium": 0.1,
+    "relaxed": 0.3,
+    "medium": 0.2,
+    "brisk": 0.1,
     "instant": 0.0,
 }
 
@@ -52,8 +54,12 @@ SPEED_PRESETS = {
 def _preset_for_value(value: float) -> str:
     if value <= 0.05:
         return "instant"
+    if value <= 0.15:
+        return "brisk"
     if value <= 0.25:
         return "medium"
+    if value <= 0.35:
+        return "relaxed"
     return "slow"
 
 

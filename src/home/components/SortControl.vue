@@ -28,7 +28,9 @@ const newHotkey = ref (null);
 
 const SPEED_OPTIONS = [
   { id: 'slow', label: '慢', desc: '最稳，每步约 1.5s' },
+  { id: 'relaxed', label: '较慢', desc: '较稳，每步约 0.8s' },
   { id: 'medium', label: '中', desc: '默认，兼顾稳定与速度' },
+  { id: 'brisk', label: '较快', desc: '较快，约 3 倍提速' },
   { id: 'instant', label: '极速', desc: '最快，约 10 倍提速，偶发漏操作' },
 ];
 
@@ -275,7 +277,7 @@ async function changePreset (id) {
 async function changeSpeed (id) {
   const opt = SPEED_OPTIONS.find (o => o.id === id);
   if (!opt) return;
-  const speeds = { slow: 0.4, medium: 0.1, instant: 0 };
+  const speeds = { slow: 0.4, relaxed: 0.3, medium: 0.2, brisk: 0.1, instant: 0 };
   sortSpeed.value = id;
   try {
     const r = await invoke ('dnd:sort-speed-set', speeds[id]);
