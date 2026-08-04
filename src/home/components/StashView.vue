@@ -83,7 +83,8 @@ function selectTab (s) {
   invoke ('stash:switch-in-game', { stash_id: s.id, character_id: props.charId });
 }
 
-// ── 跟随游戏内切换（像素扫描高亮标签） ──
+// ── 像素扫描跟随（可选）：游戏内切换仓库默认由鼠标钩子即时跟随，
+// 此开关仅用于手动启用像素扫描作低频备用（手柄等场景），默认关闭。
 const followInGame = ref (false);
 const scanBrights = ref ([]);
 const scanLast = ref ('');
@@ -93,7 +94,7 @@ function toggleFollow () {
   followInGame.value = !followInGame.value;
   if (followInGame.value) {
     if (followTimer) clearInterval (followTimer);
-    followTimer = setInterval (pollInGameTab, 800);
+    followTimer = setInterval (pollInGameTab, 1000);
     pollInGameTab ();
   } else if (followTimer) {
     clearInterval (followTimer);
@@ -460,6 +461,10 @@ onMounted (async () => {
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
   connectEvents ();
   reportStashState ();
+  if (followInGame.value) {
+    followTimer = setInterval (pollInGameTab, 1000);
+    pollInGameTab ();
+  }
 });
 
 onBeforeUnmount (() => {
@@ -528,9 +533,9 @@ watch (() => props.stashId, () => reportStashState ());
               </button>
             </div>
           </div>
-          <label class="follow-switch" :class="{ on: followInGame }" @click="toggleFollow">
+          <label class="follow-switch" :class="{ on: followInGame }" @click="toggleFollow" title="游戏内切换仓库默认由鼠标钩子即时跟随；此开关仅用于手动启用像素扫描作低频备用">
             <span class="follow-dot"></span>
-            <span class="follow-txt">跟随游戏内切换</span>
+            <span class="follow-txt">像素扫描跟随</span>
           </label>
           <button class="follow-cal-btn" @click="calOpen = !calOpen; if (calOpen) loadFollowCal()">{{ calOpen ? '收起校准' : '跟随校准' }}</button>
           <div v-if="followInGame && scanBrights.length" class="scan-bar" :title="'命中仓库: ' + (scanLast || '无')">

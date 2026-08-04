@@ -29,6 +29,88 @@ _sort_state = {
     "error": None,
 }
 
+# ── In-game stash switch detection via global mouse click hook ──
+# The game does not send packets when the player clicks stash tabs, so we
+# listen for left-clicks landing inside a stash tab selector area: clicking
+# a tab IS the switch. The pixel-feature scanner (see macros) remains as a
+# fallback for non-mouse input.
+_mouse_listener = None
+_mouse_listener_lock = threading.Lock()
+_MOUSE_TAB_HIT_RATIO = 0.45  # < 0.5 so neighbouring tabs never overlap
+
+
+def _on_mouse_click(x, y, button, pressed):
+    """pynput mouse callback — must never raise (a crash here kills the host
+    process), so the whole body is guarded."""
+    try:
+        if not pressed or not hasattr(button, "name") or button.name != "left":
+            return
+        _handle_stash_tab_click(x, y)
+    except Exception:
+        logger.debug("mouse hook: click handler error", exc_info=True)
+
+
+def _handle_stash_tab_click(x, y):
+    global last_snapshot_stash_id
+    from dnd.sort import macros
+
+    owned = []
+    if last_snapshot_character_id:
+        try:
+            mgr = get_stash_manager()
+            char_data = mgr.characters_cache.get(last_snapshot_character_id) or {}
+            owned = list(char_data.get("stashes", {}).keys())
+        except Exception:
+            owned = []
+    mapping = macros.build_dynamic_tab_mapping(owned)
+    if not mapping:
+        return
+
+    positions = macros.get_stash_tab_positions()
+    spacing = float(macros.stash_tab_spacing or 45.0)
+    hit = spacing * _MOUSE_TAB_HIT_RATIO
+
+    for i, pos in enumerate(positions[:len(mapping)]):
+        if abs(x - pos.x) <= hit and abs(y - pos.y) <= hit:
+            stash_id = str(mapping[i])
+            if stash_id == last_snapshot_stash_id:
+                return
+            last_snapshot_stash_id = stash_id
+            logger.info("In-game stash switched (mouse click): %s", stash_id)
+            from dnd import events
+            events.broadcast({"type": "stash_switched", "stash_id": stash_id})
+            return
+
+
+def start_mouse_listener():
+    """Start the global left-click listener (one-shot, idempotent)."""
+    global _mouse_listener
+    with _mouse_listener_lock:
+        if _mouse_listener is not None:
+            return
+        try:
+            from pynput import mouse
+            _mouse_listener = mouse.Listener(on_click=_on_mouse_click)
+            _mouse_listener.daemon = True
+            _mouse_listener.start()
+            logger.info("Mouse click listener started (in-game stash detection)")
+        except Exception as exc:
+            _mouse_listener = None
+            logger.warning("Mouse click listener unavailable: %s", exc)
+
+
+def stop_mouse_listener():
+    """Stop the global left-click listener (idempotent)."""
+    global _mouse_listener
+    with _mouse_listener_lock:
+        if _mouse_listener is None:
+            return
+        try:
+            _mouse_listener.stop()
+        except Exception:
+            pass
+        _mouse_listener = None
+
 
 def detect_default_interface() -> str:
     """Detect the network interface used for internet egress.

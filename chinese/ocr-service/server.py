@@ -106,7 +106,17 @@ async def lifespan(_app: FastAPI):
         events.main_loop = asyncio.get_running_loop()
     except Exception:
         pass
+    try:
+        from dnd import service
+        service.start_mouse_listener()
+    except Exception:
+        pass
     yield
+    try:
+        from dnd import service
+        service.stop_mouse_listener()
+    except Exception:
+        pass
 
 app = FastAPI(title="DarkTavern OCR Service", version="1.0.0", lifespan=lifespan)
 
