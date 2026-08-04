@@ -47,13 +47,16 @@ SPEED_PRESETS = {
     "relaxed": 0.3,
     "medium": 0.2,
     "brisk": 0.1,
+    "fast": 0.02,
     "instant": 0.0,
 }
 
 
 def _preset_for_value(value: float) -> str:
-    if value <= 0.05:
+    if value <= 0.01:
         return "instant"
+    if value <= 0.04:
+        return "fast"
     if value <= 0.15:
         return "brisk"
     if value <= 0.25:

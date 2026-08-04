@@ -1864,6 +1864,42 @@ class StashManager:
                 return sid, pos
         return None, None
 
+    def _sim_can_fit(self, sim, item):
+        """Check whether the simulated grid can fit item without reserving."""
+        w, h = item.width, item.height
+        grid = sim["grid"]
+        for y in range(sim["height"] - h, -1, -1):
+            for x in range(sim["width"] - w, -1, -1):
+                if all(grid[x + dx][y + dy] == 0 for dx in range(w) for dy in range(h)):
+                    return True
+        return False
+
+    def _pick_repack_target(self, sims, tab_order, item, mode="front"):
+        """Choose the destination stash for one item during repack.
+
+        - "front": first stash (in tab order) that fits — items pile up in
+          the front stashes.
+        - "balanced": the stash with the lowest current fill ratio that
+          still fits the item — keeps every stash evenly occupied.
+        Returns (stash_id, Point) or (None, None).
+        """
+        best = None
+        best_fill = None
+        for sid in tab_order:
+            if not self._sim_can_fit(sims[sid], item):
+                continue
+            if mode == "front":
+                return sid, self._sim_find(sims[sid], item)
+            grid = sims[sid]["grid"]
+            occupied = sum(1 for row in grid for c in row if c != 0 and c is not None)
+            fill = occupied / max(1, sims[sid]["width"] * sims[sid]["height"])
+            if best is None or fill < best_fill:
+                best = sid
+                best_fill = fill
+        if best is None:
+            return None, None
+        return best, self._sim_find(sims[best], item)
+
     def cross_sort(self, character_id, config, cancel_event=None, overlay_session=None, progress_cb=None):
         """Configurable cross-stash organisation.
 
@@ -2007,13 +2043,29 @@ class StashManager:
             run_step("归类整理", _categorize_step)
 
         if config.get("repack"):
+            repack_mode = config.get("repack_mode", "front")
             def _repack_step():
                 from dnd.items.item import Item
+                for sid in tab_order:
+                    storages[sid].rebuild_pq()
                 items = []
                 for sid in tab_order:
                     for it in storages[sid].pq:
                         items.append((sid, it))
-                if Item.sort_order:
+                if repack_mode == "balanced":
+                    # High-fill stashes first so their items grab the empty
+                    # space before smaller items fragment it.
+                    fills = {}
+                    for sid in tab_order:
+                        st = storages[sid]
+                        seen = set()
+                        for row in st.grid:
+                            for c in row:
+                                if c != 0 and c is not None:
+                                    seen.add(id(c))
+                        fills[sid] = len(seen) / max(1, st.width * st.height)
+                    items.sort(key=lambda e: -fills[e[0]])
+                elif Item.sort_order:
                     try:
                         comparator = Item.build_sort_comparator(Item.sort_order)
                         items.sort(key=lambda e: e[1], cmp=comparator)
@@ -2024,14 +2076,26 @@ class StashManager:
                 for src_sid, item in items:
                     if cancel_event and cancel_event.is_set():
                         break
-                    for dst_sid in tab_order:
-                        pos = self._sim_find(sims[dst_sid], item)
-                        if pos is not None:
-                            if dst_sid != src_sid:
-                                moves.append((src_sid, item, dst_sid, pos))
-                            break
+                    dst_sid, pos = self._pick_repack_target(
+                        sims, tab_order, item, repack_mode
+                    )
+                    if dst_sid is None:
+                        continue
+                    if dst_sid != src_sid:
+                        moves.append((src_sid, item, dst_sid, pos))
+                    # Free the item's original slots in the planning snapshot
+                    # so emptied stashes can take new items again.
+                    p = item.position
+                    if p is not None:
+                        g = sims[src_sid]["grid"]
+                        for dx in range(item.width):
+                            for dy in range(item.height):
+                                x, y = p.x + dx, p.y + dy
+                                if g[x][y] == item:
+                                    g[x][y] = 0
                 done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
-                return f"前移 {done}/{len(moves)} 件"
+                label = "均衡" if repack_mode == "balanced" else "前移"
+                return f"{label} {done}/{len(moves)} 件"
             run_step("全局重排", _repack_step)
 
         if config.get("arrange"):

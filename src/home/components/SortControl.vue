@@ -32,6 +32,7 @@ const SPEED_OPTIONS = [
   { id: 'relaxed', label: '较慢', desc: '较稳，每步约 0.8s' },
   { id: 'medium', label: '中', desc: '默认，兼顾稳定与速度' },
   { id: 'brisk', label: '较快', desc: '较快，约 3 倍提速' },
+  { id: 'fast', label: '快速', desc: '快，约 9 倍提速，操作可靠' },
   { id: 'instant', label: '极速', desc: '最快，约 10 倍提速，偶发漏操作' },
 ];
 
@@ -280,7 +281,7 @@ async function changePreset (id) {
 async function changeSpeed (id) {
   const opt = SPEED_OPTIONS.find (o => o.id === id);
   if (!opt) return;
-  const speeds = { slow: 0.4, relaxed: 0.3, medium: 0.2, brisk: 0.1, instant: 0 };
+  const speeds = { slow: 0.4, relaxed: 0.3, medium: 0.2, brisk: 0.1, fast: 0.02, instant: 0 };
   sortSpeed.value = id;
   try {
     const r = await invoke ('dnd:sort-speed-set', speeds[id]);
@@ -336,7 +337,7 @@ const MISC_LABELS = {
   gem: '宝石', ore: '矿石与金属', material: '材料',
   consumable: '消耗品', junk: '杂物',
 };
-const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, category_map: {}, misc_map: {}, repack: false, evacuate: false, evacuate_stashes: [], arrange: true });
+const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
 const miscOpen = ref (false);
 const crossNote = ref ('');
 const crossSteps = ref ([]);
@@ -346,10 +347,11 @@ const crossResults = ref ([]);
 const stashOptions = ref ([]);
 
 const crossPosition = computed ({
-  get: () => crossCfg.value.categorize ? 'category' : crossCfg.value.repack ? 'repack' : 'none',
+  get: () => crossCfg.value.categorize ? 'category' : crossCfg.value.repack ? (crossCfg.value.repack_mode === 'balanced' ? 'balanced' : 'front') : 'none',
   set: v => {
     crossCfg.value.categorize = v === 'category';
-    crossCfg.value.repack = v === 'repack';
+    crossCfg.value.repack = v === 'front' || v === 'balanced';
+    if (crossCfg.value.repack) crossCfg.value.repack_mode = v;
   },
 });
 
@@ -380,7 +382,7 @@ async function loadCrossConfig () {
     if (d && d.cross_config) {
       crossCfg.value = {
         merge: true, clear_bag: false, categorize: false, category_map: {},
-        misc_map: {}, repack: false, evacuate: false, evacuate_stashes: [], arrange: true,
+        misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true,
         ...d.cross_config,
       };
     }
@@ -867,7 +869,8 @@ watch (() => props.charId, () => loadStashOptions ());
             <div class="seg">
               <button class="seg-opt" :class="{ on: crossPosition === 'none' }" @click="crossPosition = 'none'"><span class="seg-t">不移动</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'category' }" @click="crossPosition = 'category'"><span class="seg-t">按类别归类</span></button>
-              <button class="seg-opt" :class="{ on: crossPosition === 'repack' }" @click="crossPosition = 'repack'"><span class="seg-t">全局重排</span></button>
+              <button class="seg-opt" :class="{ on: crossPosition === 'front' }" @click="crossPosition = 'front'"><span class="seg-t">前移集中</span></button>
+              <button class="seg-opt" :class="{ on: crossPosition === 'balanced' }" @click="crossPosition = 'balanced'"><span class="seg-t">均衡分散</span></button>
             </div>
           </div>
         </div>
