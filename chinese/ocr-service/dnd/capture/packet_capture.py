@@ -450,7 +450,7 @@ class PacketCapture:
         self._last_packet_ts = 0.0
 
         # Accelerator-aware capture state (set when capture_loop starts)
-        self.capture_mode = "direct"        # "direct" or "accelerator"
+        self.capture_mode = None       # None until first capture session; then "direct"/"accelerator"
         self.active_proxy_port: Optional[int] = None
         
         # Memory Guard

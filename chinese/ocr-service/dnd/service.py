@@ -700,15 +700,17 @@ def diagnose_capture() -> dict:
                 logger.debug(f"diagnose: accelerator process lookup failed: {exc}")
 
     # ── Where the capture listens (predicted from current detection) ──
+    from dnd.capture.packet_capture import detect_game_capture_point as _detect_point
+    det_mode, det_iface, det_filter, det_ports = _detect_point()
     cap = {
-        "mode": "accelerator" if proxy_port else "direct",
-        "proxy_port": proxy_port,
+        "mode": "accelerator" if det_mode == 'accelerator' else "direct",
+        "proxy_port": det_ports,
         "running": False,
         "tshark_ok": bool(detect_wireshark_installation()),
     }
-    if proxy_port:
+    if det_mode == 'accelerator':
         cap["interface"] = find_loopback_interface(detect_wireshark_installation() or None)
-        cap["filter"] = f"tcp.srcport == {proxy_port}"
+        cap["filter"] = det_filter or f"tcp.port == {det_ports[0] if det_ports else 0}"
     else:
         iface = settings_manager.get("interface") or detect_default_interface()
         cap["interface"] = iface
@@ -721,8 +723,13 @@ def diagnose_capture() -> dict:
     if _packet_capture is not None:
         try:
             result["capture"]["running"] = _packet_capture.is_active()
-            result["capture"]["mode"] = getattr(_packet_capture, "capture_mode", cap["mode"])
-            result["capture"]["proxy_port"] = getattr(_packet_capture, "active_proxy_port", proxy_port)
+            real_mode = getattr(_packet_capture, "capture_mode", None)
+            # Only override with the real mode once a capture session set it;
+            # before that the detection-based value is more accurate.
+            if real_mode in ('accelerator', 'direct'):
+                result["capture"]["mode"] = real_mode
+            ap = getattr(_packet_capture, "active_proxy_port", None)
+            result["capture"]["proxy_port"] = sorted(ap) if isinstance(ap, (set, list, tuple)) else ap
         except Exception:
             pass
 

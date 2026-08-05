@@ -55,6 +55,7 @@ def capture_status():
     from dnd.service import get_packet_capture
     from dnd.settings import settings_manager, detect_wireshark_installation
     capture = get_packet_capture()
+    ap = getattr(capture, "active_proxy_port", None)
     return {
         "running": capture.is_active(),
         "interface": capture.interface,
@@ -63,7 +64,7 @@ def capture_status():
         "tshark_path": getattr(capture, "tshark_path", "") or "",
         "tshark_detected": detect_wireshark_installation(),
         "mode": getattr(capture, "capture_mode", "direct"),
-        "proxy_port": getattr(capture, "active_proxy_port", None),
+        "proxy_port": sorted(ap) if isinstance(ap, (set, list, tuple)) else ap,
     }
 
 

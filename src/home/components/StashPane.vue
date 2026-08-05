@@ -69,7 +69,8 @@ const diagSummary = computed (() => {
   if (!d) return '检测中…';
   if (!d.game.running) return '游戏未运行 — 启动游戏后重新检测';
   const mode = d.capture?.mode;
-  const proxyPort = d.capture?.proxy_port || d.accelerator?.proxy_port;
+  const pp = d.capture?.proxy_port || d.accelerator?.proxy_port;
+  const proxyPort = Array.isArray (pp) ? pp.join (', ') : pp;
   if (mode === 'accelerator' || d.accelerator?.detected) return `检测到加速器 · 回环抓包 · 代理端口 ${proxyPort}`;
   return `未检测到加速器 · 物理网卡 ${d.capture?.interface || d.capture?.interface} 直连`;
 });
