@@ -5,7 +5,6 @@ import StashPane from './StashPane.vue';
 const props = defineProps ({
   charId: { type: String, default: '' },
   stashId: { type: String, default: '' },
-  packMode: { type: Boolean, default: false },
   stackMode: { type: Boolean, default: false },
   includeInv: { type: Boolean, default: false },
   keepInPlace: { type: Boolean, default: true },
@@ -241,7 +240,6 @@ async function loadPreview () {
     const r = await invoke ('dnd:sort-preview', {
       character_id: props.charId,
       stash_id: props.stashId,
-      pack_mode: props.packMode,
       stack_mode: props.stackMode,
       include_inventory: props.includeInv,
       keep_in_place: props.keepInPlace,
@@ -268,7 +266,7 @@ async function togglePreview () {
 // If the sort modes change while the preview is open, refresh it so the step
 // count keeps matching what the real sort will do.
 watch (
-  () => [props.packMode, props.stackMode, props.includeInv, props.keepInPlace],
+  () => [props.stackMode, props.includeInv, props.keepInPlace],
   () => { if (debugPreview.value) loadPreview (); }
 );
 

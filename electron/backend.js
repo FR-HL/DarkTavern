@@ -300,7 +300,6 @@ export async function quickPlaceTest (characterId, stashId) {
 
 export async function sortPreview (params) {
   const q = new URLSearchParams ({ character_id: params.character_id, stash_id: params.stash_id });
-  if (params.pack_mode !== undefined) q.set ('pack_mode', params.pack_mode ? 'true' : 'false');
   if (params.stack_mode !== undefined) q.set ('stack_mode', params.stack_mode ? 'true' : 'false');
   if (params.include_inventory !== undefined) q.set ('include_inventory', params.include_inventory ? 'true' : 'false');
   if (params.keep_in_place !== undefined) q.set ('keep_in_place', params.keep_in_place ? 'true' : 'false');

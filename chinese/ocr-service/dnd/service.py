@@ -287,13 +287,11 @@ def get_sort_state():
         return dict(_sort_state)
 
 
-def start_sort(character_id: str, stash_id: str, pack_mode: Optional[bool] = None,
+def start_sort(character_id: str, stash_id: str,
                 stack_mode: Optional[bool] = None, include_inventory: bool = False,
                 group_mode: Optional[str] = None, keep_in_place: Optional[bool] = None):
     from dnd.settings import settings_manager
 
-    if pack_mode is None:
-        pack_mode = bool(settings_manager.get('stashPackMode', False))
     if stack_mode is None:
         stack_mode = bool(settings_manager.get('stashStackMode', False))
     if group_mode is None:
@@ -328,7 +326,6 @@ def start_sort(character_id: str, stash_id: str, pack_mode: Optional[bool] = Non
                 character_id=character_id,
                 stash_id=stash_id,
                 cancel_event=cancel_event,
-                pack_mode=pack_mode,
                 stack_mode=stack_mode,
                 include_inventory=include_inventory,
                 group_mode=group_mode,
@@ -367,23 +364,21 @@ def cancel_sort():
     return {"success": True}
 
 
-def _resolve_sort_options(pack_mode, stack_mode, group_mode):
+def _resolve_sort_options(stack_mode, group_mode):
     from dnd.settings import settings_manager
-    if pack_mode is None:
-        pack_mode = bool(settings_manager.get('stashPackMode', False))
     if stack_mode is None:
         stack_mode = bool(settings_manager.get('stashStackMode', False))
     if group_mode is None:
         group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
-    return pack_mode, stack_mode, group_mode
+    return stack_mode, group_mode
 
 
-def start_sort_all(character_id: str, pack_mode: Optional[bool] = None,
+def start_sort_all(character_id: str,
                    stack_mode: Optional[bool] = None, group_mode: Optional[str] = None):
     """Sort every stash of a character in turn (in-game tab order, skipping
     empty stashes). Inventory items are merged into the first stash only.
     """
-    pack_mode, stack_mode, group_mode = _resolve_sort_options(pack_mode, stack_mode, group_mode)
+    stack_mode, group_mode = _resolve_sort_options(stack_mode, group_mode)
 
     with _sort_lock:
         if _sort_state["running"]:
@@ -427,10 +422,11 @@ def start_sort_all(character_id: str, pack_mode: Optional[bool] = None,
                 _sort_state["sort_all_total"] = len(tab_order)
 
             results = []
+            from dnd.routers.stash_router import _stash_label
             for i, stash_id in enumerate(tab_order):
                 if cancel_event.is_set():
                     break
-                label = macros.STASH_TYPE_NAMES.get(int(stash_id), str(stash_id))
+                label = _stash_label(stash_id)
                 with _sort_lock:
                     _sort_state["sort_all_current"] = i + 1
                     _sort_state["sort_all_label"] = label
@@ -439,15 +435,15 @@ def start_sort_all(character_id: str, pack_mode: Optional[bool] = None,
                         character_id=str(character_id),
                         stash_id=str(stash_id),
                         cancel_event=cancel_event,
-                        pack_mode=pack_mode,
                         stack_mode=stack_mode,
                         group_mode=group_mode,
                         include_inventory=(i == 0),
                     )
                     if isinstance(r, tuple) and len(r) >= 2:
-                        ok, msg = bool(r[0]), str(r[1])
+                        ok = bool(r[0])
+                        msg = str(r[1]) if r[1] else ("整理完成" if ok else "整理失败")
                     else:
-                        ok, msg = bool(r), "OK" if r else "failed"
+                        ok, msg = bool(r), ("整理完成" if r else "整理失败")
                 except Exception as exc:
                     logger.warning("Sort-all stash %s failed: %s", stash_id, exc)
                     ok, msg = False, str(exc)

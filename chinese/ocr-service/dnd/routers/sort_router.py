@@ -12,7 +12,6 @@ router = APIRouter()
 class SortStartRequest(BaseModel):
     character_id: str
     stash_id: str
-    pack_mode: Optional[bool] = None
     stack_mode: Optional[bool] = None
     include_inventory: bool = False
     group_mode: Optional[str] = None
@@ -121,7 +120,6 @@ def sort_start(body: SortStartRequest):
     return start_sort(
         character_id=body.character_id,
         stash_id=body.stash_id,
-        pack_mode=body.pack_mode,
         stack_mode=body.stack_mode,
         include_inventory=body.include_inventory,
         group_mode=body.group_mode,
@@ -265,7 +263,6 @@ def update_sort_order(body: SortOrderUpdate):
 
 @router.get("/preview")
 def sort_preview(character_id: str, stash_id: str,
-                  pack_mode: Optional[bool] = None,
                   stack_mode: Optional[bool] = None,
                   include_inventory: Optional[bool] = None,
                   keep_in_place: Optional[bool] = None):
@@ -290,8 +287,6 @@ def sort_preview(character_id: str, stash_id: str,
     # Resolve the sort modes exactly like the real sort does: request params
     # (the UI toggles) override the persisted settings.  The preview MUST use
     # the same modes as the sort or the step count will not match.
-    if pack_mode is None:
-        pack_mode = bool(settings_manager.get('stashPackMode', False))
     if stack_mode is None:
         stack_mode = bool(settings_manager.get('stashStackMode', False))
     if keep_in_place is None:
@@ -324,7 +319,7 @@ def sort_preview(character_id: str, stash_id: str,
     for comparator in comparators:
         planner = LayoutPlanner(
             storage.width, storage.height,
-            prefer_dense=pack_mode, stash=storage, stack_mode=stack_mode,
+            stash=storage, stack_mode=stack_mode,
             keep_in_place=keep_in_place,
         )
         try:
@@ -373,7 +368,7 @@ def sort_preview(character_id: str, stash_id: str,
             sim_inv = Storage(StashType.BAG.value, [])
         sim_sorter = StashSorter(
             sim_storage, sim_inv,
-            pack_mode=pack_mode, stack_mode=stack_mode,
+            stack_mode=stack_mode,
             group_mode=group_mode, keep_in_place=keep_in_place,
             feedback_manager=_NullFeedback(),
         )

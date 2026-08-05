@@ -1042,7 +1042,6 @@ class StashManager:
         character_id,
         stash_id,
         cancel_event=None,
-        pack_mode=False,
         stack_mode=False,
         overlay_session: Union[SortOverlaySession, NullOverlaySession, None] = None,
         include_inventory=False,
@@ -1173,7 +1172,6 @@ class StashManager:
         sorter = StashSorter(
             stash,
             inventory,
-            pack_mode=pack_mode,
             stack_mode=stack_mode,
             character_id=str(character_id),
             stash_id=int(stash_id) if stash_id is not None else None,
@@ -1181,7 +1179,7 @@ class StashManager:
             keep_in_place=keep_in_place,
         )
         session.add_log(
-            f"Pack mode: {'On' if sorter.pack_mode else 'Off'} · Stack mode: {'On' if sorter.stack_mode else 'Off'}"
+            f"Stack mode: {'On' if sorter.stack_mode else 'Off'}"
         )
 
         # ── Transfer mode: mark inventory items for placement in stash ──
@@ -1387,7 +1385,7 @@ class StashManager:
         StashType.SHARED_STASH_SEASONAL_0.value,
     }
 
-    def _identify_overflow_items(self, stash, pack_mode, stack_mode, all_stashes=None, source_stash_id=None):
+    def _identify_overflow_items(self, stash, stack_mode, all_stashes=None, source_stash_id=None):
         """Partition stash items into (keep, overflow).
 
         Performs trial layouts, removing the lowest-priority items one at a
@@ -1403,13 +1401,13 @@ class StashManager:
 
         planner = LayoutPlanner(
             stash.width, stash.height,
-            prefer_dense=pack_mode, stash=stash, stack_mode=stack_mode,
+            stash=stash, stack_mode=stack_mode,
         )
         try:
             planner.build(all_items)
         except LayoutPlanError:
             # Items physically don't fit -- fall through to forced removal
-            return self._remove_until_fits(stash, all_items, pack_mode, stack_mode)
+            return self._remove_until_fits(stash, all_items, stack_mode)
 
         # ── Proactive workspace relief ──
         total_cells = stash.width * stash.height
@@ -1453,7 +1451,7 @@ class StashManager:
         # Verify the reduced set still produces a valid layout
         planner2 = LayoutPlanner(
             stash.width, stash.height,
-            prefer_dense=pack_mode, stash=stash, stack_mode=stack_mode,
+            stash=stash, stack_mode=stack_mode,
         )
         try:
             planner2.build(remaining)
@@ -1462,7 +1460,7 @@ class StashManager:
             # Safety: don't overflow if reduced set somehow fails
             return all_items, []
 
-    def _remove_until_fits(self, stash, all_items, pack_mode, stack_mode):
+    def _remove_until_fits(self, stash, all_items, stack_mode):
         """Remove lowest-priority items one at a time until layout succeeds."""
         candidates = sorted(all_items, key=lambda itm: (
             itm.width * itm.height,
@@ -1478,7 +1476,7 @@ class StashManager:
             overflow.append(candidate)
             planner = LayoutPlanner(
                 stash.width, stash.height,
-                prefer_dense=pack_mode, stash=stash, stack_mode=stack_mode,
+                stash=stash, stack_mode=stack_mode,
             )
             try:
                 planner.build(remaining)
@@ -2416,7 +2414,6 @@ class StashManager:
             return 0
         _time.sleep(0.5)
 
-        pack_mode = bool(settings_manager.get('stashPackMode', False))
         stack_mode = bool(settings_manager.get('stashStackMode', False))
         group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
         keep_in_place = bool(settings_manager.get('sortKeepInPlace', True))
@@ -2424,7 +2421,6 @@ class StashManager:
         sorter = StashSorter(
             stash,
             inventory,
-            pack_mode=pack_mode,
             stack_mode=stack_mode,
             character_id=None,
             stash_id=sid,
@@ -2482,13 +2478,12 @@ class StashManager:
         source_stash_id: str,
         target_stash_id: str,
         item_indices: Optional[List[int]] = None,
-        pack_mode: bool = False,
         stack_mode: bool = False,
     ) -> Dict:
         """Check whether items from *source_stash_id* can fit in *target_stash_id*.
 
         Uses the same ML-enhanced LayoutPlanner that powers the sort feature so
-        that pack/stack preferences and learned placement scores are respected.
+        that stack preferences and learned placement scores are respected.
 
         Parameters
         ----------
@@ -2500,7 +2495,7 @@ class StashManager:
         item_indices : list[int] | None
             If provided, only consider items at these indices within the source
             stash list.  ``None`` means *all* items.
-        pack_mode, stack_mode : bool
+        stack_mode : bool
             Forwarded to the LayoutPlanner.
 
         Returns
@@ -2626,7 +2621,6 @@ class StashManager:
 
         planner = LayoutPlanner(
             grid_w, grid_h,
-            prefer_dense=pack_mode,
             stash=target_storage,
             stack_mode=stack_mode,
             learning_manager=learning_mgr,
@@ -2647,7 +2641,6 @@ class StashManager:
             for idx, itm in enumerate(source_items):
                 test_planner = LayoutPlanner(
                     grid_w, grid_h,
-                    prefer_dense=pack_mode,
                     stash=target_storage,
                     stack_mode=stack_mode,
                     learning_manager=learning_mgr,

@@ -318,7 +318,6 @@ app.on ('ready', async () => {
   ipcMain.handle ('dnd:sort-config-get', () => ({
     character_id: settings.dnd?.sort_char_id || '',
     stash_id: settings.dnd?.sort_stash_id || '',
-    pack_mode: !!settings.dnd?.pack_mode,
     stack_mode: !!settings.dnd?.stack_mode,
     include_inventory: !!settings.dnd?.sort_include_inv,
     keep_in_place: settings.dnd?.keep_in_place !== false,
@@ -327,7 +326,6 @@ app.on ('ready', async () => {
     const dnd = settings.dnd || {};
     if (data.character_id !== undefined) dnd.sort_char_id = String (data.character_id || '');
     if (data.stash_id !== undefined) dnd.sort_stash_id = String (data.stash_id || '');
-    if (data.pack_mode !== undefined) dnd.pack_mode = !!data.pack_mode;
     if (data.stack_mode !== undefined) dnd.stack_mode = !!data.stack_mode;
     if (data.include_inventory !== undefined) dnd.sort_include_inv = !!data.include_inventory;
     if (data.keep_in_place !== undefined) dnd.keep_in_place = !!data.keep_in_place;
@@ -623,7 +621,6 @@ function registerSortHotkeys () {
         const r = await backend.sortStart ({
           character_id: charId,
           stash_id: stashId,
-          pack_mode: !!settings.dnd?.pack_mode,
           stack_mode: !!settings.dnd?.stack_mode,
           include_inventory: !!settings.dnd?.sort_include_inv,
           keep_in_place: settings.dnd?.keep_in_place !== false,

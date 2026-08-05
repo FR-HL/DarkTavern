@@ -6,12 +6,11 @@ const props = defineProps ({
   stashId: { type: String, default: '' },
   equipment: { type: Boolean, default: false },
   activeCharId: { type: String, default: '' },
-  packMode: { type: Boolean, default: true },
   stackMode: { type: Boolean, default: true },
   includeInv: { type: Boolean, default: true },
   keepInPlace: { type: Boolean, default: true },
 });
-const emit = defineEmits ([ 'update:packMode', 'update:stackMode', 'update:includeInv', 'update:keepInPlace' ]);
+const emit = defineEmits ([ 'update:stackMode', 'update:includeInv', 'update:keepInPlace' ]);
 
 const invoke = (ch, ...args) => window.electron.invoke (ch, ...args);
 
@@ -354,7 +353,6 @@ async function startSort () {
     const r = await invoke ('dnd:sort-start', {
       character_id: props.charId,
       stash_id: String (props.stashId),
-      pack_mode: props.packMode,
       stack_mode: props.stackMode,
       include_inventory: props.includeInv,
       keep_in_place: props.keepInPlace,
@@ -639,15 +637,6 @@ watch (() => props.charId, () => loadStashOptions ());
                     @click="changeSpeed(o.id)">
               {{ o.label }}
             </button>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">紧凑模式</div>
-            <div class="srow-d">优先把物品摆放得更紧密</div>
-          </div>
-          <div class="srow-ctl">
-            <label class="switch"><input type="checkbox" :checked="props.packMode" @change="emit('update:packMode', $event.target.checked)"><span class="track"></span></label>
           </div>
         </div>
         <div class="srow">
@@ -1005,10 +994,17 @@ watch (() => props.charId, () => loadStashOptions ());
 .btn.lg { padding: 9px 24px; font-size: 14px; }
 .btn:disabled { opacity: .45; cursor: default; transform: none; }
 .run-keys { margin-top: 4px; }
-.sort-all-results { margin-top: 12px; border-top: 1px solid var(--line-soft); padding-top: 8px; }
-.sar-row { display: flex; align-items: center; gap: 12px; padding: 5px 2px; font-size: 12.5px; }
-.sar-name { min-width: 110px; font-weight: 600; color: var(--text); }
-.sar-msg { color: var(--text-3); }
+.sort-all-results { margin-top: 12px; border-top: 1px solid var(--line-soft); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.sar-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 12px; font-size: 12.5px;
+  border-radius: 8px; border: 1px solid var(--line-soft);
+  background: var(--card-2);
+}
+.sar-row.ok { background: var(--green-soft); border-color: var(--green); }
+.sar-row.bad { background: var(--red-soft); border-color: var(--red); }
+.sar-name { min-width: 96px; font-weight: 650; color: var(--text); }
+.sar-msg { flex: 1; word-break: break-word; color: var(--text-2); }
 .sar-row.ok .sar-msg { color: var(--green); }
 .sar-row.bad .sar-msg { color: var(--red); }
 .cal-note { font-size: 12.5px; color: var(--green); }

@@ -219,7 +219,6 @@ class LayoutPlanner:
         self,
         width: int,
         height: int,
-        prefer_dense: bool = False,
         *,
         stash: Optional[Storage] = None,
         stack_mode: bool = False,
@@ -229,7 +228,6 @@ class LayoutPlanner:
     ):
         self.width = width
         self.height = height
-        self.prefer_dense = prefer_dense
         self.stash_ref = stash
         self.stack_mode = bool(stack_mode)
         self.keep_in_place = bool(keep_in_place)
@@ -266,7 +264,7 @@ class LayoutPlanner:
                 end += 1
             if (
                 end - idx >= 4
-                and (not self.prefer_dense or self.keep_in_place)
+                and self.keep_in_place
                 and self._assign_equivalent_band(ordered_items[idx:end + 1], positions, learning_payload, comparator_used=bool(comparator))
             ):
                 idx = end + 1
@@ -628,7 +626,7 @@ class LayoutPlanner:
                     n = len(items_for_size)
                     # 同尺寸段若已聚拢成块则就地保留（同种物品互换无差别），
                     # 避免列式重排造成无谓拖动。
-                    if n >= 5 and (not self.prefer_dense or self.keep_in_place) and self._assign_equivalent_band(
+                    if n >= 5 and self.keep_in_place and self._assign_equivalent_band(
                         items_for_size, positions, learning_payload,
                         comparator_used=bool(comparator),
                     ):
@@ -962,7 +960,7 @@ class LayoutPlanner:
             "slot_y": slot_y,
             "slot_x_norm": norm_x,
             "slot_y_norm": norm_y,
-            "pack_mode": 1.0 if self.prefer_dense else 0.0,
+            "pack_mode": 0.0,
             "stack_mode": 1.0 if self.stack_mode else 0.0,
             "free_ratio": self._initial_free_ratio,
             "distance_from_current": 0.0,
@@ -1065,7 +1063,7 @@ class LayoutPlanner:
             "slot_y": slot_y,
             "slot_x_norm": norm_x,
             "slot_y_norm": norm_y,
-            "pack_mode": 1.0 if self.prefer_dense else 0.0,
+            "pack_mode": 0.0,
             "stack_mode": 1.0 if self.stack_mode else 0.0,
             "free_ratio": self._initial_free_ratio,
             "distance_from_current": distance,
@@ -1126,11 +1124,11 @@ class LayoutPlanner:
                 # 1. High ML Score (negated so smaller is better in tuple sort)
                 # 2. Top (y)
                 # 3. Left (x)
-                # 4. Density/Adjacency
+                # 4. Adjacency (tie-break only)
 
                 # Weight ML score heavily (x100) so a 0.01 difference matters more than 1 row
                 # But ensure we don't break fallback.
-                score = (-ml_score * 100.0, y, x, -adjacency if self.prefer_dense else adjacency)
+                score = (-ml_score * 100.0, y, x, adjacency)
 
                 if best_score is None or score < best_score:
                     best_score = score
@@ -2006,7 +2004,6 @@ class StashSorter:
         self,
         stash: Storage,
         inv: Storage,
-        pack_mode: bool = False,
         stack_mode: bool = False,
         *,
         character_id: Optional[str] = None,
@@ -2018,7 +2015,6 @@ class StashSorter:
         self.stash = stash
         self.inv = inv
         self.cancel_event = None
-        self.pack_mode = bool(pack_mode)
         self.stack_mode = bool(stack_mode)
         self.group_mode = group_mode if group_mode in ("none", "category", "sized", "neat") else "none"
         self.keep_in_place = bool(keep_in_place)
@@ -2104,7 +2100,7 @@ class StashSorter:
                 self.feedback_handle = manager.begin_session(
                     character_id=self.character_id,
                     stash_id=self.stash_id,
-                    pack_mode=self.pack_mode,
+                    pack_mode=False,
                     stack_mode=self.stack_mode,
                     features=base_features,
                 )
@@ -2422,7 +2418,7 @@ class StashSorter:
                 self._plan_required_moves = self._count_required_moves(plan)
                 self._move_progress_total = self._plan_required_moves
                 self._overlay_update_overview(total_items, plan_size, self._plan_required_moves)
-                mode_label = "dense pack" if self.pack_mode else "scanline"
+                mode_label = "scanline"
                 stack_label = "stacking on" if self.stack_mode else "stacking off"
                 self._overlay_log(
                     f"Layout plan ready for {plan_size} items ({mode_label}, {stack_label})."
@@ -2763,7 +2759,7 @@ class StashSorter:
                 total_items=total_items,
                 plan_moves=plan_size,
                 move_budget=move_budget,
-                pack_mode=self.pack_mode,
+                pack_mode=False,
                 stack_mode=self.stack_mode,
                 workspace_free=workspace_free,
                 workspace_target=self._workspace_mgr.workspace_min_free_cells,
@@ -2887,8 +2883,6 @@ class StashSorter:
         workspace_value = max(0, workspace_free) if workspace_free is not None else 0
         workspace_pressure = 1.0 - min(1.0, workspace_value / float(capacity))
         score = 0.2 + (fill_ratio * 0.4) + (move_density * 0.25) + (workspace_pressure * 0.15)
-        if self.pack_mode:
-            score += 0.1
         if not self.stack_mode and fill_ratio > 0.6:
             score += 0.05
         score = max(0.0, min(score, 1.0))
@@ -2912,8 +2906,6 @@ class StashSorter:
             reasons.append("Large move set")
         if workspace_pressure > 0.5:
             reasons.append("Tight workspace")
-        if self.pack_mode:
-            reasons.append("Dense pack enabled")
         if not self.stack_mode and fill_ratio > 0.6:
             reasons.append("Stacking disabled")
         if not reasons:
@@ -2942,7 +2934,6 @@ class StashSorter:
             planner = LayoutPlanner(
                 self.stash.width,
                 self.stash.height,
-                prefer_dense=self.pack_mode,
                 stash=self.stash,
                 stack_mode=self.stack_mode,
                 keep_in_place=self.keep_in_place,

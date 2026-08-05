@@ -111,7 +111,6 @@ const sortCharId = ref ('');
 const sortStashId = ref ('');
 const sortEquipment = ref (false);
 const sortActiveCharId = ref ('');
-const sortPack = ref (true);
 const sortStack = ref (true);
 const sortIncludeInv = ref (true);
 const sortKeepInPlace = ref (true);
@@ -121,7 +120,6 @@ async function saveSortConfig () {
     await invoke ('dnd:sort-config-save', {
       character_id: sortCharId.value,
       stash_id: sortStashId.value,
-      pack_mode: sortPack.value,
       stack_mode: sortStack.value,
       include_inventory: sortIncludeInv.value,
       keep_in_place: sortKeepInPlace.value,
@@ -135,14 +133,13 @@ async function restoreSortConfig () {
     if (!cfg) return;
     if (cfg.character_id) sortCharId.value = cfg.character_id;
     if (cfg.stash_id) sortStashId.value = cfg.stash_id;
-    sortPack.value = !!cfg.pack_mode;
     sortStack.value = !!cfg.stack_mode;
     sortIncludeInv.value = !!cfg.include_inventory;
     sortKeepInPlace.value = cfg.keep_in_place !== false;
   } catch (e) {}
 }
 
-watch ([sortCharId, sortStashId, sortPack, sortStack, sortIncludeInv, sortKeepInPlace], saveSortConfig);
+watch ([sortCharId, sortStashId, sortStack, sortIncludeInv, sortKeepInPlace], saveSortConfig);
 
 let lastMappings = -1;
 let toastTimer = null;
@@ -1023,7 +1020,6 @@ onBeforeUnmount (() => {
         <StashView
           :char-id="sortCharId"
           :stash-id="sortStashId"
-          :pack-mode="sortPack"
           :stack-mode="sortStack"
           :include-inv="sortIncludeInv"
           :keep-in-place="sortKeepInPlace"
@@ -1041,11 +1037,9 @@ onBeforeUnmount (() => {
           :stash-id="sortStashId"
           :equipment="sortEquipment"
           :active-char-id="sortActiveCharId"
-          :pack-mode="sortPack"
           :stack-mode="sortStack"
           :include-inv="sortIncludeInv"
           :keep-in-place="sortKeepInPlace"
-          @update:pack-mode="v => sortPack = v"
           @update:stack-mode="v => sortStack = v"
           @update:include-inv="v => sortIncludeInv = v"
           @update:keep-in-place="v => sortKeepInPlace = v"
@@ -1081,7 +1075,7 @@ onBeforeUnmount (() => {
             <div class="steps">
               <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>启动抓包</b>；在游戏中打开仓库界面，角色的仓库与背包数据会自动出现</div></div>
               <div class="step"><div class="step-n">2</div><div class="step-t">在仓库网格上方选择<b>排序方案</b>（默认整理 / 品质区分 / 装备优先），可先点「排序预览」确认摆放效果</div></div>
-              <div class="step"><div class="step-n">3</div><div class="step-t">进入「仓库配置」页，选择要整理的<b>角色与目标仓库</b>，按需调整整理速度、紧凑模式、堆叠合并、包含背包</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">进入「仓库配置」页，选择要整理的<b>角色与目标仓库</b>，按需调整整理速度、堆叠合并、包含背包</div></div>
               <div class="step"><div class="step-n">4</div><div class="step-t">游戏中确认仓库界面已打开，按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理；整理期间<b>保持游戏窗口在前台、不要移动鼠标</b></div></div>
               <div class="step"><div class="step-n">5</div><div class="step-t">随时可按 <span class="kbd">{{ cancelHotkey }}</span> 中断；结束后查看整理结果，误放可手动微调</div></div>
             </div>
@@ -1331,6 +1325,22 @@ onBeforeUnmount (() => {
               <a class="src-card" href="#" @click.prevent="openLink('https://darkerdb.com/')">
                 <span class="src-name">DarkerDB</span>
                 <span class="src-desc">游戏数据平台 · 市场数据来源</span>
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">姐妹项目 · 冒险者酒馆</div>
+          <div class="card">
+            <div class="about-block">
+              <p><a href="#" @click.prevent="openLink('https://dnd.wiki/')">冒险者酒馆</a>（dnd.wiki）是掌柜的另一部个人作品——Dark and Darker 中英双语 Wiki / 数据库网站：职业 / 装备 / 怪物图鉴、配装模拟与社区配装、市场分析、伤害计算器、排行榜与掉率查询，一应俱全。</p>
+              <p>DarkTavern 的中→英翻译词条表与物品数据同冒险者酒馆共用一套数据源：桌面端负责「要看屏幕的」（游戏内查价 / 仓库整理），网站负责「不用看屏幕的」（数据库 / 配装 / 市场），两边互补，欢迎常来坐坐！</p>
+            </div>
+            <div class="src-links single">
+              <a class="src-card" href="#" @click.prevent="openLink('https://dnd.wiki/')">
+                <span class="src-name">冒险者酒馆</span>
+                <span class="src-desc">中英双语 Wiki · 掌柜姐妹之作</span>
               </a>
             </div>
           </div>
