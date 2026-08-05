@@ -1177,7 +1177,7 @@ onBeforeUnmount (() => {
       </div>
 
       <!-- ============ 角色仓库 ============ -->
-      <div class="pane" :class="{ active: pane === 'stash' }" v-if="pane === 'stash'">
+      <div class="pane" :class="{ active: pane === 'stash' }" v-show="pane === 'stash'">
         <StashView
           :char-id="sortCharId"
           :stash-id="sortStashId"
@@ -1192,7 +1192,7 @@ onBeforeUnmount (() => {
       </div>
 
       <!-- ============ 仓库配置 ============ -->
-      <div class="pane" :class="{ active: pane === 'sort' }" v-if="pane === 'sort'">
+      <div class="pane" :class="{ active: pane === 'sort' }" v-show="pane === 'sort'">
         <SortControl
           :char-id="sortCharId"
           :stash-id="sortStashId"

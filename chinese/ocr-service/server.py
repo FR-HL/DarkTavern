@@ -122,14 +122,23 @@ async def lifespan(_app: FastAPI):
 
     # Clean up orphaned tshark/dumpcap helpers left behind by a previous
     # session that was force-killed (e.g. task manager / crash).
+    # Runs in a background thread so it never blocks service startup.
     try:
+        import threading
         from dnd.capture.tshark_cleanup import cleanup_orphaned_now
-        stats = cleanup_orphaned_now(os.getpid())
-        killed = int(stats.get('killed', 0))
-        if killed:
-            logger.info("Cleaned up %s lingering tshark/dumpcap instance(s) from previous session", killed)
-    except Exception as exc:
-        logger.warning("Tshark orphan cleanup failed: %s", exc)
+
+        def _cleanup_orphaned():
+            try:
+                stats = cleanup_orphaned_now(os.getpid())
+                killed = int(stats.get('killed', 0))
+                if killed:
+                    logger.info("Cleaned up %s lingering tshark/dumpcap instance(s) from previous session", killed)
+            except Exception as exc:
+                logger.warning("Tshark orphan cleanup failed: %s", exc)
+
+        threading.Thread(target=_cleanup_orphaned, name='tshark-orphan-cleanup', daemon=True).start()
+    except Exception:
+        pass
 
     yield
     try:
