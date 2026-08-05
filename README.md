@@ -115,6 +115,7 @@ npx electron .
 - **查价**：游戏内悬停物品 → 按扫描键（默认鼠标侧键），价格面板浮出。
 - **仓库整理**：先在游戏中打开要整理的仓库界面（能看到物品格子），在「仓库配置」页选择角色与目标仓库，再按 Ctrl+R。整理期间保持游戏窗口在前台。
 - **管理员权限**：若游戏以管理员权限运行，DarkTavern 也需以管理员身份运行（右键 → 以管理员身份运行），否则 Windows 会拦截整理时的鼠标操作。
+- **游戏版本更新**：仓库抓包依赖游戏的 protobuf 协议，游戏大版本更新后协议可能变化导致抓包失效（仓库页无数据）。遇到请先查 [Issues](https://github.com/FR-HL/DarkTavern/issues)，也欢迎反馈。
 
 ## 配置
 
@@ -197,10 +198,31 @@ npx electron-builder --win
 
 ## 使用声明
 
-- **仅供个人学习与娱乐**：本工具与本作《Dark and Darker》无官方关联，也不支持作弊（不注入、不读内存）。游戏内的使用合规性请自行判断。
+- **仅供个人学习与娱乐**：本工具与本作《Dark and Darker》无官方关联，也不支持作弊（不注入、不读内存）。游戏内的使用合规性请自行判断，请遵守游戏服务条款。
+- **版权与商标**：《Dark and Darker》及全部游戏内容、素材为 Ironmace Co., Ltd. 或其授权方的商标与版权资产，本项目为粉丝自制工具，未获官方认可或授权。
 - **禁止转卖**：禁止将本软件（或其修改版、构建产物）作为商品二次销售、捆绑销售或任何形式收费。发现倒卖/滥用，请在 [GitHub Issues](https://github.com/FR-HL/DarkTavern/issues) 举报。
 - **商标**：「DarkTavern」名称与图标为本项目品牌标识，不得用于任何衍生品或商业产品，详见 [LICENSE](LICENSE) 附加条款。
 - **免责声明**：本项目按「MIT 许可证 + 附加条款」提供（见 [LICENSE](LICENSE)），作者不对任何使用后果负责。
+
+## 参与贡献
+
+欢迎提交 Issue 与 PR。动手前请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)；功能方向以 [VISION.md](VISION.md)（项目北极星）为准。
+
+## 支持与反馈
+
+- Bug / 功能建议 → [Issues](https://github.com/FR-HL/DarkTavern/issues)
+- 使用问题 / 讨论 → [Discussions](https://github.com/FR-HL/DarkTavern/discussions)
+
+## 姐妹项目
+
+**[冒险者酒馆](https://dnd.wiki/)**（dnd.wiki）— Dark and Darker 中英双语 Wiki / 数据库网站，与本项目同为作者个人作品：
+
+- **图鉴** — 职业数据 / 装备数据（属性与掉落）/ 怪物图鉴（掉落表）/ 任务 / 地图 / 机制
+- **配装** — 装备模拟器与社区配装分享
+- **工具** — 市场分析、伤害计算器、排行榜、掉率查询
+- **中英双语** — 中文 / English 界面切换
+
+DarkTavern 的中→英翻译词条表与物品数据同冒险者酒馆共用一套数据源：桌面端负责「要看屏幕的」（游戏内查价 / 仓库整理），网站负责「不用看屏幕的」（数据库 / 配装 / 市场），两边互补。
 
 ## 致谢
 
@@ -211,7 +233,7 @@ npx electron-builder --win
 - [RapidOCR](https://github.com/RapidAI/RapidOCR) — OCR 识别引擎
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) — PP-OCR 识别模型
 - [NFU Database](https://dnd.nfuwow.com/) — 中文物品翻译
-- [Dark and Darker Wiki](https://dnd.wiki/) — Dark and Darker Adventurer's Tavern
+- [冒险者酒馆](https://dnd.wiki/)（dnd.wiki）— 作者的 Dark and Darker 中英双语 Wiki，与本项目共用翻译表 / 物品数据
 
 ## License
 
