@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>LLM 测试台 · 冒险者侍从</title>
+<style>
+  :root {
+    --bg: #17130e;
+    --panel: #211b13;
+    --panel2: #2a2318;
+    --border: #3d3223;
+    --gold: #c9a227;
+    --gold-bright: #e8c35a;
+    --text: #d8cfc0;
+    --text-dim: #8a7f6d;
+    --green: #6fbf73;
+    --red: #d9705f;
+    --blue: #6fa8dc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 14px;
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 20px;
+    color: var(--gold-bright);
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+  }
+  .subtitle { color: var(--text-dim); font-size: 12px; margin-bottom: 20px; }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-size: 13px;
+    color: var(--gold);
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+  label { color: var(--text-dim); font-size: 12px; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 5px;
+    padding: 7px 10px;
+    font-size: 13px;
+    outline: none;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--gold); }
+  input[type=password], input[type=text].key { width: 380px; }
+  textarea { width: 100%; resize: vertical; font-family: Consolas, monospace; font-size: 12px; line-height: 1.6; }
+  button {
+    background: linear-gradient(180deg, #3a2f1d, #2a2318);
+    border: 1px solid var(--gold);
+    color: var(--gold-bright);
+    border-radius: 5px;
+    padding: 8px 18px;
+    font-size: 13px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  button:hover { background: linear-gradient(180deg, #4a3d26, #332a1c); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.primary { background: linear-gradient(180deg, #6b5518, #4a3b10); font-weight: bold; }
+  .phrase-item { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .phrase-item input[type=checkbox] { accent-color: var(--gold); }
+  .phrase-item .txt { flex: 1; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: left; color: var(--gold); font-weight: normal;
+    padding: 6px 8px; border-bottom: 1px solid var(--border);
+    letter-spacing: 1px;
+  }
+  td { padding: 6px 8px; border-bottom: 1px solid #2c2417; vertical-align: top; }
+  tr.detail-row td { background: var(--panel2); }
+  .ok { color: var(--green); }
+  .fail { color: var(--red); }
+  .dim { color: var(--text-dim); }
+  .num { font-family: Consolas, monospace; }
+  .badge {
+    display: inline-block; padding: 1px 8px; border-radius: 10px;
+    font-size: 11px; border: 1px solid var(--border);
+  }
+  .badge.tool { color: var(--blue); border-color: var(--blue); }
+  .summary { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 8px; }
+  .summary .stat { text-align: center; }
+  .summary .stat .v { font-size: 22px; color: var(--gold-bright); font-family: Consolas, monospace; }
+  .summary .stat .k { font-size: 11px; color: var(--text-dim); }
+  pre {
+    background: #120f0a; border: 1px solid var(--border); border-radius: 5px;
+    padding: 10px; font-size: 11px; overflow-x: auto; white-space: pre-wrap;
+    word-break: break-all; color: #b8ad98; margin-top: 6px;
+  }
+  .status-line { color: var(--text-dim); font-size: 12px; min-height: 18px; margin-top: 8px; }
+  .clickable { cursor: pointer; }
+  .clickable:hover { background: #262015; }
+</style>
+</head>
+<body>
+
+<h1>⚔ LLM 测试台</h1>
+<div class="subtitle">测试 DeepSeek 的响应延迟与指令理解能力 —— 为智能体接入做验证（Key 仅保存在浏览器本地）</div>
+
+<div class="panel">
+  <h2>连接设置</h2>
+  <div class="row">
+    <label>API Key</label>
+    <input type="password" id="apiKey" class="key" placeholder="sk-...">
+    <label>接口地址</label>
+    <input type="text" id="baseUrl" value="https://api.deepseek.com" style="width:240px">
+    <label>模型</label>
+    <select id="model">
+      <option value="deepseek-chat">deepseek-chat（快）</option>
+      <option value="deepseek-reasoner">deepseek-reasoner（深度思考，慢）</option>
+    </select>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="stream" checked> 流式（测首字延迟）</label>
+    <label>每条跑 <input type="number" id="rounds" value="3" min="1" max="10" style="width:56px"> 轮</label>
+    <label>max_tokens <input type="number" id="maxTokens" value="512" style="width:70px"></label>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>系统提示词（工具清单）</h2>
+  <textarea id="sysPrompt" rows="14">你是《Dark and Darker》工具"冒险者侍从"的指令解析器。把玩家的中文请求解析为一次工具调用。
+只输出一个 JSON 对象，不要输出任何其他文字、解释或代码块标记。
+
+可用工具：
+1. buy_item — 在市场购买物品。参数: item(物品名,保持原文), quantity(数量,默认1), max_price(单价上限金币,未提及则null)
+2. sell_item — 出售物品。参数: item, quantity, min_price(未提及则null)
+3. price_check — 查询物品价格。参数: item
+4. sort_stash — 整理仓库。参数: preset("default"|"quality"|"equipment")
+5. open_page — 打开工具页面。参数: page("overview"|"price"|"history"|"stash"|"settings")
+
+输出格式: {"tool":"工具名","params":{...},"confidence":0到1的小数}
+无法匹配任何工具时输出: {"tool":null,"reply":"对玩家说的话"}</textarea>
+</div>
+
+<div class="panel">
+  <h2>测试语料</h2>
+  <div id="phrases"></div>
+  <div class="row" style="margin-top:10px">
+    <button onclick="startVoice()" id="voiceBtn" style="white-space:nowrap">🎤 语音输入</button>
+    <label><input type="checkbox" id="autoVoice" checked> 说完自动测试并报告</label>
+    <input type="text" id="customPhrase" placeholder="自定义测试语句…（回车 = 立即测这条）" style="flex:1">
+    <button onclick="addPhrase()">加入列表</button>
+  </div>
+</div>
+
+<div class="row">
+  <button class="primary" id="runBtn" onclick="runAll()">开始测试</button>
+  <button onclick="clearResults()">清空结果</button>
+</div>
+<div class="status-line" id="status"></div>
+
+<div class="panel" id="voiceReportPanel" style="display:none">
+  <h2>🎤 全流程计时报告</h2>
+  <div id="voiceReport" style="line-height:2"></div>
+</div>
+
+<div class="panel" id="resultPanel" style="display:none">
+  <h2>测试结果</h2>
+  <div class="summary" id="summary"></div>
+  <table style="margin-top:12px">
+    <thead>
+      <tr>
+        <th style="width:26%">输入</th>
+        <th>轮次</th>
+        <th>首字延迟</th>
+        <th>总耗时</th>
+        <th>tokens</th>
+        <th>JSON</th>
+        <th>解析出的工具</th>
+      </tr>
+    </thead>
+    <tbody id="results"></tbody>
+  </table>
+</div>
+
+<script>
+const DEFAULT_PHRASES = [
+  '买5瓶保护药水，别超过80金',
+  '帮我看看这把剑值多少钱',
+  '把仓库里的垃圾卖了',
+  '按品质整理一下仓库',
+  '打开查价器',
+  '买一把T2长剑，预算300金，要加攻击力的',
+];
+
+let phrases = [...DEFAULT_PHRASES];
+let running = false;
+let allResults = [];
+
+function renderPhrases() {
+  const box = document.getElementById('phrases');
+  box.innerHTML = '';
+  phrases.forEach((p, i) => {
+    const div = document.createElement('div');
+    div.className = 'phrase-item';
+    div.innerHTML =
+      '<input type="checkbox" checked data-idx="' + i + '">' +
+      '<span class="txt">' + escapeHtml(p) + '</span>' +
+      '<button style="padding:2px 10px" onclick="removePhrase(' + i + ')">删</button>';
+    box.appendChild(div);
+  });
+}
+
+function addPhrase() {
+  const inp = document.getElementById('customPhrase');
+  const v = inp.value.trim();
+  if (!v) return;
+  phrases.push(v);
+  inp.value = '';
+  renderPhrases();
+}
+
+function removePhrase(i) {
+  phrases.splice(i, 1);
+  renderPhrases();
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function callLlm(userText) {
+  const body = {
+    api_key: document.getElementById('apiKey').value.trim(),
+    base_url: document.getElementById('baseUrl').value.trim(),
+    model: document.getElementById('model').value,
+    stream: document.getElementById('stream').checked,
+    max_tokens: parseInt(document.getElementById('maxTokens').value) || 512,
+    messages: [
+      { role: 'system', content: document.getElementById('sysPrompt').value },
+      { role: 'user', content: userText },
+    ],
+  };
+  const resp = await fetch('/agent/llm-test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return await resp.json();
+}
+
+async function runAll() {
+  if (running) return;
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { alert('请先填写 API Key'); return; }
+
+  const checked = [...document.querySelectorAll('#phrases input[type=checkbox]:checked')]
+    .map(c => phrases[parseInt(c.dataset.idx)]);
+  if (!checked.length) { alert('请至少选择一条测试语料'); return; }
+
+  const rounds = parseInt(document.getElementById('rounds').value) || 3;
+  running = true;
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('resultPanel').style.display = '';
+  const tbody = document.getElementById('results');
+  tbody.innerHTML = '';
+  allResults = [];
+  let done = 0;
+  const total = checked.length * rounds;
+
+  for (const phrase of checked) {
+    for (let r = 1; r <= rounds; r++) {
+      document.getElementById('status').textContent =
+        '测试中 (' + (done + 1) + '/' + total + '): ' + phrase;
+      let res;
+      try {
+        res = await callLlm(phrase);
+      } catch (e) {
+        res = { ok: false, error: String(e) };
+      }
+      done++;
+      const row = { phrase, round: r, res };
+      allResults.push(row);
+      appendRow(tbody, row);
+    }
+  }
+
+  renderSummary(allResults);
+  document.getElementById('status').textContent = '完成：共 ' + total + ' 次调用';
+  running = false;
+  document.getElementById('runBtn').disabled = false;
+}
+
+function appendRow(tbody, row) {
+  const { phrase, round, res } = row;
+  const tr = document.createElement('tr');
+  tr.className = 'clickable';
+  const ttfb = res.ttfb_ms != null ? res.ttfb_ms + ' ms' : '—';
+  const total = res.total_ms != null ? res.total_ms + ' ms' : '—';
+  const tokens = (res.prompt_tokens != null)
+    ? res.prompt_tokens + '+' + (res.completion_tokens ?? '?')
+    : '—';
+  let jsonCell, toolCell;
+  if (!res.ok) {
+    jsonCell = '<span class="fail">错误</span>';
+    toolCell = '<span class="dim">' + escapeHtml((res.error || '').slice(0, 60)) + '</span>';
+  } else if (res.json_ok) {
+    jsonCell = '<span class="ok">✓</span>';
+    const tool = res.json && res.json.tool;
+    toolCell = tool
+      ? '<span class="badge tool">' + escapeHtml(tool) + '</span> <span class="dim">' +
+        escapeHtml(JSON.stringify(res.json.params || {}).slice(0, 50)) + '</span>'
+      : '<span class="dim">chat: ' + escapeHtml(String((res.json && res.json.reply) || '').slice(0, 40)) + '</span>';
+  } else {
+    jsonCell = '<span class="fail">✗</span>';
+    toolCell = '<span class="dim">' + escapeHtml((res.text || '').slice(0, 50)) + '</span>';
+  }
+  tr.innerHTML =
+    '<td>' + (round === 1 ? escapeHtml(phrase) : '') + '</td>' +
+    '<td class="num">' + round + '</td>' +
+    '<td class="num">' + ttfb + '</td>' +
+    '<td class="num">' + total + '</td>' +
+    '<td class="num dim">' + tokens + '</td>' +
+    '<td>' + jsonCell + '</td>' +
+    '<td>' + toolCell + '</td>';
+  tr.onclick = () => toggleDetail(tr, res);
+  tbody.appendChild(tr);
+}
+
+function toggleDetail(tr, res) {
+  const next = tr.nextElementSibling;
+  if (next && next.classList.contains('detail-row')) {
+    next.remove();
+    return;
+  }
+  const detail = document.createElement('tr');
+  detail.className = 'detail-row';
+  detail.innerHTML =
+    '<td colspan="7">' +
+    '<div class="dim">原始输出：</div><pre>' + escapeHtml(res.text || res.error || '(空)') + '</pre>' +
+    (res.json ? '<div class="dim" style="margin-top:8px">解析 JSON：</div><pre>' +
+      escapeHtml(JSON.stringify(res.json, null, 2)) + '</pre>' : '') +
+    '</td>';
+  tr.after(detail);
+}
+
+function renderSummary(all) {
+  const okRuns = all.filter(a => a.res.ok);
+  const ttfbs = okRuns.map(a => a.res.ttfb_ms).filter(v => v != null);
+  const totals = okRuns.map(a => a.res.total_ms).filter(v => v != null);
+  const jsonOk = okRuns.filter(a => a.res.json_ok).length;
+
+  const avg = arr => arr.length ? Math.round(arr.reduce((s, v) => s + v, 0) / arr.length) : null;
+  const p = (arr, q) => {
+    if (!arr.length) return null;
+    const sorted = [...arr].sort((a, b) => a - b);
+    return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))];
+  };
+
+  const stats = [
+    ['调用次数', all.length],
+    ['成功率', all.length ? Math.round(okRuns.length / all.length * 100) + '%' : '—'],
+    ['JSON 解析率', okRuns.length ? Math.round(jsonOk / okRuns.length * 100) + '%' : '—'],
+    ['首字 平均', fmt(avg(ttfbs))],
+    ['首字 P90', fmt(p(ttfbs, 0.9))],
+    ['总耗时 平均', fmt(avg(totals))],
+    ['总耗时 P90', fmt(p(totals, 0.9))],
+  ];
+  document.getElementById('summary').innerHTML = stats.map(([k, v]) =>
+    '<div class="stat"><div class="v">' + v + '</div><div class="k">' + k + '</div></div>'
+  ).join('');
+}
+
+function fmt(v) {
+  return v == null ? '—' : v + ' ms';
+}
+
+function clearResults() {
+  document.getElementById('results').innerHTML = '';
+  document.getElementById('summary').innerHTML = '';
+  document.getElementById('resultPanel').style.display = 'none';
+  document.getElementById('status').textContent = '';
+}
+
+// 记住 Key（仅本机浏览器）
+const saved = localStorage.getItem('llmtest.key');
+if (saved) document.getElementById('apiKey').value = saved;
+document.getElementById('apiKey').addEventListener('change', e => {
+  localStorage.setItem('llmtest.key', e.target.value.trim());
+});
+
+// 语音输入（浏览器自带 Web Speech API；Edge 最稳，Chrome 走 Google 服务器国内可能不通）
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const btn = document.getElementById('voiceBtn');
+  if (!SR) {
+    alert('当前浏览器不支持语音识别，请改用 Edge 打开本页');
+    return;
+  }
+  if (window._rec && window._recActive) {
+    window._rec.stop();
+    return;
+  }
+  const rec = new SR();
+  rec.lang = 'zh-CN';
+  rec.interimResults = true;
+  rec.continuous = false;
+  const inp = document.getElementById('customPhrase');
+  let finalText = '';
+  const timings = { micStart: 0, asrDone: 0 };
+  rec.onstart = () => {
+    window._recActive = true;
+    timings.micStart = performance.now();
+    btn.textContent = '🔴 正在聆听…再点一下停止';
+    document.getElementById('status').textContent = '🎤 正在聆听，请说话…';
+  };
+  rec.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t;
+      else interim += t;
+    }
+    inp.value = finalText + interim;
+  };
+  rec.onerror = (e) => {
+    let msg = '语音识别失败: ' + e.error;
+    if (e.error === 'network') msg += '\n（网络问题：Chrome 的识别走 Google 服务器，国内请改用 Edge）';
+    if (e.error === 'not-allowed') msg += '\n（请允许麦克风权限后重试）';
+    alert(msg);
+  };
+  rec.onend = () => {
+    window._recActive = false;
+    btn.textContent = '🎤 语音输入';
+    timings.asrDone = performance.now();
+    const text = finalText.trim();
+    if (!text) {
+      document.getElementById('status').textContent = '没听清，请再试一次';
+      return;
+    }
+    if (document.getElementById('autoVoice').checked) {
+      voicePipeline(text, timings);
+    } else {
+      document.getElementById('status').textContent = '识别完成：' + text + '（按回车测试）';
+    }
+  };
+  window._rec = rec;
+  rec.start();
+}
+
+// 语音 → LLM → 报告 全自动流水线（带全流程计时）
+async function voicePipeline(text, timings) {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { alert('请先填写 API Key'); return; }
+  const statusEl = document.getElementById('status');
+  statusEl.textContent = '🧠 AI 解析中：' + text;
+  const t0 = performance.now();
+  let res;
+  try { res = await callLlm(text); } catch (e) { res = { ok: false, error: String(e) }; }
+  const tDone = performance.now();
+
+  const label = text + '（🎤语音）';
+  allResults.push({ phrase: label, round: '🎤', res });
+  document.getElementById('resultPanel').style.display = '';
+  appendRow(document.getElementById('results'), { phrase: label, round: '🎤', res });
+  renderSummary(allResults);
+
+  const asrMs = Math.round(timings.asrDone - timings.micStart);
+  const afterAsr = Math.round(tDone - timings.asrDone);
+  const total = Math.round(tDone - timings.micStart);
+  const panel = document.getElementById('voiceReportPanel');
+  panel.style.display = '';
+  document.getElementById('voiceReport').innerHTML =
+    '<div style="font-size:15px;color:var(--gold-bright);margin-bottom:8px">🎤「' + escapeHtml(text) + '」</div>' +
+    '<div>① 点按钮→识别出文字（含你说话的时间）：<b class="num">' + asrMs + ' ms</b></div>' +
+    '<div>② 识别完成→AI 首字响应：<b class="num">' + (res.ttfb_ms != null ? res.ttfb_ms + ' ms' : '—') + '</b></div>' +
+    '<div>③ 识别完成→AI 完整回复：<b class="num">' + (res.total_ms != null ? res.total_ms + ' ms' : '—') + '</b></div>' +
+    '<div>④ 识别完成→报告展示（≈你说的"说完之后到报告"）：<b class="num">' + afterAsr + ' ms</b></div>' +
+    '<div style="margin-top:6px;color:var(--gold)">全程（点按钮→报告）：<b class="num">' + total + ' ms</b>' +
+    (res.json_ok && res.json && res.json.tool
+      ? '　→ 指令：<span class="badge tool">' + escapeHtml(res.json.tool) + '</span> <span class="dim">' +
+        escapeHtml(JSON.stringify(res.json.params || {})) + '</span>'
+      : '') +
+    '</div>';
+  statusEl.textContent = '✅ 完成';
+}
+
+// 回车直接测这条
+document.getElementById('customPhrase').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  const inp = e.target;
+  const v = inp.value.trim();
+  if (!v || running) return;
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { alert('请先填写 API Key'); return; }
+  running = true;
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('resultPanel').style.display = '';
+  document.getElementById('status').textContent = '测试中: ' + v;
+  const tbody = document.getElementById('results');
+  let res;
+  try { res = await callLlm(v); } catch (err) { res = { ok: false, error: String(err) }; }
+  allResults.push({ phrase: v, round: '-', res });
+  appendRow(tbody, { phrase: v, round: '-', res });
+  renderSummary(allResults);
+  document.getElementById('status').textContent = '完成: ' + v;
+  running = false;
+  document.getElementById('runBtn').disabled = false;
+});
+
+renderPhrases();
+</script>
+</body>
+</html>
