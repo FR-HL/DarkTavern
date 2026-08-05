@@ -33,7 +33,7 @@ let transientTimer = null;
 
 const ring = computed (() => {
   if (!status.ocr) return 'bad';
-  if (!status.game || !status.apiKey) return 'warn';
+  if (!status.game) return 'warn';
   return 'ok';
 });
 
@@ -50,7 +50,7 @@ const center = computed (() => {
   }
   if (!status.ocr) return { t1: '故障', cls: 'bad' };
   if (status.sortingRunning) return { t1: '整理', cls: 'busy' };
-  if (!status.game || !status.apiKey) return { t1: '待机', cls: 'warn' };
+  if (!status.game) return { t1: '待机', cls: 'warn' };
   return { t1: '就绪', cls: 'ok' };
 });
 
