@@ -117,6 +117,7 @@ const followMode = ref ('click');
 const scanBrights = ref ([]);
 const scanLast = ref ('');
 let followTimer = null;
+let retryTimer = null;
 
 async function loadFollowMode () {
   try {
@@ -448,10 +449,21 @@ onMounted (async () => {
   connectEvents ();
   reportStashState ();
   applyFollowMode ();
+
+  // 组件常驻（v-show）后不再随切换重建：启动时后端可能尚未就绪，
+  // 后端就绪或角色列表为空时补刷新，避免"角色空但仓库在"的错位。
+  window.electron.on ('ocr:status', (d) => {
+    if (d?.ok && !characters.value.length) loadCharacters ();
+  });
+  retryTimer = setInterval (() => {
+    if (!characters.value.length) loadCharacters ();
+    else if (retryTimer) { clearInterval (retryTimer); retryTimer = null; }
+  }, 5000);
 });
 
 onBeforeUnmount (() => {
   if (followTimer) { clearInterval (followTimer); followTimer = null; }
+  if (retryTimer) { clearInterval (retryTimer); retryTimer = null; }
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
