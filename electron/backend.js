@@ -60,7 +60,16 @@ export function startService (pythonPath) {
   ocrProcess.on ('error', (err) => { logger.error (`[Backend] Spawn error: ${err.message}`); ocrProcess = null; });
 }
 
-export function stopService () {
+export async function stopService () {
+  // 先让 OCR 服务优雅停止抓包（服务内部会终止 tshark / dumpcap 子进程并清理临时文件）
+  try {
+    const res = await fetch (OCR_URL + '/capture/stop', { method: 'POST', signal: AbortSignal.timeout (6000) });
+    if (!res.ok) logger.warn (`[Backend] Graceful stop HTTP ${res.status}`);
+  } catch (e) {
+    logger.warn (`[Backend] Graceful stop request failed: ${e.message}`);
+  }
+  // 等服务侧清理完成再退出，避免强杀导致 tshark/dumpcap 残留
+  await new Promise (r => setTimeout (r, 1500));
   if (ocrProcess) {
     try { ocrProcess.kill (); } catch (e) {}
     ocrProcess = null;

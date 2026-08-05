@@ -66,13 +66,21 @@ if (settings.general.launch_on_startup) {
 if (!app.requestSingleInstanceLock ()) app.quit ();
 app.on ('second-instance', () => {});
 
+let quitCleanupDone = false;
+
 app.on ('before-quit', () => {
   globalShortcut.unregisterAll ();
   if (healthTimer) { clearInterval (healthTimer); healthTimer = null; }
   if (ballStatusTimer) { clearInterval (ballStatusTimer); ballStatusTimer = null; }
   if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
-  backend.stopService ();
   stopTracking ();
+});
+
+app.on ('will-quit', (e) => {
+  // 先优雅停止 OCR 服务（含抓包清理），完成后再真正退出，避免 tshark/dumpcap 残留
+  if (quitCleanupDone) return;
+  e.preventDefault ();
+  backend.stopService ().finally (() => { quitCleanupDone = true; app.quit (); });
 });
 
 app.on ('ready', async () => {

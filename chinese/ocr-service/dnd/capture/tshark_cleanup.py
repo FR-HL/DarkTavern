@@ -135,6 +135,15 @@ def _notify_window(window_ref, killed: int) -> None:
         pass
 
 
+def cleanup_orphaned_now(parent_pid: int, protected_pids: Optional[Sequence[int]] = None) -> dict:
+    """In-process scan-and-kill of orphaned tshark/dumpcap helpers.
+
+    Unlike :func:`schedule_tshark_cleanup` this runs in the current process
+    (no multiprocessing), which is safe inside PyInstaller frozen bundles.
+    """
+    return _scan_and_cleanup(parent_pid, protected_pids)
+
+
 def schedule_tshark_cleanup(
     logger: logging.Logger,
     window_ref=None,
