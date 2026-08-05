@@ -5,7 +5,7 @@ import time
 import urllib.request
 
 API_BASE = "https://api.darkerdb.com/v2"
-API_KEY = "***REMOVED***"
+API_KEY = os.environ.get("DARKERDB_API_KEY", "")
 MAPPING_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mapping")
 
 
@@ -72,6 +72,11 @@ def build_mapping(zh_rows, en_rows):
 
 
 def main():
+    if not API_KEY:
+        print("ERROR: set DARKERDB_API_KEY env var first, e.g.")
+        print('  set DARKERDB_API_KEY=your_key && python sync_mappings.py')
+        sys.exit(1)
+
     os.makedirs(MAPPING_DIR, exist_ok=True)
 
     log("=== Fetching items (zh-Hans) ===")

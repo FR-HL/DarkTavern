@@ -46,8 +46,12 @@ Python 后端 (chinese/ocr-service, 本地 HTTP :19528)
 ### 仓库工具
 - **角色仓库** — 抓包可视化各职业角色的仓库与背包
 - **一键自动整理** — 三种预设（默认整理 / 品质区分 / 装备优先），自动生成摆放方案并模拟鼠标整理
-- **智能排序** — 同名同款分组相邻、大件优先、溢出整组不打散、可选先合并可堆叠物品
-- **整理预览** — 开始前预览生成方案，可随时 Ctrl+T 中断
+- **跨仓整理** — 「自动归类」零配置策略：堆叠合并修正 / 背包清空 / 类别归类（杂物细分宝石 / 矿石 / 材料 / 消耗品）/ 腾空仓库 / 全局重排（含均衡分散模式），目标仓满自动溢出，批量背包中转提速
+- **智能排序** — 同名同款分组相邻、大件优先、溢出整组不打散、可选先合并可堆叠物品、可选保留相同物品原位
+- **仓库锁定** — 锁定的仓库被全仓 / 跨仓 / 堆叠整理自动跳过
+- **仓库跟随** — 三态模式（关闭 / 点击识别 / 像素识别），游戏内切仓时前端同步高亮
+- **整理预览** — 开始前预览生成方案与步数，可随时 Ctrl+T 中断（全局有效）
+- **整理速度** — 慢 → 极速多档可调；快速放置（Shift+右键）加速跨仓摆放
 
 ### 启动主页
 - **暗酒馆主题** — 左栏实时状态符文（OCR / 游戏窗口 / 热键 / API），后端在后台加载、就绪自动点亮
@@ -68,7 +72,10 @@ Python 后端 (chinese/ocr-service, 本地 HTTP :19528)
 | F7 | 调试模式 |
 | F8 | 清除悬浮窗 |
 | Ctrl+R | 开始整理（仓库自动整理，需先配置目标） |
-| Ctrl+T | 取消整理 |
+| Ctrl+F12 | 开始跨仓整理 |
+| Ctrl+E | 循环切换仓库（跳过背包 / 装备） |
+| Ctrl+T | 取消整理（全局有效，跨仓 / 堆叠 / 全仓均可中止） |
+| Shift+右键 | 快速放置（跨仓摆放加速） |
 | Ctrl+Alt+B | 锁定 / 解锁悬浮球 |
 
 ## 环境准备
@@ -137,8 +144,9 @@ DarkTavern/
 │   └── shared/               # 共享样式与工具库（稀有度 / 职业 / 模式等）
 ├── chinese/ocr-service/      # Python 后端（查价 + 仓库工具）
 │   ├── server.py             # 本地 HTTP 服务 :19528（含扫描缓存）
-│   ├── ocr_engine_hybrid.py  # 像素行分割 + RapidOCR v4 rec（行级并行，主用）
-│   ├── ocr_engine_rapid.py   # 备选引擎（整图识别）
+│   ├── ocr_engine_hybrid.py  # 像素行分割 + RapidOCR v4 rec（行级并行，默认）
+│   ├── ocr_engine_rapid.py   # 备选引擎（整图 det+rec）
+│   ├── ocr_engine_v1fix.py   # 旧 rec 切点优化版（存档，蓝字效果差）
 │   ├── ocr_engine.py         # 旧 Paddle rec 引擎（回退保留）
 │   ├── detect.py             # 提示框检测（YOLO DNN）
 │   ├── capture.py            # 游戏窗口截图（mss）
@@ -176,8 +184,15 @@ DarkTavern/
 ## 从源码打包（可选）
 
 ```powershell
-npx vite build                 # 编译前端
-npx electron-builder --win     # 打包为安装程序
+# 1. 编译前端
+npx vite build
+
+# 2. 打包 Python 后端为 ocr-service.exe（PyInstaller，输出到 chinese/ocr-service/dist/）
+#    打包后的 app 用该 exe 运行后端，不再依赖 ocr_env
+chinese\ocr-service\build.bat
+
+# 3. 打包为安装程序（electron-builder.yml 会自动带上面两步的产物）
+npx electron-builder --win
 ```
 
 ## 使用声明
@@ -185,7 +200,7 @@ npx electron-builder --win     # 打包为安装程序
 - **仅供个人学习与娱乐**：本工具与本作《Dark and Darker》无官方关联，也不支持作弊（不注入、不读内存）。游戏内的使用合规性请自行判断。
 - **禁止转卖**：禁止将本软件（或其修改版、构建产物）作为商品二次销售、捆绑销售或任何形式收费。发现倒卖/滥用，请在 [GitHub Issues](https://github.com/FR-HL/DarkTavern/issues) 举报。
 - **商标**：「DarkTavern」名称与图标为本项目品牌标识，不得用于任何衍生品或商业产品，详见 [LICENSE](LICENSE) 附加条款。
-- **免责声明**：本项目按 MIT 许可证「AS IS」提供，作者不对任何使用后果负责。
+- **免责声明**：本项目按「MIT 许可证 + 附加条款」提供（见 [LICENSE](LICENSE)），作者不对任何使用后果负责。
 
 ## 致谢
 
@@ -200,7 +215,7 @@ npx electron-builder --win     # 打包为安装程序
 
 ## License
 
-MIT License.
+MIT License + 附加条款（商标与再分发限制，详见 [LICENSE](LICENSE)）。
 
 ```
 Copyright (c) 2025 DarkerDB (Original GrimVault)

@@ -1,5 +1,6 @@
-# OCR service dependencies (only needed for development / Python fallback)
-# The production build uses the pre-compiled ocr-service.exe
+# Python backend dependencies.
+# Required for running from source (dev): ocr_env\Scripts\python -m pip install -r requirements.txt
+# For release packaging, chinese\ocr-service\build.bat bundles these into ocr-service.exe via PyInstaller.
 rapidocr-onnxruntime>=1.4.0
 fastapi>=0.110.0
 uvicorn>=0.27.0
