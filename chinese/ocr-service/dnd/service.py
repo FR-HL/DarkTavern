@@ -648,9 +648,16 @@ def diagnose_capture() -> dict:
         }
         # Game's loopback connections -> accelerator proxy port
         proxy_ports = Counter()
+        game_conns = []
         try:
             for conn in _conns(game_proc):
                 raddr, laddr = getattr(conn, "raddr", None), getattr(conn, "laddr", None)
+                if len(game_conns) < 20:
+                    game_conns.append({
+                        "local": f"{laddr[0]}:{laddr[1]}" if laddr else "",
+                        "remote": f"{raddr[0]}:{raddr[1]}" if raddr else "",
+                        "status": getattr(conn, "status", ""),
+                    })
                 if raddr and raddr[0] == "127.0.0.1" and getattr(conn, "status", "") == "ESTABLISHED":
                     proxy_ports[raddr[1]] += 1
                     result["accelerator"]["connections"].append({
@@ -659,6 +666,7 @@ def diagnose_capture() -> dict:
                     })
         except Exception as exc:
             logger.debug(f"diagnose: game connection read failed: {exc}")
+        result["game"]["connections"] = game_conns
 
         if proxy_ports:
             proxy_port = proxy_ports.most_common(1)[0][0]

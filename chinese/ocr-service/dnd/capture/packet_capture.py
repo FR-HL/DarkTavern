@@ -246,6 +246,103 @@ def detect_game_proxy_port(retries: int = 2) -> Optional[int]:
     return None
 
 
+def detect_game_capture_point(exclude_proxy_port: Optional[int] = None):
+    """Locate where the game's plaintext traffic actually flows.
+
+    Returns a tuple ``(mode, interface, display_filter, proxy_port)``:
+      * ("accelerator", iface, "tcp.port == <proxy>", proxy) — local proxy: either
+        loopback (127.0.0.1) or a proxy listening on one of the machine's NIC IPs
+        (common for TUN-style accelerators)
+      * ("direct", iface, "tcp.port >= lo and tcp.port <= hi", None) — NIC derived
+        from the game's real connections (physical or virtual adapters)
+      * (None, None, None, None) — game not running / connections unreadable
+
+    ``exclude_proxy_port`` lets callers retry after a candidate proxy port
+    failed its traffic probe (avoids looping on the same misdetection).
+    """
+    try:
+        local_ips = set()
+        for _, addrs in psutil.net_if_addrs().items():
+            for addr in addrs:
+                if addr.family == socket.AF_INET:
+                    local_ips.add(addr.address)
+    except Exception:
+        local_ips = {'127.0.0.1'}
+    logger.info(f"[capture-detect] 本机 IPv4: {sorted(local_ips)}")
+
+    game_conns = []          # (laddr_ip, laddr_port, raddr_ip, raddr_port, status)
+    proxy_ports: set = set()
+    try:
+        for proc in psutil.process_iter(['name']):
+            try:
+                if not is_game_process(proc.info.get('name')):
+                    continue
+                logger.info(f"[capture-detect] 游戏进程: {proc.info.get('name')} PID={proc.pid}")
+                conn_fn = getattr(proc, 'net_connections', None) or proc.connections
+                for conn in conn_fn(kind='tcp'):
+                    laddr = getattr(conn, 'laddr', None)
+                    raddr = getattr(conn, 'raddr', None)
+                    status = getattr(conn, 'status', None)
+                    if status in ('LISTEN', 'CLOSED', 'CLOSE_WAIT', 'LAST_ACK'):
+                        continue
+                    if not laddr or not raddr:
+                        continue
+                    game_conns.append((laddr[0], laddr[1], raddr[0], raddr[1], status))
+                    logger.info(
+                        f"[capture-detect] 连接 {laddr[0]}:{laddr[1]} -> {raddr[0]}:{raddr[1]} ({status})"
+                    )
+                    # A connection to a *local* address means a local proxy
+                    # (accelerator) sits in front of the game. This includes
+                    # NIC IPs: same-machine traffic never hits the physical
+                    # NIC, it loops back internally, so capture on loopback.
+                    if raddr[0] == '127.0.0.1' or raddr[0] in local_ips:
+                        proxy_ports.add(raddr[1])
+                        logger.info(f"[capture-detect] 判定本地代理端口: {raddr[0]}:{raddr[1]}")
+            except (psutil.Error, OSError):
+                continue
+    except Exception as exc:
+        logger.debug(f"Game capture point detection failed: {exc}")
+        return None, None, None, None
+
+    if not game_conns:
+        logger.info("[capture-detect] 未找到游戏活跃 TCP 连接")
+        return None, None, None, None
+
+    if exclude_proxy_port:
+        proxy_ports -= set(exclude_proxy_port) if isinstance(exclude_proxy_port, (list, set, tuple)) else {exclude_proxy_port}
+
+    # Local proxy accelerator wins: capture the game<->proxy traffic on the
+    # loopback interface (same-machine traffic is invisible on the NIC).
+    if proxy_ports:
+        f = ' or '.join(f'tcp.port == {p}' for p in sorted(proxy_ports))
+        logger.info(f"[capture-detect] 采用加速器模式: loopback, 代理端口 {sorted(proxy_ports)}")
+        return 'accelerator', None, f, sorted(proxy_ports)
+
+    # Direct / virtual-NIC mode: derive the interface from the game's local IPs
+    # and the port range from the actual local ports in use.
+    local_ports = sorted({p for _, p, _, _, _ in game_conns})
+    local_ips_used = {ip for ip, _, _, _, _ in game_conns}
+    if not local_ports:
+        return None, None, None, None
+
+    iface = _find_interface_for_ips(local_ips_used)
+    lo, hi = local_ports[0], local_ports[-1]
+    logger.info(f"[capture-detect] 采用直连模式: iface={iface}, 端口范围 {lo}-{hi}")
+    return 'direct', iface, f'tcp.port >= {lo} and tcp.port <= {hi}', None
+
+
+def _find_interface_for_ips(ips: set) -> Optional[str]:
+    """Return the interface that owns one of the given IPv4 addresses."""
+    try:
+        for iface, addrs in psutil.net_if_addrs().items():
+            for addr in addrs:
+                if addr.family == socket.AF_INET and addr.address in ips:
+                    return iface
+    except Exception as exc:
+        logger.debug(f"Interface lookup failed: {exc}")
+    return None
+
+
 def find_loopback_interface(tshark_path: Optional[str]) -> str:
     """Find the Npcap loopback capture interface name via ``tshark -D``."""
     import re
@@ -270,6 +367,39 @@ def find_loopback_interface(tshark_path: Optional[str]) -> str:
     except Exception as exc:
         logger.debug(f"Loopback interface detection failed: {exc}")
     return fallback
+
+
+def probe_interface_port(tshark_path: Optional[str], iface: Optional[str], display_filter: str, timeout: float = 8.0) -> bool:
+    """Verify a candidate proxy filter actually carries traffic on an interface.
+
+    Some local connections (anti-cheat, game helpers) look like a proxy but
+    carry no game traffic; capturing there would silently yield nothing.
+    Returns True only when at least one packet matching the filter is seen.
+
+    Note: tshark exits 0 even on -a duration timeout with zero packets, so
+    success is judged by non-empty stdout (frame numbers), not exit code.
+    """
+    if not tshark_path:
+        return False
+    if not iface:
+        iface = find_loopback_interface(tshark_path)
+    try:
+        result = subprocess.run(
+            [tshark_path, '-i', iface,
+             '-Y', display_filter,
+             '-T', 'fields', '-e', 'frame.number',
+             '-c', '1', '-a', f'duration:{int(timeout)}'],
+            capture_output=True, timeout=timeout + 10,
+        )
+        return bool((result.stdout or b'').strip())
+    except Exception as exc:
+        logger.debug(f"Interface probe failed: {exc}")
+        return False
+
+
+# Backward-compatible alias
+def probe_loopback_port(tshark_path: Optional[str], proxy_port: int, timeout: float = 8.0) -> bool:
+    return probe_interface_port(tshark_path, None, f'tcp.port == {proxy_port}', timeout)
 
 
 class _StreamState:
@@ -642,35 +772,55 @@ class PacketCapture:
                 self._last_packet_ts = time.time()
                 self.logger.info("Initializing capture session")
 
-                # Detect a game accelerator (game routing through a local proxy).
-                # When present, the game's plaintext protocol packets flow over the
-                # loopback interface to the proxy port, so capture there instead of
-                # a physical NIC (which would only see the accelerator's tunnel).
-                proxy_port = detect_game_proxy_port()
-                if proxy_port:
-                    self.capture_mode = "accelerator"
-                    self.active_proxy_port = proxy_port
-                    capture_iface = find_loopback_interface(self.tshark_path)
-                    display_filter = f'tcp.srcport == {proxy_port}'
+                # Locate where the game's plaintext traffic flows. Priority:
+                # 1. local proxy accelerator (loopback or NIC-bound, all of
+                #    which live on the loopback path), verified to actually
+                #    carry traffic
+                # 2. NIC derived from the game's real connections (physical or
+                #    virtual/TUN adapters) with the actual ports in use
+                # 3. configured interface + default port range (fallback)
+                mode, capture_iface, display_filter, proxy_ports = detect_game_capture_point()
+                if mode == 'accelerator' and proxy_ports:
+                    iface = capture_iface or find_loopback_interface(self.tshark_path)
+                    # Same-machine ESTABLISHED connections to a local port are
+                    # strong evidence of a proxy. The probe can miss when the
+                    # game is idle (no packets within its window), so a failed
+                    # probe only logs — we still adopt the loopback capture.
+                    # The 60s no-traffic re-check covers genuine misdetections.
+                    if not probe_interface_port(self.tshark_path, iface, display_filter):
+                        self.logger.warning(
+                            f"Proxy ports {sorted(proxy_ports)} temporarily idle (no packets seen), still using loopback capture"
+                        )
+                    self.capture_mode = 'accelerator'
+                    self.active_proxy_port = set(proxy_ports) if isinstance(proxy_ports, (list, set, tuple)) else {proxy_ports}
+                    capture_iface = iface
                     self.logger.info(
-                        f"Accelerator detected — capturing loopback '{capture_iface}', proxy port {proxy_port}"
+                        f"Accelerator detected — capturing '{capture_iface}', proxy ports {sorted(self.active_proxy_port)}"
                     )
+                    self.logger.info(f"Display filter: {display_filter}")
+                elif mode == 'direct' and capture_iface:
+                    self.capture_mode = 'direct'
+                    self.active_proxy_port = None
+                    self.logger.info(f"Starting capture on interface: {capture_iface} (from game connections)")
+                    self.logger.info(f"Display filter: {display_filter}")
                 else:
-                    self.capture_mode = "direct"
+                    self.capture_mode = 'direct'
                     self.active_proxy_port = None
                     capture_iface = self.interface
                     local_ip = self.get_local_ip()
                     if not local_ip:
                         self.logger.error(f"Could not find IP address for interface {self.interface}")
                         break
+                    # Match both directions: game->server (ip.src == local,
+                    # tcp.srcport in range) and server->game replies (ip.dst ==
+                    # local, tcp.dstport in range).
                     display_filter = (
-                        f'ip.dst == {local_ip} and '
-                        f'tcp.srcport >= {self.port_range[0]} and '
-                        f'tcp.srcport <= {self.port_range[1]}'
+                        f'ip.addr == {local_ip} and '
+                        f'tcp.port >= {self.port_range[0]} and '
+                        f'tcp.port <= {self.port_range[1]}'
                     )
-                    self.logger.info(f"Starting capture on interface: {self.interface}, IP: {local_ip}")
-
-                self.logger.info(f"Display filter: {display_filter}")
+                    self.logger.info(f"Starting capture on interface: {self.interface}, IP: {local_ip} (fallback)")
+                    self.logger.info(f"Display filter: {display_filter}")
 
                 self._current_loop = loop
                 try:
@@ -727,7 +877,7 @@ class PacketCapture:
                             except (ValueError, TypeError):
                                 srcport = None
                             if self.active_proxy_port is not None:
-                                is_downstream = srcport == self.active_proxy_port
+                                is_downstream = srcport in self.active_proxy_port
                             else:
                                 is_downstream = (
                                     srcport is not None
