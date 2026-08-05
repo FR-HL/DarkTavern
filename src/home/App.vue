@@ -161,7 +161,7 @@ const sub = computed (() => {
   if (!ocrOk.value) return 'OCR 引擎唤醒中，请稍候片刻…';
   if (overviewSorting.value) return '仓库整理进行中，请保持游戏窗口在前台';
   if (!gameOk.value) return '启动游戏、把鼠标悬停在物品上即可查价';
-  if (!overviewCapture.value) return '启动抓包后，角色仓库数据会自动采集';
+  if (!overviewCapture.value) return '启动抓包后，到角色选择界面选一次角色即可取得仓库数据';
   return '已检测到游戏窗口，按下 ' + scanKey.value + ' 开始';
 });
 const subHtml = computed (() => {
@@ -169,7 +169,7 @@ const subHtml = computed (() => {
   if (!ocrOk.value) return 'OCR 引擎唤醒中，请稍候片刻…';
   if (overviewSorting.value) return '仓库整理进行中，请保持游戏窗口在前台';
   if (!gameOk.value) return '启动游戏、把鼠标悬停在物品上即可查价';
-  if (!overviewCapture.value) return '启动抓包后，角色仓库数据会自动采集';
+  if (!overviewCapture.value) return '启动抓包后，到角色选择界面选一次角色即可取得仓库数据';
   return '已检测到游戏窗口，按下 <span class="kbd">' + esc (scanKey.value) + '</span> 即刻查价';
 });
 const scaleVal = computed (() => scale.value.toFixed (1) + '×');
@@ -747,8 +747,9 @@ onBeforeUnmount (() => {
               <div class="step-col">
                 <div class="step-col-t">整理仓库</div>
                 <div class="step"><div class="step-n">1</div><div class="step-t">启动<b>抓包</b>（角色仓库页）</div></div>
-                <div class="step"><div class="step-n">2</div><div class="step-t">游戏中<b>打开要整理的仓库</b>界面</div></div>
-                <div class="step"><div class="step-n">3</div><div class="step-t">按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t">游戏<b>角色选择界面</b>选一次角色（取仓库数据）</div></div>
+                <div class="step"><div class="step-n">3</div><div class="step-t">游戏中<b>打开要整理的仓库</b>界面</div></div>
+                <div class="step"><div class="step-n">4</div><div class="step-t">按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理</div></div>
               </div>
             </div>
           </section>
@@ -1073,7 +1074,7 @@ onBeforeUnmount (() => {
               前置条件：已安装 <b>Wireshark</b>（提供 tshark，安装时勾选 "Add tshark to PATH"）；若游戏以管理员权限运行，DarkTavern 也需<b>以管理员身份运行</b>，否则鼠标操作会被 Windows 拦截。
             </div>
             <div class="steps">
-              <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>启动抓包</b>；在游戏中打开仓库界面，角色的仓库与背包数据会自动出现</div></div>
+              <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>启动抓包</b>，再<b>回到游戏角色选择界面选择角色</b>（游戏只在选角时下发仓库数据），角色的仓库与背包数据即自动出现；数据保存在本地，重启不用重抓</div></div>
               <div class="step"><div class="step-n">2</div><div class="step-t">在仓库网格上方选择<b>排序方案</b>（默认整理 / 品质区分 / 装备优先），可先点「排序预览」确认摆放效果</div></div>
               <div class="step"><div class="step-n">3</div><div class="step-t">进入「仓库配置」页，选择要整理的<b>角色与目标仓库</b>，按需调整整理速度、堆叠合并、包含背包</div></div>
               <div class="step"><div class="step-n">4</div><div class="step-t">游戏中确认仓库界面已打开，按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理；整理期间<b>保持游戏窗口在前台、不要移动鼠标</b></div></div>
@@ -1178,7 +1179,7 @@ onBeforeUnmount (() => {
             <div class="card term-card">
               <div class="term-head">角色仓库没有数据</div>
               <div class="term-body">
-                <p>确认已安装 Wireshark 且 tshark 在 PATH 中；在「角色仓库」页启动抓包后，游戏中重新打开一次仓库界面。</p>
+                <p>确认已安装 Wireshark（提供 tshark）；在「角色仓库」页启动抓包后，<b>回到游戏角色选择界面重新选择该角色</b>——游戏只在选角时下发全量仓库数据，仅在游戏内打开仓库界面是拿不到数据的。</p>
               </div>
             </div>
             <div class="card term-card">
