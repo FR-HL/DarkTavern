@@ -1,4 +1,4 @@
-# DarkTavern
+# 冒险者侍从 Adventurer's Squire
 
 Dark and Darker 中文实时查价 + 仓库整理工具。鼠标悬停游戏内物品、按下扫描键，即在物品提示框旁浮出**像素级还原原版样式**的价格面板（中文物品名 + 属性 + 市场价 / 商人价 / 每格价值）；另可通过网络抓包可视化各角色的仓库与背包，并一键自动整理。
 
@@ -82,7 +82,7 @@ Python 后端 (chinese/ocr-service, 本地 HTTP :19528)
 
 前置：**Node.js 20+**、**Python 3.11**、**Wireshark**（仓库抓包需要其附带的 `tshark` 与 `Npcap`，安装时勾选 "Add tshark to PATH"；查价功能不依赖）。
 
-> 装 Wireshark 时忘了勾选 PATH 也不用重装：DarkTavern 会自动探测 Wireshark 安装位置；仍找不到时，可在应用内手动选择 tshark.exe 或安装目录。
+> 装 Wireshark 时忘了勾选 PATH 也不用重装：冒险者侍从 会自动探测 Wireshark 安装位置；仍找不到时，可在应用内手动选择 tshark.exe 或安装目录。
 
 ```powershell
 # 1. 前端 + Electron 依赖
@@ -96,7 +96,7 @@ ocr_env\Scripts\python -m pip install -r requirements.txt
 #    ocr_env\Scripts\python -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-> **为什么必须是 `ocr_env` 这个名字？** Electron 启动时**自动优先**调用 `ocr_env\Scripts\python.exe` 来跑后端（见 `electron/backend.js`）。这样无论你 shell 里激活着哪个 venv，DarkTavern 都用自己的环境，**不会**因为缺 `fastapi` 等包而卡住。所以**不需要手动激活** ocr_env，建好即可。
+> **为什么必须是 `ocr_env` 这个名字？** Electron 启动时**自动优先**调用 `ocr_env\Scripts\python.exe` 来跑后端（见 `electron/backend.js`）。这样无论你 shell 里激活着哪个 venv，冒险者侍从 都用自己的环境，**不会**因为缺 `fastapi` 等包而卡住。所以**不需要手动激活** ocr_env，建好即可。
 
 > **模型文件** `models/tooltip.onnx`（提示框检测）与 `models/paddle/ch/rec.onnx` + `dict.txt`（回退用 Paddle 识别模型）已随仓库提供，无需另行下载；主用识别模型由 `rapidocr-onnxruntime` 包自带。
 
@@ -118,11 +118,11 @@ npx electron .
 - **仓库抓包（取数据）**：
   1. 「角色仓库」页点击**启动抓包**（自动探测游戏本地代理端口，纯被动监听）；
   2. **回到游戏的角色选择界面，选择要查看的角色**——游戏只在选角时下发全量仓库数据，已在游戏里需先退回选角界面选一次；
-  3. 回到 DarkTavern，该角色的仓库 / 背包 / 装备即自动出现。
+  3. 回到 冒险者侍从，该角色的仓库 / 背包 / 装备即自动出现。
   数据保存在本地，重启程序不用重抓；物品变动后想刷新，重走一遍上述步骤即可。
 - **仓库跟随**：取到数据后，游戏内打开 / 切换仓库，页面会同步高亮对应仓库（模式在「仓库配置」页设置）。
 - **仓库整理**：先在游戏中打开要整理的仓库界面（能看到物品格子），在「仓库配置」页选择角色与目标仓库，再按 Ctrl+R。整理期间保持游戏窗口在前台。
-- **管理员权限**：若游戏以管理员权限运行，DarkTavern 也需以管理员身份运行（右键 → 以管理员身份运行），否则 Windows 会拦截整理时的鼠标操作。
+- **管理员权限**：若游戏以管理员权限运行，冒险者侍从 也需以管理员身份运行（右键 → 以管理员身份运行），否则 Windows 会拦截整理时的鼠标操作。
 - **游戏版本更新**：仓库抓包依赖游戏的 protobuf 协议，游戏大版本更新后协议可能变化导致抓包失效（仓库页无数据）。遇到请先查 [Issues](https://github.com/FR-HL/DarkTavern/issues)，也欢迎反馈。
 
 ## 配置
@@ -209,7 +209,7 @@ npx electron-builder --win
 - **仅供个人学习与娱乐**：本工具与本作《Dark and Darker》无官方关联，也不支持作弊（不注入、不读内存）。游戏内的使用合规性请自行判断，请遵守游戏服务条款。
 - **版权与商标**：《Dark and Darker》及全部游戏内容、素材为 Ironmace Co., Ltd. 或其授权方的商标与版权资产，本项目为粉丝自制工具，未获官方认可或授权。
 - **禁止转卖**：禁止将本软件（或其修改版、构建产物）作为商品二次销售、捆绑销售或任何形式收费。发现倒卖/滥用，请在 [GitHub Issues](https://github.com/FR-HL/DarkTavern/issues) 举报。
-- **商标**：「DarkTavern」名称与图标为本项目品牌标识，不得用于任何衍生品或商业产品，详见 [LICENSE](LICENSE) 附加条款。
+- **商标**：「冒险者侍从 / Adventurer's Squire」名称与图标为本项目品牌标识，不得用于任何衍生品或商业产品，详见 [LICENSE](LICENSE) 附加条款。
 - **免责声明**：本项目按「MIT 许可证 + 附加条款」提供（见 [LICENSE](LICENSE)），作者不对任何使用后果负责。
 
 ## 参与贡献
@@ -230,7 +230,7 @@ npx electron-builder --win
 - **工具** — 市场分析、伤害计算器、排行榜、掉率查询
 - **中英双语** — 中文 / English 界面切换
 
-DarkTavern 的中→英翻译词条表与物品数据同冒险者酒馆共用一套数据源：桌面端负责「要看屏幕的」（游戏内查价 / 仓库整理），网站负责「不用看屏幕的」（数据库 / 配装 / 市场），两边互补。
+冒险者侍从 的中→英翻译词条表与物品数据同冒险者酒馆共用一套数据源：桌面端负责「要看屏幕的」（游戏内查价 / 仓库整理），网站负责「不用看屏幕的」（数据库 / 配装 / 市场），两边互补。
 
 ## 致谢
 
@@ -250,5 +250,5 @@ MIT License + 附加条款（商标与再分发限制，详见 [LICENSE](LICENSE
 ```
 Copyright (c) 2025 DarkerDB (Original GrimVault)
 Copyright (c) 2026 GrimVault Chinese Edition Contributors
-Copyright (c) 2026 DarkTavern
+Copyright (c) 2026 Adventurer's Squire
 ```

@@ -25,7 +25,7 @@ def capture_start():
         return {
             "success": False,
             "running": False,
-            "error": "未找到 TShark。请先安装 Wireshark（安装时保持勾选 TShark 组件），装完重启 DarkTavern。",
+            "error": "未找到 TShark。请先安装 Wireshark（安装时保持勾选 TShark 组件），装完重启 冒险者侍从。",
         }
     result = capture.start_capture_switch()
     return {"success": result, "running": capture.is_active()}

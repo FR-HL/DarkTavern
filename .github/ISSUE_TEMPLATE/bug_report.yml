@@ -45,7 +45,7 @@ body:
     attributes:
       label: 日志 / 截图
       description: |
-        日志位置：%APPDATA%\DarkTavern\logs（源码运行）或安装目录 resources\logs。
+        日志位置：%APPDATA%\AdventurersSquire\logs（源码运行）或安装目录 resources\logs。
         可直接粘贴相关片段或上传截图。查价问题请附上悬浮窗截图与物品名。
     validations:
       required: false

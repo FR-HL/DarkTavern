@@ -242,11 +242,19 @@ def _ctc_decode(mat, dictionary):
 class ChineseOCR:
     def __init__(self, model_path=None, dict_path=None):
         if model_path is None:
-            model_path = os.environ.get("DARKTAVERN_REC_MODEL") or os.path.join(
-                os.path.dirname(__file__), "..", "..", "models", "paddle", "ch", "rec.onnx")
+            model_path = (
+                os.environ.get("SQUIRE_REC_MODEL")
+                or os.environ.get("DARKTAVERN_REC_MODEL")
+                or os.path.join(
+                    os.path.dirname(__file__), "..", "..", "models", "paddle", "ch", "rec.onnx")
+            )
         if dict_path is None:
-            dict_path = os.environ.get("DARKTAVERN_REC_DICT") or os.path.join(
-                os.path.dirname(__file__), "..", "..", "models", "paddle", "ch", "dict.txt")
+            dict_path = (
+                os.environ.get("SQUIRE_REC_DICT")
+                or os.environ.get("DARKTAVERN_REC_DICT")
+                or os.path.join(
+                    os.path.dirname(__file__), "..", "..", "models", "paddle", "ch", "dict.txt")
+            )
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = 2
         opts.inter_op_num_threads = 1

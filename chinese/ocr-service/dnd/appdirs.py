@@ -55,11 +55,58 @@ def resource_path(relative_path):
         print(f"ERROR - Failed to load resource: {e}")
         return os.path.join(get_resource_dir(), relative_path)
 
+# Application data directory name. Renamed from the legacy "DarkTavern" to
+# "AdventurersSquire"; existing user data is migrated on first run.
+APP_DIR_NAME = 'AdventurersSquire'
+_LEGACY_APP_DIR_NAMES = ('DarkTavern',)
+
+_migrated_appdata = False
+
+
+def _migrate_legacy_appdata(appdata):
+    """Move legacy data directories to the new app directory (once).
+
+    Only migrates when the legacy directory exists and the new directory does
+    not, so it is idempotent and never overwrites existing new data.
+    """
+    global _migrated_appdata
+    if _migrated_appdata:
+        return
+    _migrated_appdata = True
+    new_dir = os.path.join(appdata, APP_DIR_NAME)
+    if os.path.exists(new_dir):
+        return
+    for legacy in _LEGACY_APP_DIR_NAMES:
+        old_dir = os.path.join(appdata, legacy)
+        if os.path.isdir(old_dir):
+            try:
+                shutil.move(old_dir, new_dir)
+                logging.getLogger(__name__).info(
+                    f"[appdirs] Migrated legacy data dir {old_dir} -> {new_dir}"
+                )
+                return
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    f"[appdirs] Failed to migrate {old_dir}: {e}; attempting copy"
+                )
+                try:
+                    shutil.copytree(old_dir, new_dir, dirs_exist_ok=True)
+                    logging.getLogger(__name__).info(
+                        f"[appdirs] Copied legacy data dir {old_dir} -> {new_dir}"
+                    )
+                    return
+                except Exception as e2:
+                    logging.getLogger(__name__).error(
+                        f"[appdirs] Failed to copy {old_dir}: {e2}"
+                    )
+
+
 def get_appdata_dir():
     appdata = os.environ.get('LOCALAPPDATA') or os.path.expanduser('~\\AppData\\Local')
-    darktavern_dir = os.path.join(appdata, 'DarkTavern')
-    os.makedirs(darktavern_dir, exist_ok=True)
-    return darktavern_dir
+    _migrate_legacy_appdata(appdata)
+    app_dir = os.path.join(appdata, APP_DIR_NAME)
+    os.makedirs(app_dir, exist_ok=True)
+    return app_dir
 
 def get_data_dir():
     data_dir = os.path.join(get_appdata_dir(), 'data')

@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢有兴趣参与 DarkTavern！动手前请先读 [README](README.md) 与 [VISION.md](VISION.md)（项目北极星，新功能先对照它再动手）。
+感谢有兴趣参与 冒险者侍从！动手前请先读 [README](README.md) 与 [VISION.md](VISION.md)（项目北极星，新功能先对照它再动手）。
 
 ## 开发环境
 

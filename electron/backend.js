@@ -25,11 +25,11 @@ export function startService (pythonPath) {
   let serverScript = join (chineseDir, 'ocr-service', 'server.py');
 
   let env = { ...process.env };
-  env.DARKTAVERN_TOOLTIP_MODEL = join (modelsDir, 'tooltip.onnx');
-  env.DARKTAVERN_REC_MODEL = join (modelsDir, 'paddle', 'ch', 'rec.onnx');
-  env.DARKTAVERN_REC_DICT = join (modelsDir, 'paddle', 'ch', 'dict.txt');
-  env.DARKTAVERN_MAPPING_DIR = join (chineseDir, 'mapping');
-  env.DARKTAVERN_OCR_PORT = String (OCR_PORT);
+  env.SQUIRE_TOOLTIP_MODEL = join (modelsDir, 'tooltip.onnx');
+  env.SQUIRE_REC_MODEL = join (modelsDir, 'paddle', 'ch', 'rec.onnx');
+  env.SQUIRE_REC_DICT = join (modelsDir, 'paddle', 'ch', 'dict.txt');
+  env.SQUIRE_MAPPING_DIR = join (chineseDir, 'mapping');
+  env.SQUIRE_OCR_PORT = String (OCR_PORT);
 
   let cmd, args;
 

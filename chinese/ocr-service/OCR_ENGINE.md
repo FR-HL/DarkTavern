@@ -87,13 +87,13 @@ det 仍在，比 A 慢，但比当前快一截。改动：仅构造参数一行�
 
 `server.py`：
 - `from ocr_engine_rapid import ChineseOCR`
-- `ocr = ChineseOCR()`（RapidOCR 无参构造，自带 det/rec 模型，不再读 `DARKTAVERN_REC_MODEL/REC_DICT`）
+- `ocr = ChineseOCR()`（RapidOCR 无参构造，自带 det/rec 模型，不再读 `SQUIRE_REC_MODEL/REC_DICT`）
 - warmup 改 `ocr.read(dummy)`（旧 `read_line` 已不存在）
 - 删除已无用的 `REC_MODEL_PATH` / `REC_DICT_PATH` 死变量与误导注释
 
 新增：`ocr_engine_rapid.py`（从 GrimVault-Chinese-Edition 拷入，接口 `read(image)->str` 与 server 调用点 `ocr.read(region)` 兼容）。
 
-`electron/backend.js` 仍传 `DARKTAVERN_REC_MODEL/REC_DICT` env，但 server 已不读，属无害冗余（清理需动主进程，暂未做）。
+`electron/backend.js` 传 `SQUIRE_REC_MODEL/REC_DICT` env（改名自 `DARKTAVERN_*`），server 端 `ocr_engine_v1fix.py` 读取（含 `DARKTAVERN_*` 兜底）。
 旧 `ocr_engine.py` 已无人 import，保留作 RapidOCR 出岔子时的回退（死文件，可日后删）。
 
 ## 8. 依赖
@@ -116,7 +116,7 @@ det 仍在，比 A 慢，但比当前快一截。改动：仅构造参数一行�
 | 2 | `ocr_engine_hybrid.py` | RapidOCR v4 rec（动态宽） | 无 | 不切 | `hybrid` |
 | 3 | `ocr_engine_rapid.py` | RapidOCR v4 rec | **有** | 不切 | `rapid` |
 
-切换：环境变量 `DARKTAVERN_OCR_ENGINE` ∈ {v1fix, hybrid, rapid}，`server.py` 顶部读取，**默认 `v1fix`**。
+切换：环境变量 `SQUIRE_OCR_ENGINE`（兼容旧名 `DARKTAVERN_OCR_ENGINE`）∈ {v1fix, hybrid, rapid}，`server.py` 顶部读取，**默认 `v1fix`**。
 切档后**必须重启 app**（OCR 为 Electron 子进程，不重启不加载新代码）。
 档2 仅构造 RapidOCR 的 `TextRecognizer`（rec），启动不加载 det/cls，启动速度与旧引擎同级。
 

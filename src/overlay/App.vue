@@ -84,7 +84,7 @@ onMounted(() => {
       <Popup v-if="popup">
         <div>
           <span v-if="mode === modes.automatic"
-            >DarkTavern
+            >冒险者侍从
             <span class="font-bold underline">自动模式</span> 已启用
             <br />
             <span class="text-base"
@@ -92,7 +92,7 @@ onMounted(() => {
             ></span
           >
           <span v-if="mode === modes.manual"
-            >DarkTavern
+            >冒险者侍从
             <span class="font-bold underline">手动模式</span> 已启用
             <br />
             <span class="text-base"
@@ -100,7 +100,7 @@ onMounted(() => {
             ></span
           >
           <span v-if="mode === modes.disabled"
-            >DarkTavern <span class="font-bold underline">已禁用</span>
+            >冒险者侍从 <span class="font-bold underline">已禁用</span>
             <br />
             <span class="text-base"
               >重新启用前不会执行查价操作</span

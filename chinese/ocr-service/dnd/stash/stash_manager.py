@@ -1109,7 +1109,7 @@ class StashManager:
             return False, "Game window not found. Please make sure Dark and Darker is running."
         try:
             # Force-activate the game window (Alt-key trick) — works even
-            # when another window (e.g. the DarkTavern app) is foreground.
+            # when another window (e.g. the Adventurer's Squire app) is foreground.
             if not macros.force_activate_game_window():
                 logger.warning("Unable to focus the game window — activating via pygetwindow")
                 windows[0].activate()

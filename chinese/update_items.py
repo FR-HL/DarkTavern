@@ -28,7 +28,7 @@ def fetch_all_items():
 
         try:
             req = urllib.request.Request(url)
-            req.add_header("User-Agent", "DarkTavern/1.0")
+            req.add_header("User-Agent", "AdventurersSquire/1.0")
 
             with urllib.request.urlopen(req, timeout=15) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -119,7 +119,7 @@ def main():
         json.dump(names, f, indent=2)
 
     print(f"Saved {len(names)} English names to: {ref_path}")
-    print("\nDone! Use the Mapping Editor in DarkTavern to add Chinese translations.")
+    print("\nDone! Use the Mapping Editor in Adventurer's Squire to add Chinese translations.")
 
 
 if __name__ == "__main__":

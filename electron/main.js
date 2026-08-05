@@ -1,3 +1,4 @@
+import './migrate.js';
 import electron, { globalShortcut, Menu, screen, shell, Tray } from 'electron';
 import { basename, join } from 'node:path';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -78,7 +79,7 @@ app.on ('ready', async () => {
   backend.startService (settings.general.python_path);
 
   tray = new Tray (join (ROOT, 'assets/images/Icon-81x89.png'));
-  tray.setToolTip ('DarkTavern');
+  tray.setToolTip ('冒险者侍从 Adventurer’s Squire');
   refreshTrayMenu ();
   healthTimer = setInterval (() => {
     refreshTrayMenu ();
@@ -678,7 +679,7 @@ function openHomeWindow () {
 
   homeWindow = new BrowserWindow ({
     width: 1280, height: 840, minWidth: 1080, minHeight: 720,
-    show: false, title: 'DarkTavern', autoHideMenuBar: true,
+    show: false, title: '冒险者侍从', autoHideMenuBar: true,
     backgroundColor: settings.general.theme === 'dark' ? '#1c1c1f' : '#f4f4f6',
     webPreferences: { sandbox: false, preload: join (SOURCE, 'preload.cjs') },
   });
@@ -1022,7 +1023,7 @@ async function refreshTrayMenu () {
   const dot = (ok) => ok ? '●' : '○';
 
   tray.setContextMenu (Menu.buildFromTemplate ([
-    { label: `DarkTavern v${app.getVersion ()}`, enabled: false },
+    { label: `冒险者侍从 v${app.getVersion ()}`, enabled: false },
     { type: 'separator' },
     { label: `${dot (ocrStatus)} OCR 侍者：${ocrStatus ? '已就绪' : '唤醒中…'}`, enabled: false },
     { label: `${dot (gameOk)} 游戏窗口：${gameOk ? '已检测到' : '未检测到'}`, enabled: false },

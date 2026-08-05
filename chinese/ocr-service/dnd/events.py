@@ -11,7 +11,7 @@ import logging
 
 from fastapi import WebSocket
 
-logger = logging.getLogger("darktavern-dnd")
+logger = logging.getLogger("squire-dnd")
 
 main_loop: "asyncio.AbstractEventLoop | None" = None
 _clients: "set[WebSocket]" = set()

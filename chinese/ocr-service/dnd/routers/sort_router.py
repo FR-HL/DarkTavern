@@ -109,9 +109,9 @@ def sort_start(body: SortStartRequest):
         return {
             "success": False,
             "error": (
-                "检测到游戏以管理员权限运行，而 DarkTavern 不是管理员。"
+                "检测到游戏以管理员权限运行，而 冒险者侍从 不是管理员。"
                 "Windows 会拦截鼠标模拟输入，整理将无效。"
-                "请以管理员身份运行 DarkTavern（右键→以管理员身份运行），"
+                "请以管理员身份运行 冒险者侍从（右键→以管理员身份运行），"
                 "或取消游戏的管理员权限后重试。"
             ),
             "uipi": status,
@@ -137,9 +137,9 @@ def sort_all_start(body: CharacterOnlyRequest):
         return {
             "success": False,
             "error": (
-                "检测到游戏以管理员权限运行，而 DarkTavern 不是管理员。"
+                "检测到游戏以管理员权限运行，而 冒险者侍从 不是管理员。"
                 "Windows 会拦截鼠标模拟输入，整理将无效。"
-                "请以管理员身份运行 DarkTavern（右键→以管理员身份运行），"
+                "请以管理员身份运行 冒险者侍从（右键→以管理员身份运行），"
                 "或取消游戏的管理员权限后重试。"
             ),
             "uipi": status,
@@ -157,9 +157,9 @@ def merge_stacks_start(body: CharacterOnlyRequest):
         return {
             "success": False,
             "error": (
-                "检测到游戏以管理员权限运行，而 DarkTavern 不是管理员。"
+                "检测到游戏以管理员权限运行，而 冒险者侍从 不是管理员。"
                 "Windows 会拦截鼠标模拟输入，合并将无效。"
-                "请以管理员身份运行 DarkTavern（右键→以管理员身份运行），"
+                "请以管理员身份运行 冒险者侍从（右键→以管理员身份运行），"
                 "或取消游戏的管理员权限后重试。"
             ),
             "uipi": status,
@@ -177,9 +177,9 @@ def cross_sort_start(body: CrossSortRequest):
         return {
             "success": False,
             "error": (
-                "检测到游戏以管理员权限运行，而 DarkTavern 不是管理员。"
+                "检测到游戏以管理员权限运行，而 冒险者侍从 不是管理员。"
                 "Windows 会拦截鼠标模拟输入，整理将无效。"
-                "请以管理员身份运行 DarkTavern（右键→以管理员身份运行），"
+                "请以管理员身份运行 冒险者侍从（右键→以管理员身份运行），"
                 "或取消游戏的管理员权限后重试。"
             ),
             "uipi": status,

@@ -26,7 +26,7 @@ def fetch_all(endpoint, extra_params=""):
             try:
                 req = urllib.request.Request(url)
                 req.add_header("X-Api-Key", API_KEY)
-                req.add_header("User-Agent", "DarkTavern/1.0")
+                req.add_header("User-Agent", "AdventurersSquire/1.0")
                 with urllib.request.urlopen(req, timeout=30) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                 break

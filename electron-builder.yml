@@ -1,5 +1,5 @@
-appId: com.darktavern.app
-productName: DarkTavern
+appId: com.adventurerssquire.app
+productName: AdventurersSquire
 directories:
   output: release
   buildResources: resources

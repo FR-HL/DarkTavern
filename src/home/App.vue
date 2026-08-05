@@ -616,7 +616,7 @@ onBeforeUnmount (() => {
     <aside class="side">
       <div class="brand">
         <svg class="brand-icon" viewBox="0 0 576 512" fill="currentColor"><path d="M0 80l0 48c0 17.7 14.3 32 32 32l16 0 48 0 0-80c0-26.5-21.5-48-48-48S0 53.5 0 80zM112 32c10 13.4 16 30 16 48l0 304c0 35.3 28.7 64 64 64s64-28.7 64-64l0-5.3c0-32.4 26.3-58.7 58.7-58.7L480 320l0-192c0-53-43-96-96-96L112 32zM464 480c61.9 0 112-50.1 112-112c0-8.8-7.2-16-16-16l-245.3 0c-14.7 0-26.7 11.9-26.7 26.7l0 5.3c0 53-43 96-96 96l176 0 96 0z"/></svg>
-        <span class="brand-name"><span class="brand-grad">冒险者</span>酒馆</span>
+        <span class="brand-name"><span class="brand-grad">冒险者</span>侍从</span>
       </div>
 
       <nav class="nav">
@@ -688,7 +688,7 @@ onBeforeUnmount (() => {
       <!-- ============ 概览 ============ -->
       <div class="pane" :class="{ active: pane === 'overview' }">
         <div class="page-title">概览</div>
-        <div class="page-sub">DarkTavern 运行状态一览。</div>
+        <div class="page-sub">冒险者侍从 运行状态一览。</div>
 
         <div class="hero">
           <div class="hero-ey"><span class="hero-dot" :class="{ warn: !gameOk || !ocrOk }"></span>实时状态</div>
@@ -1056,7 +1056,7 @@ onBeforeUnmount (() => {
           <div class="sec-label">一、查价器</div>
           <div class="card">
             <div class="steps">
-              <div class="step"><div class="step-n">1</div><div class="step-t">启动 DarkTavern，等待主页左栏「OCR 侍者」由灰转金（后端加载模型约数秒，需保持后端在后台运行）</div></div>
+              <div class="step"><div class="step-n">1</div><div class="step-t">启动 冒险者侍从，等待主页左栏「OCR 侍者」由灰转金（后端加载模型约数秒，需保持后端在后台运行）</div></div>
               <div class="step"><div class="step-n">2</div><div class="step-t">启动游戏 <b>Dark and Darker</b>，把鼠标<b>悬停</b>在任意物品的提示框上</div></div>
               <div class="step"><div class="step-n">3</div><div class="step-t">按下扫描键（默认 <span class="kbd">{{ scanKey }}</span>，可在查价器页自定义）</div></div>
               <div class="step"><div class="step-n">4</div><div class="step-t">价格面板浮现在物品提示框旁：中文物品名 + 属性 + <b>市场价 / 商人价 / 每格价值</b></div></div>
@@ -1071,7 +1071,7 @@ onBeforeUnmount (() => {
           <div class="sec-label">二、自动整理</div>
           <div class="card">
             <div class="card-note">
-              前置条件：已安装 <b>Wireshark</b>（提供 tshark，安装时勾选 "Add tshark to PATH"）；若游戏以管理员权限运行，DarkTavern 也需<b>以管理员身份运行</b>，否则鼠标操作会被 Windows 拦截。
+              前置条件：已安装 <b>Wireshark</b>（提供 tshark，安装时勾选 "Add tshark to PATH"）；若游戏以管理员权限运行，冒险者侍从也需<b>以管理员身份运行</b>，否则鼠标操作会被 Windows 拦截。
             </div>
             <div class="steps">
               <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>启动抓包</b>，再<b>回到游戏角色选择界面选择角色</b>（游戏只在选角时下发仓库数据），角色的仓库与背包数据即自动出现；数据保存在本地，重启不用重抓</div></div>
@@ -1118,7 +1118,7 @@ onBeforeUnmount (() => {
             <div class="card term-card">
               <div class="term-head">为什么它不是外挂</div>
               <div class="term-body">
-                <p>外挂（作弊程序）的共同特征是<b>侵入游戏本体</b>：读取/修改游戏内存、注入 DLL、篡改网络数据包、修改游戏文件。DarkTavern 一样都不做：</p>
+                <p>外挂（作弊程序）的共同特征是<b>侵入游戏本体</b>：读取/修改游戏内存、注入 DLL、篡改网络数据包、修改游戏文件。冒险者侍从 一样都不做：</p>
                 <ul>
                   <li>全程<b>不碰游戏进程</b>——不注入、不读内存、不写内存</li>
                   <li>不修改游戏文件、不绕过反作弊、不提供游戏内优势操作</li>
@@ -1173,7 +1173,7 @@ onBeforeUnmount (() => {
             <div class="card term-card">
               <div class="term-head">整理时鼠标不动 / 被拦截</div>
               <div class="term-body">
-                <p>游戏以管理员权限运行时，DarkTavern 也需以管理员身份运行（右键 → 以管理员身份运行），或取消游戏快捷方式的管理员选项。</p>
+                <p>游戏以管理员权限运行时，冒险者侍从也需以管理员身份运行（右键 → 以管理员身份运行），或取消游戏快捷方式的管理员选项。</p>
               </div>
             </div>
             <div class="card term-card">
@@ -1198,7 +1198,7 @@ onBeforeUnmount (() => {
             <div class="card term-card">
               <div class="term-head">其他问题</div>
               <div class="term-body">
-                <p>在交流群提问（侧边栏「交流群」可复制群号），或到 GitHub Issues 反馈；附上日志（用户目录 darktavern/logs）能更快定位。</p>
+                <p>在交流群提问（侧边栏「交流群」可复制群号），或到 GitHub Issues 反馈；附上日志（用户目录 AdventurersSquire/logs）能更快定位。</p>
               </div>
             </div>
           </div>
@@ -1208,7 +1208,7 @@ onBeforeUnmount (() => {
           <div class="sec-label">安全说明 · 一句话讲清楚</div>
           <div class="card">
             <div class="term-body">
-              <p>DarkTavern <b>不是外挂</b>。它对你的电脑只做四件事，且全部是<b>人类自己也能做</b>的事：</p>
+              <p>冒险者侍从 <b>不是外挂</b>。它对你的电脑只做四件事，且全部是<b>人类自己也能做</b>的事：</p>
               <ul>
                 <li><b>看屏幕</b>：截取游戏画面像素，用 OCR 识别物品提示框文字 —— 相当于你用自己的眼睛看</li>
                 <li><b>看网络</b>：被动监听游戏网络数据，解码出仓库布局 —— 相当于你打开仓库看一眼</li>
@@ -1231,7 +1231,7 @@ onBeforeUnmount (() => {
       <!-- ============ 关于酒馆 ============ -->
       <div class="pane" :class="{ active: pane === 'about' }">
         <div class="page-title">关于酒馆</div>
-        <div class="page-sub">了解 DarkTavern 的身份、愿景、软件来源与致谢。</div>
+        <div class="page-sub">了解 冒险者侍从 的身份、愿景、软件来源与致谢。</div>
 
         <div class="keeper">
           <div class="keeper-glow"></div>
@@ -1248,7 +1248,7 @@ onBeforeUnmount (() => {
           </div>
           <div class="keeper-vision">
             <p class="keeper-lead">和你一样，我也是一名热爱 <em>Dark and Darker</em> 的普通玩家——曾在漆黑的地牢裡，为一件装备到底值不值而反复纠结。于是，我决定自己动手。</p>
-            <p class="keeper-body">DarkTavern 改编自原版查价器 GrimVault 与开源中文版 GrimVault-Chinese-Edition。最初我基于中文版延续开发，后来因后续维护问题，不愿再麻烦原作者，便潜心研读源码，将软件<strong>完整重写</strong>。没有团队、没有盈利，只是一个玩家想帮玩家的小小心意——愿它让你的每一次冒险，都心中有数、满载而归。</p>
+            <p class="keeper-body">冒险者侍从 改编自原版查价器 GrimVault 与开源中文版 GrimVault-Chinese-Edition。最初我基于中文版延续开发，后来因后续维护问题，不愿再麻烦原作者，便潜心研读源码，将软件<strong>完整重写</strong>。没有团队、没有盈利，只是一个玩家想帮玩家的小小心意——愿它让你的每一次冒险，都心中有数、满载而归。</p>
           </div>
           <div class="about-contacts">
             <a class="contact-chip" href="#" @click.prevent="openLink('https://space.bilibili.com/301927878')">
@@ -1275,7 +1275,7 @@ onBeforeUnmount (() => {
           <div class="card">
             <div class="about-block">
               <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a>、开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>，仓库整理功能则参考了 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>。</p>
-              <p>遵从前辈们的开源精神，DarkTavern 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢 GrimVault、GrimVault-Chinese-Edition 与 DnDTools 铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
+              <p>遵从前辈们的开源精神，冒险者侍从 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢 GrimVault、GrimVault-Chinese-Edition 与 DnDTools 铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
             </div>
             <div class="src-links">
               <a class="src-card" href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">
@@ -1291,7 +1291,7 @@ onBeforeUnmount (() => {
                 <span class="src-desc">仓库整理工具 · 参考来源</span>
               </a>
               <a class="src-card" href="#" @click.prevent="openGithub">
-                <span class="src-name">DarkTavern</span>
+                <span class="src-name">冒险者侍从</span>
                 <span class="src-desc">本项目源码 · 开源续写</span>
               </a>
             </div>
@@ -1303,7 +1303,7 @@ onBeforeUnmount (() => {
           <div class="sec-label">仓库整理 · 致谢</div>
           <div class="card">
             <div class="about-block">
-              <p>DarkTavern 的<b>角色仓库与自动整理</b>功能参考自开源项目 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>——它用网络抓包把仓库可视化的思路给了我极大的启发：抓包解析物品数据、仓库布局可视化、排序算法与整理执行，均在此基础上移植与重写。</p>
+              <p>冒险者侍从 的<b>角色仓库与自动整理</b>功能参考自开源项目 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>——它用网络抓包把仓库可视化的思路给了我极大的启发：抓包解析物品数据、仓库布局可视化、排序算法与整理执行，均在此基础上移植与重写。</p>
               <p>诚挚感谢 DnDTools 项目的无私开源，让「一键整理仓库」这件玩家苦差事变成了可能，也感谢每一位为玩家社区贡献工具的朋友！</p>
             </div>
             <div class="src-links single">
@@ -1336,7 +1336,7 @@ onBeforeUnmount (() => {
           <div class="card">
             <div class="about-block">
               <p><a href="#" @click.prevent="openLink('https://dnd.wiki/')">冒险者酒馆</a>（dnd.wiki）是掌柜的另一部个人作品——Dark and Darker 中英双语 Wiki / 数据库网站：职业 / 装备 / 怪物图鉴、配装模拟与社区配装、市场分析、伤害计算器、排行榜与掉率查询，一应俱全。</p>
-              <p>DarkTavern 的中→英翻译词条表与物品数据同冒险者酒馆共用一套数据源：桌面端负责「要看屏幕的」（游戏内查价 / 仓库整理），网站负责「不用看屏幕的」（数据库 / 配装 / 市场），两边互补，欢迎常来坐坐！</p>
+              <p>冒险者侍从 的中→英翻译词条表与物品数据同冒险者酒馆共用一套数据源：桌面端负责「要看屏幕的」（游戏内查价 / 仓库整理），网站负责「不用看屏幕的」（数据库 / 配装 / 市场），两边互补，欢迎常来坐坐！</p>
             </div>
             <div class="src-links single">
               <a class="src-card" href="#" @click.prevent="openLink('https://dnd.wiki/')">
@@ -1389,7 +1389,7 @@ onBeforeUnmount (() => {
       <!-- ============ 免责声明 ============ -->
       <div class="pane" :class="{ active: pane === 'disclaimer' }">
         <div class="page-title">免责声明</div>
-        <div class="page-sub">使用 DarkTavern 即表示您已阅读并同意以下全部条款，请在使用前仔细阅读。</div>
+        <div class="page-sub">使用 冒险者侍从 即表示您已阅读并同意以下全部条款，请在使用前仔细阅读。</div>
 
         <div class="about-note note-lead">
           <em>使用即同意：</em>您下载、安装、使用或分发本软件的任何行为，均视为已阅读、理解并无条件同意本声明全部内容。如不同意，请立即停止使用并删除本软件。
@@ -1399,7 +1399,7 @@ onBeforeUnmount (() => {
           <div class="sec-label">一、软件性质</div>
           <div class="card">
             <div class="term-body">
-              <p>DarkTavern 是第三方玩家自制、以 MIT 许可证免费开源的独立工具。它与 Ironmace、游戏《Dark and Darker》及其开发者、发行商、代理商之间<strong>不存在任何形式的隶属、关联、授权、认可或合作关系</strong>。</p>
+              <p>冒险者侍从 是第三方玩家自制、以 MIT 许可证免费开源的独立工具。它与 Ironmace、游戏《Dark and Darker》及其开发者、发行商、代理商之间<strong>不存在任何形式的隶属、关联、授权、认可或合作关系</strong>。</p>
               <p>本工具仅用于个人学习、研究与娱乐目的，作者未向任何用户收取费用，也不对任何用户的使用行为负责。</p>
             </div>
           </div>

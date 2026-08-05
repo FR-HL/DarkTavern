@@ -122,7 +122,7 @@ export function wire (overlay, sendBall = null) {
 
 async function queryPrice (tooltipText) {
   try {
-    const headers = { 'User-Agent': 'DarkTavern/1.0' };
+    const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
     if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
 
     const res = await fetch (`${DARKERDB_URL}?tooltip=${encodeURIComponent (tooltipText)}`, { headers, signal: AbortSignal.timeout (15000) });
@@ -165,7 +165,7 @@ async function queryMarketLive (data, scanId, send) {
     const secondary = data.item?.secondary || [];
 
     if (itemId && itemId !== 'id.item.') {
-      const headers = { 'User-Agent': 'DarkTavern/1.0' };
+      const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
       if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
 
       const sorted = [...secondary]

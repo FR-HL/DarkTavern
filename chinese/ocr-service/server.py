@@ -1,7 +1,7 @@
 """
-DarkTavern OCR Service
+Adventurer's Squire OCR Service
 ======================
-Local HTTP server providing Chinese OCR + translation for DarkTavern.
+Local HTTP server providing Chinese OCR + translation for Adventurer's Squire.
 Screen capture → DNN tooltip detection → OCR → translate.
 No DLL injection, no game process interaction - pure screen reading.
 
@@ -53,11 +53,13 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from capture import capture_game_window, find_game_window, get_window_rect, get_monitor_info
 from detect import TooltipDetector
-# OCR engine switch (set env DARKTAVERN_OCR_ENGINE to choose; default = v1fix):
+# OCR engine switch (set env SQUIRE_OCR_ENGINE to choose; default = v1fix):
 #   v1fix  -> old per-line Paddle rec with valley-point slicing (fastest, blue lines may still corrupt)
 #   hybrid -> old numpy segmentation + RapidOCR dynamic-width rec (fast + intact blue lines)
 #   rapid  -> RapidOCR full-image det+rec (accurate, slow)
-_OCR_ENGINE = os.environ.get("DARKTAVERN_OCR_ENGINE", "hybrid").strip().lower()
+_OCR_ENGINE = os.environ.get(
+    "SQUIRE_OCR_ENGINE", os.environ.get("DARKTAVERN_OCR_ENGINE", "hybrid")
+).strip().lower()
 if _OCR_ENGINE == "hybrid":
     from ocr_engine_hybrid import ChineseOCR
 elif _OCR_ENGINE == "rapid":
@@ -70,21 +72,27 @@ from translator import Translator
 
 # Path to tooltip.onnx model
 TOOLTIP_MODEL_PATH = os.environ.get(
-    "DARKTAVERN_TOOLTIP_MODEL",
-    os.path.join(
-        os.path.dirname(__file__),
-        "..", "..", "models", "tooltip.onnx",
+    "SQUIRE_TOOLTIP_MODEL",
+    os.environ.get(
+        "DARKTAVERN_TOOLTIP_MODEL",
+        os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "models", "tooltip.onnx",
+        ),
     ),
 )
 
 # Mapping files directory
 MAPPING_DIR = os.environ.get(
-    "DARKTAVERN_MAPPING_DIR",
-    os.path.join(os.path.dirname(__file__), "..", "mapping"),
+    "SQUIRE_MAPPING_DIR",
+    os.environ.get(
+        "DARKTAVERN_MAPPING_DIR",
+        os.path.join(os.path.dirname(__file__), "..", "mapping"),
+    ),
 )
 
 # Server port
-PORT = int(os.environ.get("DARKTAVERN_OCR_PORT", "19528"))
+PORT = int(os.environ.get("SQUIRE_OCR_PORT", os.environ.get("DARKTAVERN_OCR_PORT", "19528")))
 
 # RapidOCR (PP-OCRv4) ships its own detection + recognition models; no external model paths needed.
 
@@ -94,7 +102,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
-logger = logging.getLogger("darktavern-ocr")
+logger = logging.getLogger("squire-ocr")
 
 # --- Application ---
 
@@ -118,7 +126,7 @@ async def lifespan(_app: FastAPI):
     except Exception:
         pass
 
-app = FastAPI(title="DarkTavern OCR Service", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Adventurer's Squire OCR Service", version="1.0.0", lifespan=lifespan)
 
 # --- DnD Tools routers (capture / stash / sort / packets) ---
 try:
@@ -169,6 +177,13 @@ def initialize():
         candidates = [
             os.path.join(os.path.dirname(__file__), "..", "..", "models", "tooltip.onnx"),
             os.path.expandvars(
+                r"%LOCALAPPDATA%\Programs\AdventurersSquire\resources\models\tooltip.onnx"
+            ),
+            os.path.expandvars(
+                r"%PROGRAMFILES%\AdventurersSquire\native\models\tooltip.onnx"
+            ),
+            # Legacy install locations (pre-rename) kept as fallbacks.
+            os.path.expandvars(
                 r"%LOCALAPPDATA%\Programs\DarkTavern\resources\models\tooltip.onnx"
             ),
             os.path.expandvars(
@@ -182,7 +197,7 @@ def initialize():
 
     if not os.path.exists(model_path):
         logger.error(f"Tooltip model not found at: {model_path}")
-        logger.error("Set DARKTAVERN_TOOLTIP_MODEL environment variable to the correct path")
+        logger.error("Set SQUIRE_TOOLTIP_MODEL environment variable to the correct path")
         sys.exit(1)
 
     logger.info(f"Loading tooltip detection model: {model_path}")

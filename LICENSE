@@ -2,7 +2,7 @@ MIT License
 
 Copyright (c) 2025 DarkerDB (Original GrimVault)
 Copyright (c) 2026 GrimVault Chinese Edition Contributors
-Copyright (c) 2026 DarkTavern
+Copyright (c) 2026 Adventurer's Squire
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -26,9 +26,9 @@ SOFTWARE.
 
 # 附加条款（商标与使用声明）
 
-1. **商标**：「DarkTavern」名称、Logo、图标及相关品牌标识归 DarkTavern 项目作者所有，**不属于**本 MIT 许可证授予范围。未经作者书面许可，不得将上述标识用于任何衍生作品、插件、商业产品或服务。
+1. **商标**：「冒险者侍从 / Adventurer's Squire」名称、Logo、图标及相关品牌标识归 冒险者侍从 项目作者所有，**不属于**本 MIT 许可证授予范围。未经作者书面许可，不得将上述标识用于任何衍生作品、插件、商业产品或服务。
 
-2. **再分发**：MIT 许可证允许自由再分发（含修改版），但禁止将本软件或其修改版作为商品二次销售、捆绑销售或以任何形式向他人收取费用；亦不得以「DarkTavern」名义发布非官方构建产物。此类商业使用需与作者另行签署授权协议。
+2. **再分发**：MIT 许可证允许自由再分发（含修改版），但禁止将本软件或其修改版作为商品二次销售、捆绑销售或以任何形式向他人收取费用；亦不得以「冒险者侍从 / Adventurer's Squire」名义发布非官方构建产物。此类商业使用需与作者另行签署授权协议。
 
 3. **第三方许可**：本软件包含上游项目（GrimVault、GrimVault-Chinese-Edition）的代码，其各自 MIT 版权声明与许可仍适用于相应部分；本条款不改变或缩减上游授予的权利。
 

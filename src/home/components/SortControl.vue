@@ -219,7 +219,7 @@ async function autoCalibrate () {
       calNote.value = '自动校准完成并已保存（特征）';
       await loadFollowCal ();
     } else if (r) {
-      const msg = r.error === 'uipi_blocked' ? '鼠标模拟被拦截（需管理员权限运行 DarkTavern）'
+      const msg = r.error === 'uipi_blocked' ? '鼠标模拟被拦截（需管理员权限运行 冒险者侍从）'
         : r.error === 'game_not_found' ? '未检测到游戏窗口，请先打开游戏仓库界面'
         : '自动校准失败：' + (r.error || '未知错误');
       calNote.value = msg;
@@ -607,7 +607,7 @@ watch (() => props.charId, () => loadStashOptions ());
 
     <div v-if="uipiBlocked" class="uipi-warn">
       <b>鼠标模拟将被系统拦截</b>
-      <span>检测到游戏以<b>管理员权限</b>运行，而 DarkTavern 不是。Windows 会拦截整理时的鼠标操作（游戏内光标不会移动）。请<b>以管理员身份运行 DarkTavern</b>（右键快捷方式 → 以管理员身份运行），或取消游戏快捷方式的"以管理员身份运行"后重试。</span>
+      <span>检测到游戏以<b>管理员权限</b>运行，而 冒险者侍从 不是。Windows 会拦截整理时的鼠标操作（游戏内光标不会移动）。请<b>以管理员身份运行 冒险者侍从</b>（右键快捷方式 → 以管理员身份运行），或取消游戏快捷方式的"以管理员身份运行"后重试。</span>
     </div>
 
     <div class="sec">

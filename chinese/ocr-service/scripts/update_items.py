@@ -225,7 +225,7 @@ def update(force_icons: bool, api_key: str) -> bool:
         logger.error("DARKERDB_API_KEY is required")
         return False
 
-    headers = {"X-Api-Key": api_key, "User-Agent": "DarkTavern-Updater/1.0"}
+    headers = {"X-Api-Key": api_key, "User-Agent": "AdventurersSquire-Updater/1.0"}
 
     records = fetch_all_items(headers, locale="en")
     if not records:

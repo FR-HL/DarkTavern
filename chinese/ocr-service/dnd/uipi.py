@@ -2,7 +2,7 @@
 
 Windows silently drops simulated input (SendInput / mouse_event) that is
 injected from a *non-elevated* process into an *elevated* (admin) window.
-If the game runs as administrator while DarkTavern runs normally, the
+If the game runs as administrator while Adventurer's Squire runs normally, the
 sorter's mouse moves will appear to do nothing.  This module detects that
 condition so the UI can warn the user.
 
