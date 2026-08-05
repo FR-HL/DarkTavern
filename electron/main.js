@@ -78,7 +78,7 @@ app.on ('before-quit', () => {
 app.on ('ready', async () => {
   backend.startService (settings.general.python_path);
 
-  tray = new Tray (join (ROOT, 'assets/images/Icon-81x89.png'));
+  tray = new Tray (join (ROOT, 'assets/images/icon.ico'));
   tray.setToolTip ('冒险者侍从 Adventurer’s Squire');
   refreshTrayMenu ();
   healthTimer = setInterval (() => {
@@ -355,6 +355,9 @@ app.on ('ready', async () => {
     })(),
     developer_mode: !!settings.general.developer_mode,
     theme: settings.general.theme === 'dark' ? 'dark' : 'light',
+    app_version: app.getVersion (),
+    disclaimer_agreed_version: settings.general.disclaimer_agreed_version || '',
+    auto_check_update: settings.general.auto_check_update !== false,
   }));
 
   ipcMain.handle ('settings:save', (e, data) => {
@@ -400,6 +403,12 @@ app.on ('ready', async () => {
         homeWindow.setBackgroundColor (data.theme === 'dark' ? '#1c1c1f' : '#f4f4f6');
       }
     }
+    if (data.disclaimer_agreed_version !== undefined) {
+      settings.general.disclaimer_agreed_version = String (data.disclaimer_agreed_version || '');
+    }
+    if (data.auto_check_update !== undefined) {
+      settings.general.auto_check_update = !!data.auto_check_update;
+    }
     if (data.default_mode !== undefined) { settings.general.default_mode = data.default_mode; needSend = true; }
     if (data.alignment !== undefined) { settings.general.alignment = data.alignment; needSend = true; }
     if (data.scale !== undefined) { settings.general.scale = parseFloat (data.scale); needSend = true; }
@@ -422,9 +431,70 @@ app.on ('ready', async () => {
     return { success: true };
   });
 
+  ipcMain.handle ('app:quit', () => {
+    app.quit ();
+    return { success: true };
+  });
+
+  ipcMain.handle ('update:check', () => checkForUpdate ());
+
   openHomeWindow ();
   createBallWindow ();
+  scheduleDailyUpdateCheck ();
 });
+
+const UPDATE_API = 'https://api.github.com/repos/FR-HL/DarkTavern/releases/latest';
+
+function compareVersions (a, b) {
+  const pa = String (a).split ('.').map (n => parseInt (n) || 0);
+  const pb = String (b).split ('.').map (n => parseInt (n) || 0);
+  for (let i = 0; i < Math.max (pa.length, pb.length); i++) {
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x - y;
+  }
+  return 0;
+}
+
+async function checkForUpdate () {
+  try {
+    const res = await fetch (UPDATE_API, {
+      headers: { 'User-Agent': 'AdventurersSquire', 'Accept': 'application/vnd.github+json' },
+    });
+    if (!res.ok) return { success: false, error: `HTTP ${res.status}` };
+    const data = await res.json ();
+    const latest = String (data.tag_name || '').replace (/^v/i, '');
+    const current = app.getVersion ();
+    if (!latest) return { success: false, error: '无版本信息' };
+    return {
+      success: true,
+      has_update: compareVersions (latest, current) > 0,
+      latest,
+      current,
+      url: data.html_url || 'https://github.com/FR-HL/DarkTavern/releases',
+    };
+  } catch (e) {
+    return { success: false, error: e?.message || String (e) };
+  }
+}
+
+function todayStr () {
+  const d = new Date ();
+  return `${d.getFullYear ()}-${String (d.getMonth () + 1).padStart (2, '0')}-${String (d.getDate ()).padStart (2, '0')}`;
+}
+
+function scheduleDailyUpdateCheck () {
+  if (settings.general.auto_check_update === false) return;
+  const today = todayStr ();
+  if (settings.general.last_update_check === today) return;
+  settings.general.last_update_check = today;
+  saveSettings ();
+  setTimeout (async () => {
+    const r = await checkForUpdate ();
+    if (r.success && r.has_update && homeWindow && !homeWindow.isDestroyed ()) {
+      homeWindow.webContents.send ('update:available', r);
+    }
+  }, 8000);
+}
 
 async function registerScanHotkey (overlay) {
   let key = settings.hotkeys.run_price_check;
@@ -680,6 +750,7 @@ function openHomeWindow () {
   homeWindow = new BrowserWindow ({
     width: 1280, height: 840, minWidth: 1080, minHeight: 720,
     show: false, title: '冒险者侍从', autoHideMenuBar: true,
+    icon: join (ROOT, 'assets/images/icon.ico'),
     backgroundColor: settings.general.theme === 'dark' ? '#1c1c1f' : '#f4f4f6',
     webPreferences: { sandbox: false, preload: join (SOURCE, 'preload.cjs') },
   });

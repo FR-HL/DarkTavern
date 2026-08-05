@@ -13,6 +13,7 @@ import adminAvatar from '@assets/images/admin.avif';
 import StashView from './components/StashView.vue';
 import SortControl from './components/SortControl.vue';
 import PacketPane from './components/PacketPane.vue';
+import DisclaimerBody from './components/DisclaimerBody.vue';
 
 const invoke = (channel, data) => window.electron.invoke (channel, data);
 
@@ -67,6 +68,18 @@ const settingsStatus = reactive ({ type: '', text: '' });
 const mappingStatus = reactive ({ type: '', text: '' });
 const toastMsg = ref ('');
 const toastShow = ref (false);
+
+const disclaimerShow = ref (false);
+const disclaimerFull = ref (false);
+const appVersion = ref ('');
+
+const autoCheckUpdate = ref (true);
+const updateChecking = ref (false);
+const updatePill = ref ('');
+const updatePillCls = ref ('');
+const updateHasNew = ref (false);
+const updateLatest = ref ('');
+const updateUrl = ref ('');
 
 const isListening = ref (false);
 const newKeybind = ref (null);
@@ -461,9 +474,15 @@ async function loadSettings () {
     alignment.value = d.alignment || 'attached';
     scale.value = d.scale || 1.0;
     launchOnStartup.value = !!d.launch_on_startup;
+    autoCheckUpdate.value = d.auto_check_update !== false;
     developerMode.value = !!d.developer_mode;
     theme.value = d.theme === 'dark' ? 'dark' : 'light';
     applyTheme ();
+    appVersion.value = d.app_version || '';
+    if (appVersion.value && d.disclaimer_agreed_version !== appVersion.value) {
+      disclaimerFull.value = false;
+      disclaimerShow.value = true;
+    }
     setRune ('key', 'ok', '已绑定', 'var(--gold)');
     if (d.api_key) setRune ('api', 'ok', '已配置', 'var(--teal)');
     else setRune ('api', 'pending', '未配置', 'var(--ink-faint)');
@@ -480,6 +499,65 @@ async function saveApiKey () {
 }
 function toggleApiKeyVisibility () { apiKeyVisible.value = !apiKeyVisible.value; }
 async function saveLaunch () { const r = await invoke ('settings:save', { launch_on_startup: launchOnStartup.value }); if (r.success) showToast ('已保存'); }
+
+async function agreeDisclaimer () {
+  const r = await invoke ('settings:save', { disclaimer_agreed_version: appVersion.value });
+  if (r?.success) disclaimerShow.value = false;
+}
+
+function declineDisclaimer () {
+  invoke ('app:quit');
+}
+
+function toggleDisclaimerFull () {
+  disclaimerFull.value = !disclaimerFull.value;
+}
+
+async function toggleAutoCheckUpdate () {
+  autoCheckUpdate.value = !autoCheckUpdate.value;
+  const r = await invoke ('settings:save', { auto_check_update: autoCheckUpdate.value });
+  if (r?.success) showToast ('已保存');
+  else autoCheckUpdate.value = !autoCheckUpdate.value;
+}
+
+function applyUpdateResult (r) {
+  if (!r?.success) {
+    updatePill.value = '检查失败';
+    updatePillCls.value = 'bad';
+    updateHasNew.value = false;
+    return;
+  }
+  updateLatest.value = r.latest || '';
+  updateUrl.value = r.url || '';
+  if (r.has_update) {
+    updateHasNew.value = true;
+    updatePill.value = `发现新版本 v${r.latest}`;
+    updatePillCls.value = 'new';
+  } else {
+    updateHasNew.value = false;
+    updatePill.value = '已是最新版本';
+    updatePillCls.value = 'ok';
+  }
+}
+
+async function checkUpdateNow () {
+  if (updateChecking.value) return;
+  updateChecking.value = true;
+  updatePill.value = '检查中…';
+  updatePillCls.value = '';
+  try {
+    const r = await invoke ('update:check');
+    applyUpdateResult (r);
+  } catch (e) {
+    applyUpdateResult ({ success: false });
+  } finally {
+    updateChecking.value = false;
+  }
+}
+
+function downloadUpdate () {
+  if (updateUrl.value) window.electron.openExternal (updateUrl.value);
+}
 
 async function toggleDeveloperMode () {
   developerMode.value = !developerMode.value;
@@ -591,6 +669,10 @@ onMounted (() => {
     if (!d?.stash_id) return;
     sortStashId.value = String (d.stash_id);
     invoke ('stash:set-current', { id: String (d.stash_id), label: d.label || '' });
+  });
+  window.electron.on ('update:available', (r) => {
+    applyUpdateResult (r);
+    if (r?.has_update) showToast (`发现新版本 v${r.latest}，前往设置下载`);
   });
   document.addEventListener ('keydown', onKeyDown);
   document.addEventListener ('mousedown', onMouseDown);
@@ -949,6 +1031,32 @@ onBeforeUnmount (() => {
               </div>
               <div class="srow-ctl">
                 <label class="switch"><input type="checkbox" :checked="developerMode" @change="toggleDeveloperMode"><span class="track"></span></label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">软件更新</div>
+          <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">当前版本</div>
+                <div class="srow-d">v{{ appVersion }} · 新版本需手动下载安装，设置与记录不会丢失</div>
+              </div>
+              <div class="srow-ctl">
+                <span class="ocr-pill" :class="updatePillCls">{{ updatePill || '未检查' }}</span>
+                <button class="btn subtle" :disabled="updateChecking" @click="checkUpdateNow">{{ updateChecking ? '检查中…' : '检查更新' }}</button>
+                <button v-if="updateHasNew" class="btn primary" @click="downloadUpdate">下载新版本</button>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">自动检查更新</div>
+                <div class="srow-d">每天首次打开软件时自动检查一次，发现新版本会提示</div>
+              </div>
+              <div class="srow-ctl">
+                <label class="switch"><input type="checkbox" :checked="autoCheckUpdate" @change="toggleAutoCheckUpdate"><span class="track"></span></label>
               </div>
             </div>
           </div>
@@ -1391,146 +1499,7 @@ onBeforeUnmount (() => {
         <div class="page-title">免责声明</div>
         <div class="page-sub">使用 冒险者侍从 即表示您已阅读并同意以下全部条款，请在使用前仔细阅读。</div>
 
-        <div class="about-note note-lead">
-          <em>使用即同意：</em>您下载、安装、使用或分发本软件的任何行为，均视为已阅读、理解并无条件同意本声明全部内容。如不同意，请立即停止使用并删除本软件。
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">一、软件性质</div>
-          <div class="card">
-            <div class="term-body">
-              <p>冒险者侍从 是第三方玩家自制、以 MIT 许可证免费开源的独立工具。它与 Ironmace、游戏《Dark and Darker》及其开发者、发行商、代理商之间<strong>不存在任何形式的隶属、关联、授权、认可或合作关系</strong>。</p>
-              <p>本工具仅用于个人学习、研究与娱乐目的，作者未向任何用户收取费用，也不对任何用户的使用行为负责。</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">二、游戏账号风险（请务必阅读）</div>
-          <div class="terms-grid">
-            <div class="card term-card">
-              <div class="term-head">封禁与处罚</div>
-              <div class="term-body">
-                <p>因使用本工具导致的任何账号处罚，全部风险与后果由使用者自行承担：</p>
-                <ul>
-                  <li>临时或永久封禁账号</li>
-                  <li>限制交易 / 拍卖行 / 组队等游戏功能</li>
-                  <li>限制登录或强制下线</li>
-                  <li>降低账号信用或声誉</li>
-                </ul>
-              </div>
-            </div>
-            <div class="card term-card">
-              <div class="term-head">虚拟财产损失</div>
-              <div class="term-body">
-                <p>包括但不限于以下损失，作者一律不承担任何责任：</p>
-                <ul>
-                  <li>金币、道具、装备等虚拟财产损失</li>
-                  <li>角色数据、成就与游戏进度损失</li>
-                  <li>账号本身的价值贬损或无法找回</li>
-                  <li>因处罚产生的间接经济损失</li>
-                </ul>
-              </div>
-            </div>
-            <div class="card term-card">
-              <div class="term-head">官方条款冲突</div>
-              <div class="term-body">
-                <p>游戏官方用户协议、服务条款或公告可能明示或暗示禁止第三方工具。使用者需自行确认使用行为合规，并承担由此产生的全部后果。游戏运营方随时可能更新政策或调整检测手段，本工具<strong>不保证</strong>始终被允许使用。</p>
-              </div>
-            </div>
-            <div class="card term-card">
-              <div class="term-head">自查义务</div>
-              <div class="term-body">
-                <ul>
-                  <li>使用前请自行查阅游戏最新规则</li>
-                  <li>建议先在小号试用，确认无风险再用于主账号</li>
-                  <li>任何账号问题请第一时间联系游戏官方客服</li>
-                  <li>本工具不提供任何账号申诉或恢复协助</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">三、功能与使用风险</div>
-          <div class="terms-grid">
-            <div class="card term-card">
-              <div class="term-head">自动整理</div>
-              <div class="term-body">
-                <p>自动整理通过模拟鼠标操作完成，可能因游戏界面变动、网络延迟、窗口失焦等原因产生误操作。使用前请确认已打开仓库界面且游戏窗口在前台。因误操作导致的物品错放、误卖、丢失等，由使用者自行承担。</p>
-              </div>
-            </div>
-            <div class="card term-card">
-              <div class="term-head">网络抓包</div>
-              <div class="term-body">
-                <p>仓库可视化基于游戏网络数据解析，仅在本机展示与整理。请勿将捕获的数据用于任何非法用途；作者不对数据被滥用造成的后果负责。</p>
-              </div>
-            </div>
-            <div class="card term-card">
-              <div class="term-head">下载安全</div>
-              <div class="term-body">
-                <p>请仅从官方渠道（GitHub 仓库与官方 Release）获取本软件与更新。从非官方渠道下载的修改版可能包含恶意代码，由此造成的一切损失作者不承担任何责任。</p>
-              </div>
-            </div>
-            <div class="card term-card">
-              <div class="term-head">运行环境</div>
-              <div class="term-body">
-                <p>本工具在 Windows 平台开发与测试。在其他系统、虚拟机、云电脑或与第三方检测软件共存等环境下出现的问题，作者不保证修复，亦不承担责任。</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">四、数据与准确性</div>
-          <div class="card">
-            <div class="term-body">
-              <p>本工具展示的价格、属性、翻译等数据来自第三方公开数据（如 DarkerDB API），可能存在延迟、错误或过时。作者不保证数据的准确性、完整性、时效性，相关内容<strong>不构成任何投资、交易或游戏行为建议</strong>。用户依据本工具做出的任何游戏内决策，后果自行承担。</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">五、知识产权</div>
-          <div class="card">
-            <div class="term-body">
-              <p>游戏中出现的名称、美术、数据等知识产权归 Ironmace 或其授权方所有。本软件包含并依赖多个第三方开源项目与模型（GrimVault、RapidOCR、PaddleOCR 等），各自按其许可证提供；本软件名称与图标为作者品牌标识，详见 LICENSE。</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">六、责任免除（最大程度）</div>
-          <div class="card">
-            <div class="term-body">
-              <p>本软件按「现状」（AS IS）提供，作者不作任何明示或暗示担保，包括但不限于适销性、特定用途适用性、无侵权。不担保软件无错误、无中断、无病毒，也不担保与您的系统或游戏版本兼容。</p>
-              <p>在法律允许的最大范围内，作者对因使用或无法使用本软件造成的任何直接、间接、偶然、特殊或惩罚性损害概不负责，包括但不限于利润损失、数据丢失、硬件损坏、游戏账号损失（含封禁、限制、虚拟财产损失）。若当地法律不允许部分限制，则相应部分以当地法律允许的最大范围为准。</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">七、隐私</div>
-          <div class="card">
-            <div class="term-body">
-              <p>本工具不收集、不上传任何个人信息；设置、日志与查询记录仅保存在本机。查价请求仅携带用户自行填写的 API Key 发送至 DarkerDB 官方接口，作者无法获取也无法保存您的 API Key。</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec">
-          <div class="sec-label">八、条款更新</div>
-          <div class="card">
-            <div class="term-body">
-              <p>作者保留随时修改本声明的权利，更新后不再另行通知，继续使用即视为接受更新后的条款。请以 GitHub 仓库中的最新版本为准。</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="about-note">
-          <em>最后提醒：</em>使用第三方工具始终存在未知风险。如您对游戏账号十分珍视，建议谨慎使用；任何因使用本工具产生的问题，请第一时间停止使用并通过 GitHub Issues 反馈，但作者不承担任何赔偿义务。
-        </div>
+        <DisclaimerBody />
       </div>
 
       <!-- ============ 赞助酒馆 ============ -->
@@ -1607,6 +1576,37 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="about-note">© 2026 方源Official · 如有疑问请联系：1292517294@qq.com</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="disc-mask" v-if="disclaimerShow">
+    <div class="disc-modal" :class="{ full: disclaimerFull }">
+      <div class="disc-head">
+        <svg class="disc-icon" viewBox="0 0 512 512" fill="currentColor"><path d="M256 32c14.2 0 27.3 7.5 34.5 19.8l216 368c7.3 12.4 7.3 27.7 .2 40.1S486.3 480 472 480H40c-14.3 0-27.6-7.7-34.7-20.1s-7-27.8 .2-40.1l216-368C228.7 39.5 241.8 32 256 32zm0 128c-13.3 0-24 10.7-24 24V296c0 13.3 10.7 24 24 24s24-10.7 24-24V184c0-13.3-10.7-24-24-24zm32 224a32 32 0 1 0 -64 0 32 32 0 1 0 64 0z"/></svg>
+        <div class="disc-title">使用前必读 · 免责声明</div>
+      </div>
+
+      <div class="disc-body" v-if="!disclaimerFull">
+        <p class="disc-lead">欢迎使用 <b>冒险者侍从</b>。本工具为第三方玩家自制、以 MIT 许可证免费开源，与 Ironmace 及《Dark and Darker》<b>不存在任何形式的隶属、关联、授权或认可关系</b>。点击「同意并继续」即视为您已阅读、理解并接受完整《免责声明》。</p>
+        <ul class="disc-points">
+          <li><b>账号风险</b>：因使用本工具导致的任何账号处罚（如封禁、功能限制）及金币、道具等虚拟财产损失，全部由使用者自行承担。</li>
+          <li><b>使用风险</b>：自动整理通过模拟鼠标操作完成，可能因游戏界面变动、延迟等原因产生误操作；请仅从官方渠道（GitHub 仓库与官方 Release）获取本软件。</li>
+          <li><b>数据与责任</b>：价格等数据来自第三方公开接口，可能存在延迟或错误，仅供参考；软件按「现状」提供，作者不对任何直接或间接损失承担责任。</li>
+        </ul>
+        <p class="disc-note">如不同意上述条款，请立即停止使用并删除本软件。</p>
+      </div>
+
+      <div class="disc-scroll" v-else>
+        <DisclaimerBody />
+      </div>
+
+      <div class="disc-foot">
+        <a class="disc-link" @click="toggleDisclaimerFull">{{ disclaimerFull ? '返回摘要' : '查看完整《免责声明》' }}</a>
+        <div class="disc-actions">
+          <button class="btn subtle" @click="declineDisclaimer">不同意并退出</button>
+          <button class="btn primary" @click="agreeDisclaimer">同意并继续</button>
+        </div>
       </div>
     </div>
   </div>
