@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
@@ -106,10 +106,33 @@ async function clearData () {
   window.dispatchEvent (new CustomEvent ('dnd:characters-refresh'));
 }
 
-onMounted (() => {
+let refreshTimer = null;
+let ocrReady = false;
+
+function fullRefresh () {
   refreshCapture ();
   loadInterfaces ();
   loadDiagnose ();
+}
+
+onMounted (() => {
+  fullRefresh ();
+  // 组件常驻（v-show）后不再随切换重建：启动时后端可能尚未就绪，
+  // 用轻量轮询保证抓包状态最终一致，并在后端就绪时补一次完整刷新。
+  refreshTimer = setInterval (() => {
+    refreshCapture ();
+    if (ocrReady && refreshTimer) { clearInterval (refreshTimer); refreshTimer = null; }
+  }, 5000);
+  window.electron.on ('ocr:status', (d) => {
+    if (d?.ok && !ocrReady) {
+      ocrReady = true;
+      fullRefresh ();
+    }
+  });
+});
+
+onBeforeUnmount (() => {
+  if (refreshTimer) { clearInterval (refreshTimer); refreshTimer = null; }
 });
 </script>
 
