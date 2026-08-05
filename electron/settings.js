@@ -22,6 +22,7 @@ const defaults = {
     ball_visible: true,
     developer_mode: false,
     theme: 'light',
+    font_scale: '1.0',
     disclaimer_agreed_version: '',
     auto_check_update: true,
     last_update_check: '',
@@ -75,6 +76,7 @@ settings.general.ball_locked = toBool (settings.general.ball_locked);
 settings.general.ball_visible = toBool (settings.general.ball_visible);
 settings.general.developer_mode = toBool (settings.general.developer_mode);
 settings.general.theme = settings.general.theme === 'dark' ? 'dark' : 'light';
+settings.general.font_scale = parseFloat (settings.general.font_scale) || 1.0;
 settings.general.disclaimer_agreed_version = settings.general.disclaimer_agreed_version || '';
 settings.general.auto_check_update = settings.general.auto_check_update === false || settings.general.auto_check_update === 'false' ? false : true;
 settings.general.last_update_check = settings.general.last_update_check || '';

@@ -106,6 +106,34 @@ const developerMode = ref (false);
 const devCard = ref ('');
 const theme = ref ('light');
 
+// ── 设置页 · 字体大小 ──
+const FONT_SCALES = [
+  { key: 0.8, label: '特小' },
+  { key: 0.9, label: '小' },
+  { key: 1.0, label: '标准' },
+  { key: 1.1, label: '大' },
+  { key: 1.2, label: '特大' },
+  { key: 1.3, label: '超大' },
+  { key: 1.4, label: '巨大' },
+];
+const fontScale = ref (1.0);
+
+function applyFont () {
+  document.documentElement.style.zoom = String (fontScale.value);
+}
+
+async function setFontSize (v) {
+  if (fontScale.value === v) return;
+  const prev = fontScale.value;
+  fontScale.value = v;
+  applyFont ();
+  const r = await invoke ('settings:save', { font_scale: v });
+  if (!r?.success) {
+    fontScale.value = prev;
+    applyFont ();
+  }
+}
+
 function applyTheme () {
   document.documentElement.dataset.theme = theme.value === 'dark' ? 'dark' : 'light';
 }
@@ -485,6 +513,8 @@ async function loadSettings () {
     if (d.stash_next_key) stashNextKey.value = d.stash_next_key;
     theme.value = d.theme === 'dark' ? 'dark' : 'light';
     applyTheme ();
+    fontScale.value = parseFloat (d.font_scale) || 1.0;
+    applyFont ();
     appVersion.value = d.app_version || '';
     if (appVersion.value && d.disclaimer_agreed_version !== appVersion.value) {
       disclaimerFull.value = false;
@@ -1029,6 +1059,19 @@ onBeforeUnmount (() => {
                   </button>
                   <button class="seg-opt" :class="{ on: theme === 'dark' }" @click="setTheme('dark')">
                     <span class="seg-t">黑夜</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">字体大小</div>
+                <div class="srow-d">调整主页文字大小（不影响游戏内悬浮窗）</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="seg">
+                  <button v-for="f in FONT_SCALES" :key="f.key" class="seg-opt" :class="{ on: fontScale === f.key }" @click="setFontSize(f.key)">
+                    <span class="seg-t">{{ f.label }}</span>
                   </button>
                 </div>
               </div>

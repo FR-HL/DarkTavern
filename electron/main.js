@@ -363,6 +363,7 @@ app.on ('ready', async () => {
     })(),
     developer_mode: !!settings.general.developer_mode,
     theme: settings.general.theme === 'dark' ? 'dark' : 'light',
+    font_scale: parseFloat (settings.general.font_scale) || 1.0,
     app_version: app.getVersion (),
     disclaimer_agreed_version: settings.general.disclaimer_agreed_version || '',
     auto_check_update: settings.general.auto_check_update !== false,
@@ -410,6 +411,9 @@ app.on ('ready', async () => {
       if (homeWindow && !homeWindow.isDestroyed ()) {
         homeWindow.setBackgroundColor (data.theme === 'dark' ? '#1c1c1f' : '#f4f4f6');
       }
+    }
+    if (data.font_scale !== undefined) {
+      settings.general.font_scale = Math.min (1.4, Math.max (0.8, parseFloat (data.font_scale) || 1.0));
     }
     if (data.disclaimer_agreed_version !== undefined) {
       settings.general.disclaimer_agreed_version = String (data.disclaimer_agreed_version || '');
