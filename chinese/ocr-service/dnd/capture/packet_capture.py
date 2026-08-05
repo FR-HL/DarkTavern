@@ -188,7 +188,21 @@ def _read_positive_float_env(var_name: str, default: float) -> float:
 GAME_PROCESS_NAMES = ("DungeonCrawler.exe", "DarkAndDarker.exe")
 
 
-def detect_game_proxy_port() -> Optional[int]:
+def is_game_process(process_name: Optional[str]) -> bool:
+    """Case-insensitive game process name match (tolerates .exe / variants)."""
+    if not process_name:
+        return False
+    name = process_name.lower()
+    for game in GAME_PROCESS_NAMES:
+        base = game.lower()
+        if base.endswith(".exe"):
+            base = base[:-4]
+        if name == base or name == base + ".exe" or name.startswith(base):
+            return True
+    return False
+
+
+def detect_game_proxy_port(retries: int = 2) -> Optional[int]:
     """Detect a game accelerator's local proxy port.
 
     When the game routes through a local accelerator (e.g. GIAcceler), the game
@@ -198,29 +212,38 @@ def detect_game_proxy_port() -> Optional[int]:
 
     Returns the proxy port (most common one if several), or None when the game
     is not running or has no loopback connection (i.e. a direct connection).
+    Retries a few times to ride out transient connection states.
     """
     from collections import Counter
-    proxy_ports: Counter = Counter()
-    try:
-        for proc in psutil.process_iter(['name']):
-            try:
-                if proc.info.get('name') not in GAME_PROCESS_NAMES:
-                    continue
-                conn_fn = getattr(proc, 'net_connections', None) or proc.connections
-                for conn in conn_fn(kind='tcp'):
-                    raddr = getattr(conn, 'raddr', None)
-                    status = getattr(conn, 'status', None)
-                    if raddr and raddr[0] == '127.0.0.1' and status == 'ESTABLISHED':
+    for _ in range(max(1, retries + 1)):
+        proxy_ports: Counter = Counter()
+        try:
+            for proc in psutil.process_iter(['name']):
+                try:
+                    if not is_game_process(proc.info.get('name')):
+                        continue
+                    conn_fn = getattr(proc, 'net_connections', None) or proc.connections
+                    for conn in conn_fn(kind='tcp'):
+                        raddr = getattr(conn, 'raddr', None)
+                        status = getattr(conn, 'status', None)
+                        if not raddr or raddr[0] != '127.0.0.1':
+                            continue
+                        # Count active/established connections; ignore listener
+                        # sockets and fully-closed ones (transient states like
+                        # SYN_SENT still indicate an accelerator in use).
+                        if status in ('LISTEN', 'CLOSED', 'CLOSE_WAIT', 'LAST_ACK'):
+                            continue
                         proxy_ports[raddr[1]] += 1
-            except (psutil.Error, OSError):
-                continue
-    except Exception as exc:
-        logger.debug(f"Game proxy port detection failed: {exc}")
-        return None
+                except (psutil.Error, OSError):
+                    continue
+        except Exception as exc:
+            logger.debug(f"Game proxy port detection failed: {exc}")
+            return None
 
-    if not proxy_ports:
-        return None
-    return proxy_ports.most_common(1)[0][0]
+        if proxy_ports:
+            return proxy_ports.most_common(1)[0][0]
+        time.sleep(1.0)
+    return None
 
 
 def find_loopback_interface(tshark_path: Optional[str]) -> str:
@@ -293,6 +316,8 @@ class PacketCapture:
         self._apply_tshark_environment()
         self._user_requested_stop = False
         self._force_closing = False
+        self._mode_recheck = False
+        self._last_packet_ts = 0.0
 
         # Accelerator-aware capture state (set when capture_loop starts)
         self.capture_mode = "direct"        # "direct" or "accelerator"
@@ -612,98 +637,153 @@ class PacketCapture:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            # Detect a game accelerator (game routing through a local proxy).
-            # When present, the game's plaintext protocol packets flow over the
-            # loopback interface to the proxy port, so capture there instead of
-            # a physical NIC (which would only see the accelerator's tunnel).
-            proxy_port = detect_game_proxy_port()
-            if proxy_port:
-                self.capture_mode = "accelerator"
-                self.active_proxy_port = proxy_port
-                capture_iface = find_loopback_interface(self.tshark_path)
-                display_filter = f'tcp.srcport == {proxy_port}'
-                self.logger.info(
-                    f"Accelerator detected — capturing loopback '{capture_iface}', proxy port {proxy_port}"
-                )
-            else:
-                self.capture_mode = "direct"
-                self.active_proxy_port = None
-                capture_iface = self.interface
-                local_ip = self.get_local_ip()
-                if not local_ip:
-                    self.logger.error(f"Could not find IP address for interface {self.interface}")
-                    return
-                display_filter = (
-                    f'ip.dst == {local_ip} and '
-                    f'tcp.srcport >= {self.port_range[0]} and '
-                    f'tcp.srcport <= {self.port_range[1]}'
-                )
-                self.logger.info(f"Starting capture on interface: {self.interface}, IP: {local_ip}")
+            while not self._stop_event.is_set():
+                self._mode_recheck = False
+                self._last_packet_ts = time.time()
+                self.logger.info("Initializing capture session")
 
-            self.logger.info(f"Display filter: {display_filter}")
+                # Detect a game accelerator (game routing through a local proxy).
+                # When present, the game's plaintext protocol packets flow over the
+                # loopback interface to the proxy port, so capture there instead of
+                # a physical NIC (which would only see the accelerator's tunnel).
+                proxy_port = detect_game_proxy_port()
+                if proxy_port:
+                    self.capture_mode = "accelerator"
+                    self.active_proxy_port = proxy_port
+                    capture_iface = find_loopback_interface(self.tshark_path)
+                    display_filter = f'tcp.srcport == {proxy_port}'
+                    self.logger.info(
+                        f"Accelerator detected — capturing loopback '{capture_iface}', proxy port {proxy_port}"
+                    )
+                else:
+                    self.capture_mode = "direct"
+                    self.active_proxy_port = None
+                    capture_iface = self.interface
+                    local_ip = self.get_local_ip()
+                    if not local_ip:
+                        self.logger.error(f"Could not find IP address for interface {self.interface}")
+                        break
+                    display_filter = (
+                        f'ip.dst == {local_ip} and '
+                        f'tcp.srcport >= {self.port_range[0]} and '
+                        f'tcp.srcport <= {self.port_range[1]}'
+                    )
+                    self.logger.info(f"Starting capture on interface: {self.interface}, IP: {local_ip}")
 
-            self._current_loop = loop
-            try:
-                self._current_capture = pyshark.LiveCapture(
-                    interface=capture_iface,
-                    display_filter=display_filter,
-                    eventloop=loop,
-                    tshark_path=self.tshark_path
-                )
+                self.logger.info(f"Display filter: {display_filter}")
 
-                if hasattr(self._current_capture, "keep_packets"):
-                    try:
-                        self._current_capture.keep_packets = False
-                        self.logger.debug("LiveCapture configured with keep_packets=False")
-                    except Exception as keep_err:
-                        self.logger.debug(f"Unable to set keep_packets flag: {keep_err}")
-            except Exception as capture_error:
-                self.logger.error(f"Failed to create LiveCapture: {capture_error}")
-                if "tshark" in str(capture_error).lower():
-                    self.logger.error("This appears to be a tshark-related issue. Make sure tshark is properly installed and accessible.")
-                return
+                self._current_loop = loop
+                try:
+                    self._current_capture = pyshark.LiveCapture(
+                        interface=capture_iface,
+                        display_filter=display_filter,
+                        eventloop=loop,
+                        tshark_path=self.tshark_path
+                    )
 
-            for packet in self._current_capture.sniff_continuously():
-                if self._stop_event.is_set():
-                    break
-                if 'TCP' in packet and hasattr(packet.tcp, 'payload'):
-                    # Reassemble each TCP stream independently — the game uses
-                    # several connections and their bytes must not be mixed.
-                    # Since we now capture both directions, upstream and
-                    # downstream segments of the *same* connection are also
-                    # split into separate buffers — interleaving them would
-                    # corrupt reassembly for large packets.
-                    stream_key = getattr(packet.tcp, 'stream', None)
-                    if stream_key is None:
+                    if hasattr(self._current_capture, "keep_packets"):
                         try:
-                            stream_key = f"{packet.tcp.srcport}-{packet.tcp.dstport}"
-                        except Exception:
-                            stream_key = "default"
-                    try:
-                        srcport = int(packet.tcp.srcport)
-                    except (ValueError, TypeError):
-                        srcport = None
-                    if self.active_proxy_port is not None:
-                        is_downstream = srcport == self.active_proxy_port
+                            self._current_capture.keep_packets = False
+                            self.logger.debug("LiveCapture configured with keep_packets=False")
+                        except Exception as keep_err:
+                            self.logger.debug(f"Unable to set keep_packets flag: {keep_err}")
+                except Exception as capture_error:
+                    self.logger.error(f"Failed to create LiveCapture: {capture_error}")
+                    if "tshark" in str(capture_error).lower():
+                        self.logger.error("This appears to be a tshark-related issue. Make sure tshark is properly installed and accessible.")
+                    break
+
+                try:
+                    for packet in self._current_capture.sniff_continuously():
+                        if self._stop_event.is_set():
+                            break
+                        # On-demand accelerator re-check: only when the current
+                        # mode yields no traffic for a while (e.g. accelerator
+                        # was toggled after capture started). Zero overhead
+                        # while packets are flowing.
+                        if time.time() - self._last_packet_ts > 60 and not self._mode_recheck:
+                            self.logger.info("No packets for 60s, re-checking accelerator state")
+                            self._mode_recheck = True
+                            break
+                        if self._mode_recheck:
+                            self.logger.info("Accelerator state changed, restarting capture session")
+                            break
+                        self._last_packet_ts = time.time()
+                        if 'TCP' in packet and hasattr(packet.tcp, 'payload'):
+                            # Reassemble each TCP stream independently — the game uses
+                            # several connections and their bytes must not be mixed.
+                            # Since we now capture both directions, upstream and
+                            # downstream segments of the *same* connection are also
+                            # split into separate buffers — interleaving them would
+                            # corrupt reassembly for large packets.
+                            stream_key = getattr(packet.tcp, 'stream', None)
+                            if stream_key is None:
+                                try:
+                                    stream_key = f"{packet.tcp.srcport}-{packet.tcp.dstport}"
+                                except Exception:
+                                    stream_key = "default"
+                            try:
+                                srcport = int(packet.tcp.srcport)
+                            except (ValueError, TypeError):
+                                srcport = None
+                            if self.active_proxy_port is not None:
+                                is_downstream = srcport == self.active_proxy_port
+                            else:
+                                is_downstream = (
+                                    srcport is not None
+                                    and self.port_range[0] <= srcport <= self.port_range[1]
+                                )
+                            stream_key = f"{stream_key}-{'D' if is_downstream else 'U'}"
+                            self.process_packet(packet.tcp.payload.binary_value, stream_key)
+                except RuntimeError as e:
+                    if "Event loop" in str(e) and "stopped" in str(e):
+                        self.logger.info("Event loop stopped during capture, exiting cleanly")
+                        break
                     else:
-                        is_downstream = (
-                            srcport is not None
-                            and self.port_range[0] <= srcport <= self.port_range[1]
-                        )
-                    stream_key = f"{stream_key}-{'D' if is_downstream else 'U'}"
-                    self.process_packet(packet.tcp.payload.binary_value, stream_key)
-        except RuntimeError as e:
-            if "Event loop" in str(e) and "stopped" in str(e):
-                self.logger.info("Event loop stopped during capture, exiting cleanly")
-            else:
-                self.logger.error(f"Runtime error in capture loop: {e}", exc_info=True)
+                        self.logger.error(f"Runtime error in capture loop: {e}", exc_info=True)
+                        break
+                except Exception as e:
+                    self.logger.error(f"Fatal error in capture loop: {e}", exc_info=True)
+                    break
+                finally:
+                    # Close only this session's capture (do not tear down the
+                    # whole manager state — a new session may follow).
+                    self._close_capture_session()
         except Exception as e:
-            self.logger.error(f"Fatal error in capture loop: {e}", exc_info=True)
+            self.logger.error(f"Unhandled capture loop error: {e}", exc_info=True)
         finally:
             self._cleanup_capture()
             with self._state_lock:
                 self.running = False
             self._stop_event.set()
+
+    def _close_capture_session(self) -> None:
+        """Close the current LiveCapture + its tshark children (no state change)."""
+        capture = getattr(self, '_current_capture', None)
+        self._current_capture = None
+        if capture is None:
+            return
+        try:
+            result = capture.close() if hasattr(capture, 'close') else None
+            if asyncio.iscoroutine(result):
+                try:
+                    result.close()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        finally:
+            try:
+                processes = getattr(capture, '_running_processes', None)
+                if processes:
+                    for proc in processes:
+                        try:
+                            if proc.poll() is None:
+                                proc.terminate()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
             
     def _cleanup_capture(self):
         if self._cleanup_complete.is_set():
@@ -840,7 +920,6 @@ class PacketCapture:
             self._stop_event.clear()
             self._cleanup_capture_on_exit = True
             self._save_state(True)
-            self._user_requested_stop = False
 
             self.capture_thread = threading.Thread(target=self.capture_loop, daemon=True)
             self._cleanup_complete.clear()

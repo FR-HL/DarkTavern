@@ -607,7 +607,7 @@ def diagnose_capture() -> dict:
     """
     from collections import Counter
     from dnd.capture.packet_capture import (
-        GAME_PROCESS_NAMES, find_loopback_interface,
+        GAME_PROCESS_NAMES, find_loopback_interface, is_game_process,
     )
     from dnd.settings import settings_manager, detect_wireshark_installation
 
@@ -633,7 +633,7 @@ def diagnose_capture() -> dict:
     game_proc = None
     try:
         for proc in psutil.process_iter(["name", "pid"]):
-            if proc.info.get("name") in GAME_PROCESS_NAMES:
+            if is_game_process(proc.info.get("name")):
                 game_proc = proc
                 break
     except Exception as exc:
