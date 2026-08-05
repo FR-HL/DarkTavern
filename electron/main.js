@@ -272,7 +272,7 @@ app.on ('ready', async () => {
       title: '选择 tshark.exe（或 Wireshark.exe / Wireshark 安装目录）',
       buttonLabel: '选择',
       filters: [{ name: 'Wireshark / TShark', extensions: ['exe'] }],
-      properties: ['openFile', 'showHiddenFiles'],
+      properties: ['openFile', 'openDirectory', 'showHiddenFiles'],
     });
     if (res.canceled || !res.filePaths.length) return { canceled: true, path: '' };
     return { canceled: false, path: res.filePaths[0] };

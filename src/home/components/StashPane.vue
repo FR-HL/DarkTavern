@@ -26,7 +26,8 @@ async function refreshCapture () {
     const s = await invoke ('dnd:capture-status');
     if (s) {
       capture.value = s;
-      tsharkPath.value = s.tshark_path || s.wireshark_path || '';
+      // 只认解析成功的 tshark 路径，避免无效选择误显示为绿点就绪
+      tsharkPath.value = s.tshark_path || '';
       tsharkDetected.value = s.tshark_detected || '';
     }
   } catch (e) {}
@@ -42,6 +43,7 @@ async function pickTshark () {
       const r = await invoke ('dnd:capture-settings', { wireshark_path: res.path });
       if (r && r.error) error.value = r.error;
       await refreshCapture ();
+      if (!tsharkOk.value) error.value = '所选路径未找到 tshark.exe，请重新选择（可直接选 Wireshark 安装目录，如 D:\\Program Files\\Wireshark）';
     }
   } finally { tsharkBusy.value = false; }
 }

@@ -129,5 +129,6 @@ def capture_update_settings(body: CaptureSettingsUpdate):
         "interface": capture.interface,
         "port_range": {"low": capture.port_range[0], "high": capture.port_range[1]},
         "tshark_path": getattr(capture, "tshark_path", "") or "",
+        "tshark_ok": bool(getattr(capture, "tshark_path", "")),
         "tshark_detected": _detect(),
     }
