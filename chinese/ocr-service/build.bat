@@ -26,6 +26,10 @@ if not exist %PY% (
   --hidden-import pynput.mouse._win32 ^
   --hidden-import keyboard ^
   --hidden-import sklearn.utils._cython_blas ^
+  --add-data "dnd\protos;dnd\protos" ^
+  --add-data "..\..\assets\items.json;assets" ^
+  --add-data "..\..\assets\equipment_slots.json;assets" ^
+  --add-data "..\..\assets\icons.pak;assets" ^
   server.py
 
 if errorlevel 1 (

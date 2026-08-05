@@ -83,8 +83,12 @@ _loaded_proto_symbols = _load_protos()
 try:
     from dnd.protos import _PacketCommand_pb2
 except ImportError:
-    logger.error("Could not import _PacketCommand_pb2. Ensure protos are generated and path is correct.")
-    _PacketCommand_pb2 = None
+    # Frozen (PyInstaller) builds may not resolve the dnd.protos package from
+    # the PYZ archive; the dynamic loader above already registered every
+    # *_pb2 module in sys.modules, so fall back to that first.
+    _PacketCommand_pb2 = sys.modules.get('dnd.protos._PacketCommand_pb2')
+    if _PacketCommand_pb2 is None:
+        logger.error("Could not import _PacketCommand_pb2. Ensure protos are generated and path is correct.")
 
 
 def _build_proto_map() -> Dict[int, Any]:

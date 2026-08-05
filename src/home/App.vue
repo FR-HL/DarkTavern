@@ -55,6 +55,8 @@ const charCount = ref (0);
 const stashItems = ref (0);
 const sortHotkey = ref ('Ctrl+R');
 const cancelHotkey = ref ('Ctrl+T');
+const crossHotkey = ref ('Ctrl+F12');
+const stashNextKey = ref ('Ctrl+E');
 
 const apiKey = ref ('');
 const apiKeyVisible = ref (false);
@@ -356,7 +358,8 @@ function showMappingStatus (msg, type) {
 
 function copyGroup () { window.electron.clipboardWriteText ('237874334'); showToast ('群号已复制'); }
 function copyWechat () { window.electron.clipboardWriteText ('ZFZ13434'); showToast ('商务微信已复制'); }
-function openGithub () { window.electron.openExternal ('https://github.com/FR-HL/DarkTavern'); }
+// 项目公开前暂隐藏：GitHub 仓库入口
+// function openGithub () { window.electron.openExternal ('https://github.com/FR-HL/DarkTavern'); }
 function openLink (url) { window.electron.openExternal (url); }
 
 function setRune (key, state, text, color) { runes[key] = { state, text, color }; }
@@ -476,6 +479,10 @@ async function loadSettings () {
     launchOnStartup.value = !!d.launch_on_startup;
     autoCheckUpdate.value = d.auto_check_update !== false;
     developerMode.value = !!d.developer_mode;
+    if (d.sort_hotkey) sortHotkey.value = d.sort_hotkey;
+    if (d.cancel_hotkey) cancelHotkey.value = d.cancel_hotkey;
+    if (d.cross_hotkey) crossHotkey.value = d.cross_hotkey;
+    if (d.stash_next_key) stashNextKey.value = d.stash_next_key;
     theme.value = d.theme === 'dark' ? 'dark' : 'light';
     applyTheme ();
     appVersion.value = d.app_version || '';
@@ -758,11 +765,13 @@ onBeforeUnmount (() => {
           <span class="foot-k">交流群</span>
           <span class="foot-v">237874334</span>
         </div>
+        <!-- 项目公开前暂隐藏：GitHub 仓库入口
         <a class="foot-row" href="#" @click.prevent="openGithub">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
           <span class="foot-k">开源</span>
           <span class="foot-v">GitHub</span>
         </a>
+        -->
       </div>
     </aside>
 
@@ -1179,17 +1188,58 @@ onBeforeUnmount (() => {
           <div class="sec-label">二、自动整理</div>
           <div class="card">
             <div class="card-note">
-              前置条件：已安装 <b>Wireshark</b>（提供 tshark，安装时勾选 "Add tshark to PATH"）；若游戏以管理员权限运行，冒险者侍从也需<b>以管理员身份运行</b>，否则鼠标操作会被 Windows 拦截。
+              <b>环境准备（一次性）：</b>
             </div>
             <div class="steps">
-              <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>启动抓包</b>，再<b>回到游戏角色选择界面选择角色</b>（游戏只在选角时下发仓库数据），角色的仓库与背包数据即自动出现；数据保存在本地，重启不用重抓</div></div>
-              <div class="step"><div class="step-n">2</div><div class="step-t">在仓库网格上方选择<b>排序方案</b>（默认整理 / 品质区分 / 装备优先），可先点「排序预览」确认摆放效果</div></div>
-              <div class="step"><div class="step-n">3</div><div class="step-t">进入「仓库配置」页，选择要整理的<b>角色与目标仓库</b>，按需调整整理速度、堆叠合并、包含背包</div></div>
-              <div class="step"><div class="step-n">4</div><div class="step-t">游戏中确认仓库界面已打开，按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理；整理期间<b>保持游戏窗口在前台、不要移动鼠标</b></div></div>
-              <div class="step"><div class="step-n">5</div><div class="step-t">随时可按 <span class="kbd">{{ cancelHotkey }}</span> 中断；结束后查看整理结果，误放可手动微调</div></div>
+              <div class="step"><div class="step-n">1</div><div class="step-t">安装 <b>Wireshark</b>（官网 wireshark.org 下载安装）。安装向导中务必勾选 <b>"Add tshark to PATH"</b>，否则软件找不到抓包工具</div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">启动软件，进入「角色仓库」页，看 <b>TShark</b> 状态：<b>绿点</b>表示已就绪（自动检测）；<b>红点「未找到」</b>时点右侧<b>「选择路径」</b>，定位到 <span class="kbd">C:\Program Files\Wireshark\tshark.exe</span>（选择 Wireshark.exe 或安装目录也可以，软件会自动解析）</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t"><b>管理员权限：</b>若游戏以<b>管理员身份运行</b>，冒险者侍从也必须<b>右键「以管理员身份运行」</b>，否则模拟鼠标整理会被 Windows 拦截</div></div>
+              <div class="step"><div class="step-n">4</div><div class="step-t"><b>网卡：</b>抓包区默认选中带「推荐」标记的物理网卡（通常为以太网）；使用<b>加速器</b>（UU / 雷神等）时软件会自动切换为回环抓包，无需手动配置</div></div>
+              <div class="step"><div class="step-n">5</div><div class="step-t">点击<b>「重新检测」</b>查看链路诊断（游戏进程 / 抓包点 / 加速器状态），确认环境就绪后再继续</div></div>
             </div>
             <div class="about-thanks">
-              提示：整理速度建议先用「中」，出现漏放/串位再降到「慢」；「极速」约 10 倍提速但偶发漏操作。Ctrl+E 可在仓库间循环切换。
+              提示：未装 Wireshark 也能打开软件，但「启动抓包」会失败；端口范围 20200–20300 为默认值，一般无需修改。
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">三、自动整理 · 操作流程</div>
+          <div class="card">
+            <div class="steps">
+              <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>「启动抓包」</b>，然后<b>回到游戏角色选择界面选择角色</b>——游戏只在选角时下发全量仓库数据，仅在游戏内打开仓库界面是拿不到数据的</div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">角色仓库与背包数据<b>自动出现</b>在列表中（数据保存在本机，重启软件无需重抓；如需重抓，可先「清除数据」再重新选角）</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">若数据<b>未出现或不完整</b>：在游戏内<b>切换职业</b>（进入该角色），或<b>切换到商人 / 技能页面再切回</b>，即可触发游戏重新下发仓库数据，随后点「刷新角色」同步</div></div>
+              <div class="step"><div class="step-n">4</div><div class="step-t">游戏内<b>打开要整理的仓库界面</b>（若在「仓库配置」页开启了<b>仓库跟随</b>，软件会自动识别并同步高亮当前仓库）</div></div>
+              <div class="step"><div class="step-n">5</div><div class="step-t">在仓库网格上方选择<b>排序方案</b>（默认整理 / 品质区分 / 装备优先），可先点<b>「排序预览」</b>确认摆放效果，不满意再调整</div></div>
+              <div class="step"><div class="step-n">6</div><div class="step-t">进入「仓库配置」页：选择<b>整理角色</b>、目标仓库与模式（单仓库 / 全仓库顺序整理），按需调整<b>整理速度、堆叠合并、包含背包、保留原位、快速放置</b>等选项</div></div>
+              <div class="step"><div class="step-n">7</div><div class="step-t">确认游戏窗口<b>在前台</b>且仓库界面已打开，按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理；整理期间<b>保持游戏前台、不要移动鼠标</b>（软件会自动最小化主页避免遮挡）</div></div>
+              <div class="step"><div class="step-n">8</div><div class="step-t">随时可按 <span class="kbd">{{ cancelHotkey }}</span> 中断；结束后查看整理结果，误放可手动微调</div></div>
+            </div>
+            <div class="about-thanks">
+              提示：整理速度建议先用「中」，出现漏放 / 串位再降到「慢」；「极速」约 10 倍提速但偶发漏操作。
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">四、自动整理 · 进阶操作</div>
+          <div class="card">
+            <div class="steps two-col">
+              <div class="step-col">
+                <div class="step-col-t">跨仓整理</div>
+                <div class="step"><div class="step-n">1</div><div class="step-t">在「仓库配置」页配置<b>跨仓策略</b>（自动归类 / 堆叠合并 / 背包清空 / 腾空仓库等）与目标仓库</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t">游戏内打开目标仓库，按下 <span class="kbd">{{ crossHotkey }}</span> 开始；目标仓满自动溢出，可按 <span class="kbd">{{ cancelHotkey }}</span> 中止</div></div>
+              </div>
+              <div class="step-col">
+                <div class="step-col-t">仓库跟随与锁定</div>
+                <div class="step"><div class="step-n">1</div><div class="step-t"><b>跟随模式</b>（关闭 / 点击识别 / 像素识别）在「仓库配置」页开启，游戏内切仓时前端同步高亮</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t"><b>锁定仓库</b>：在仓库网格点锁图标，被锁仓库在全仓 / 跨仓 / 堆叠整理时自动跳过（仍可单页整理）</div></div>
+                <div class="step"><div class="step-n">3</div><div class="step-t"><span class="kbd">{{ stashNextKey }}</span> 可循环切换仓库（自动跳过背包 / 装备）</div></div>
+              </div>
+            </div>
+            <div class="about-thanks">
+              提示：跨仓整理前请确认已启动抓包并抓取到角色数据；游戏界面变动或窗口失焦可能导致误操作，必要时先「排序预览」核对方案。
             </div>
           </div>
         </div>
@@ -1383,7 +1433,7 @@ onBeforeUnmount (() => {
           <div class="card">
             <div class="about-block">
               <p>本软件改编自原版查价器 <a href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">GrimVault</a>、开源中文版 <a href="#" @click.prevent="openLink('https://github.com/Songyt1110/GrimVault-Chinese-Edition')">GrimVault-Chinese-Edition</a>，仓库整理功能则参考了 <a href="#" @click.prevent="openLink('https://github.com/Beelzebub2/DnDTools')">DnDTools</a>。</p>
-              <p>遵从前辈们的开源精神，冒险者侍从 也已<strong>全部开源</strong>至 <a href="#" @click.prevent="openGithub">GitHub</a>。诚挚感谢 GrimVault、GrimVault-Chinese-Edition 与 DnDTools 铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
+              <p>遵从前辈们的开源精神，冒险者侍从 也已<strong>全部开源</strong>至 <strong>GitHub</strong>。诚挚感谢 GrimVault、GrimVault-Chinese-Edition 与 DnDTools 铺就的道路，也感谢一路上每一位支持与帮助过我的朋友。</p>
             </div>
             <div class="src-links">
               <a class="src-card" href="#" @click.prevent="openLink('https://github.com/DarkerDB/GrimVault')">
@@ -1398,10 +1448,12 @@ onBeforeUnmount (() => {
                 <span class="src-name">DnDTools</span>
                 <span class="src-desc">仓库整理工具 · 参考来源</span>
               </a>
+              <!-- 项目公开前暂隐藏：本项目 GitHub 入口
               <a class="src-card" href="#" @click.prevent="openGithub">
                 <span class="src-name">冒险者侍从</span>
                 <span class="src-desc">本项目源码 · 开源续写</span>
               </a>
+              -->
             </div>
             <div class="about-thanks">感谢所有开源前辈的无私分享，感谢每一位支持与帮助过我的朋友！</div>
           </div>
