@@ -1037,6 +1037,98 @@ class StashManager:
 
         return response
 
+    def refresh_character_data(
+        self,
+        character_id=None,
+        timeout: float = 8.0,
+        cancel_event=None,
+    ):
+        """Refresh inventory data in-game and wait for the new snapshot.
+
+        Clicks the lobby top-bar merchant tab and then the stash tab. The
+        page switch makes the game re-request the full character snapshot;
+        the packet capture saves it and updates the local cache. Returns
+        the instant a snapshot arrives (event-driven, late packets included);
+        gives up after a short wait so a non-responsive game never stalls
+        the sort for long.
+
+        Returns ``(ok, note, received_character_id)``:
+          ok=True  — a fresh snapshot arrived (and the cache was reloaded);
+          note     — 'ok', 'timeout', 'no_window', 'click_failed',
+                     'cancelled' or 'mismatch';
+          received — the character id the fresh snapshot belonged to (may
+                     differ from *character_id* on mismatch, else None).
+        """
+        import time as _time
+        from dnd.sort import macros
+        from dnd.stash import character as character_store
+
+        if not macros.force_activate_game_window():
+            logger.warning("refresh_character_data: game window not found")
+            return False, "no_window", None
+
+        # Only treat packets saved from this point on as fresh data.
+        character_store.full_packet_event.clear()
+        start_marker = _time.monotonic()
+        deadline = start_marker + timeout
+        round_wait = 2.0   # wait for the snapshot after the toggle
+        toggle_gap = 0.3   # gap between the away-click and the back-click
+
+        def _fresh_packet():
+            """Return (pkt_time, pkt_char) if a snapshot arrived after the marker."""
+            pkt_time, pkt_char = character_store.get_last_full_packet()
+            if pkt_time >= start_marker:
+                return pkt_time, pkt_char
+            return None, None
+
+        def _consume(pkt_char):
+            if character_id is None or pkt_char == str(character_id):
+                # The capture handler already reloaded the cache entry;
+                # reload once more to be sure the file is fully written.
+                self.update_single_character(pkt_char)
+                logger.info("refresh_character_data: fresh snapshot for %s", pkt_char)
+                return True, "ok", pkt_char
+            logger.warning(
+                "refresh_character_data: snapshot arrived for %s but expected %s",
+                pkt_char, character_id,
+            )
+            return False, "mismatch", pkt_char
+
+        if cancel_event is not None:
+            macros.push_cancel_event(cancel_event)
+        try:
+            # Let the forced window activation settle before clicking.
+            _time.sleep(0.15)
+            if not macros.click_topbar_tab('merchant'):
+                return False, "click_failed", None
+            _time.sleep(toggle_gap)
+            if not macros.click_topbar_tab('stash'):
+                return False, "click_failed", None
+
+            round_end = min(_time.monotonic() + round_wait, deadline)
+            while True:
+                remaining = round_end - _time.monotonic()
+                if remaining <= 0:
+                    break
+                if cancel_event is not None and cancel_event.is_set():
+                    return False, "cancelled", None
+                # Block until the capture thread signals a newly saved full
+                # packet — instant wake-up even if it is late, no polling.
+                # The 0.2s cap keeps the cancel check responsive.
+                character_store.full_packet_event.wait(min(remaining, 0.2))
+                character_store.full_packet_event.clear()
+                pkt_time, pkt_char = _fresh_packet()
+                if pkt_time is not None:
+                    return _consume(pkt_char)
+        except macros.MacroCancelled:
+            return False, "cancelled", None
+        finally:
+            if cancel_event is not None:
+                macros.pop_cancel_event(cancel_event)
+
+        logger.warning("refresh_character_data: no snapshot after toggle")
+        return False, "timeout", None
+
     def sort_stash(
         self,
         character_id,
@@ -1047,6 +1139,7 @@ class StashManager:
         include_inventory=False,
         group_mode: str = "none",
         keep_in_place=False,
+        auto_refresh=True,
     ):
         logger.info(f"Sorting stash {stash_id} for character {character_id}")
         session_summary = None
@@ -1071,6 +1164,65 @@ class StashManager:
             session.add_log(f"Stash {stash_id} could not be found for this character.")
             logger.warning("Stash %s not found for character %s", stash_id, character_id)
             return False, "Stash not found", session_summary
+        session.update_status("Locating Dark and Darker window...", status="info")
+        windows = [w for w in gw.getAllWindows() if w.title == "Dark and Darker  "]
+        if not windows:
+            logger.warning("Game window 'Dark and Darker' not found. Sorting cancelled.")
+            session.update_status("Game window not found. Please bring Dark and Darker to the foreground.", status="error")
+            session.add_log("Window titled 'Dark and Darker  ' was not detected.")
+            return False, "Game window not found. Please make sure Dark and Darker is running."
+        try:
+            # Force-activate the game window (Alt-key trick) — works even
+            # when another window (e.g. the Adventurer's Squire app) is foreground.
+            if not macros.force_activate_game_window():
+                logger.warning("Unable to focus the game window — activating via pygetwindow")
+                windows[0].activate()
+            logger.info("Focused window: Dark and Darker")
+            # Exclusive fullscreen (mode 0) needs extra time to regain focus
+            window_mode = macros.get_game_window_mode()
+            if window_mode == 0:
+                logger.info("Game is in exclusive fullscreen — adding extra focus delay")
+                session.add_log("Exclusive fullscreen detected — waiting for focus.")
+                time.sleep(1.0)
+            session.update_status("Game window focused. Resetting modifiers...", status="info")
+            self._reset_modifier_state(session)
+        except Exception as e:
+            logger.error(f"Error focusing window: {e}")
+            session.add_log("Unable to focus the game window automatically – please ensure it is active.")
+
+        # ── Auto-refresh inventory data before sorting ──
+        # Switch the lobby top-bar page away and back so the game re-requests
+        # the full character snapshot; the capture updates the local cache.
+        if auto_refresh and macros.settings_manager.get('autoRefreshBeforeSort', True):
+            if cancel_event and cancel_event.is_set():
+                return False, "Sort cancelled", session_summary
+            session.update_status("Refreshing inventory data...", status="info")
+            refreshed, note, received = self.refresh_character_data(
+                character_id=character_id,
+                cancel_event=cancel_event,
+            )
+            if refreshed:
+                session.add_log("Inventory data refreshed.")
+                char = self.characters_cache.get(str(character_id)) or char
+                stash_items = char.get('stashes', {}).get(str(stash_id)) or []
+                if not stash_items:
+                    session.update_status("Selected stash is empty or missing.", status="error")
+                    session.add_log(f"Stash {stash_id} disappeared after data refresh.")
+                    return False, "Stash not found", session_summary
+            elif note == "cancelled":
+                return False, "Sort cancelled", session_summary
+            elif note == "mismatch":
+                session.add_log(
+                    f"Warning: in-game character is {received}, not the selected "
+                    f"character — sorting with existing data may target the wrong stash."
+                )
+            else:
+                session.add_log(
+                    f"Auto data refresh skipped ({note}) — sorting with existing data. "
+                    f"Make sure capture is running if the data seems stale."
+                )
+        session.update_status("Game window focused. Executing sort...", status="info")
+
         session.update_status("Loading character inventory...", status="info")
         file_path = os.path.join(self.data_dir, f"{character_id}.json")
         stashes = {}
@@ -1100,32 +1252,6 @@ class StashManager:
 
         stash = Storage(int(stash_id), stash_items)
         inventory = Storage(StashType.BAG.value, inv_items)
-        session.update_status("Locating Dark and Darker window...", status="info")
-        windows = [w for w in gw.getAllWindows() if w.title == "Dark and Darker  "]
-        if not windows:
-            logger.warning("Game window 'Dark and Darker' not found. Sorting cancelled.")
-            session.update_status("Game window not found. Please bring Dark and Darker to the foreground.", status="error")
-            session.add_log("Window titled 'Dark and Darker  ' was not detected.")
-            return False, "Game window not found. Please make sure Dark and Darker is running."
-        try:
-            # Force-activate the game window (Alt-key trick) — works even
-            # when another window (e.g. the Adventurer's Squire app) is foreground.
-            if not macros.force_activate_game_window():
-                logger.warning("Unable to focus the game window — activating via pygetwindow")
-                windows[0].activate()
-            logger.info("Focused window: Dark and Darker")
-            # Exclusive fullscreen (mode 0) needs extra time to regain focus
-            window_mode = macros.get_game_window_mode()
-            if window_mode == 0:
-                logger.info("Game is in exclusive fullscreen — adding extra focus delay")
-                session.add_log("Exclusive fullscreen detected — waiting for focus.")
-                time.sleep(1.0)
-            session.update_status("Game window focused. Resetting modifiers...", status="info")
-            self._reset_modifier_state(session)
-            session.update_status("Game window focused. Executing sort...", status="info")
-        except Exception as e:
-            logger.error(f"Error focusing window: {e}")
-            session.add_log("Unable to focus the game window automatically – please ensure it is active.")
 
         # ── Auto-select the correct stash tab ──
         stash_type_int = int(stash_id)
@@ -1743,6 +1869,23 @@ class StashManager:
         session = overlay_session or NullOverlaySession()
         session.update_status("Merging stacks across stashes...", status="info")
 
+        from dnd.settings import settings_manager as _sm_refresh
+        if _sm_refresh.get('autoRefreshBeforeSort', True):
+            refreshed, note, received = self.refresh_character_data(
+                character_id=character_id,
+                cancel_event=cancel_event,
+            )
+            if refreshed:
+                session.add_log("Inventory data refreshed.")
+            elif note == "cancelled":
+                return False, "Stack merge cancelled", None
+            elif note == "mismatch":
+                session.add_log(
+                    f"Warning: in-game character is {received}, not the selected character."
+                )
+            else:
+                session.add_log(f"Auto data refresh skipped ({note}) — using existing data.")
+
         char = self.characters_cache.get(str(character_id))
         if not char:
             return False, "Character not found", None
@@ -1982,6 +2125,24 @@ class StashManager:
         from dnd.stash.storage import StashType, Storage
 
         session = overlay_session or NullOverlaySession()
+
+        from dnd.settings import settings_manager as _sm_refresh
+        if _sm_refresh.get('autoRefreshBeforeSort', True):
+            refreshed, note, received = self.refresh_character_data(
+                character_id=character_id,
+                cancel_event=cancel_event,
+            )
+            if refreshed:
+                session.add_log("Inventory data refreshed.")
+            elif note == "cancelled":
+                return False, "Cross sort cancelled", []
+            elif note == "mismatch":
+                session.add_log(
+                    f"Warning: in-game character is {received}, not the selected character."
+                )
+            else:
+                session.add_log(f"Auto data refresh skipped ({note}) — using existing data.")
+
         char = self.characters_cache.get(str(character_id))
         if not char:
             return False, "Character not found", []

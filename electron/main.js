@@ -232,6 +232,7 @@ app.on ('ready', async () => {
   });
   ipcMain.handle ('stash:tab-test', (e, characterId = '') => backend.tabTest (characterId));
   ipcMain.handle ('stash:tab-scan', () => backend.tabScan ());
+  ipcMain.handle ('stash:refresh-data', (e, data = {}) => backend.refreshStashData (data?.character_id || '', data?.timeout || 8));
   ipcMain.handle ('stash:follow-calibrate-status', () => backend.followCalibrateStatus ());
   ipcMain.handle ('stash:follow-calibrate-record', (e, index) => backend.followCalibrateRecord (Number (index)));
   ipcMain.handle ('stash:follow-calibrate-auto', () => backend.followCalibrateAuto ());

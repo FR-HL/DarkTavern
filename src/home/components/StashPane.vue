@@ -111,6 +111,20 @@ async function clearData () {
   window.dispatchEvent (new CustomEvent ('dnd:characters-refresh'));
 }
 
+const refreshBusy = ref (false);
+
+async function oneClickRefresh () {
+  if (refreshBusy.value) return;
+  refreshBusy.value = true;
+  error.value = '';
+  try {
+    const r = await invoke ('stash:refresh-data', {});
+    if (r && r.error) error.value = r.error;
+  } catch (e) {}
+  window.dispatchEvent (new CustomEvent ('dnd:characters-refresh'));
+  refreshBusy.value = false;
+}
+
 let refreshTimer = null;
 let ocrReady = false;
 
@@ -171,7 +185,9 @@ onBeforeUnmount (() => {
           </select>
         </div>
         <div class="cap-actions">
-          <button class="btn subtle" @click="window.dispatchEvent (new CustomEvent ('dnd:characters-refresh'))">刷新角色</button>
+          <button class="btn subtle" :disabled="refreshBusy" title="自动切换游戏顶部栏页面，让游戏重新下发仓库数据（无需重新选角）" @click="oneClickRefresh">
+            {{ refreshBusy ? '更新中…' : '一键更新' }}
+          </button>
           <button class="btn danger" @click="clearData">清除数据</button>
           <button class="btn" :class="capture.running ? 'warn' : 'primary'" :disabled="captureBusy" @click="toggleCapture">
             {{ capture.running ? '停止抓包' : '启动抓包' }}

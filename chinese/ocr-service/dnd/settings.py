@@ -104,6 +104,7 @@ class SettingsManager:
             "sortFeedbackSyncEnabled": True,
             "stashTabMapping": [4, 5, 6, 7, 8, 9, 20, 21, 30],
             "autoStashSelection": True,
+            "autoRefreshBeforeSort": True,
             "stashStackMode": False,
             "sortKeepInPlace": True,
             "lockedStashes": [],

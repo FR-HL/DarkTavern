@@ -10,8 +10,25 @@ const OCR_URL = `http://127.0.0.1:${OCR_PORT}`;
 
 let ocrProcess = null;
 
+async function portAlreadyServing () {
+  try {
+    const res = await fetch (OCR_URL + '/health', { signal: AbortSignal.timeout (1500) });
+    return res.ok;
+  } catch (e) { return false; }
+}
+
 export function startService (pythonPath) {
   if (ocrProcess) return;
+
+  // If something already answers on the service port, the spawn below will
+  // fail to bind and the app would silently talk to that foreign process
+  // (e.g. a leftover server.py from a dev session — possibly running with
+  // different privileges, which trips the UIPI warning). Surface it loudly.
+  portAlreadyServing ().then (inUse => {
+    if (inUse) {
+      logger.warn (`[Backend] 端口 ${OCR_PORT} 已被其他进程占用：新后端可能无法启动，应用将连接到该外部进程。请关闭残留的 server.py / ocr-service.exe 后重启本软件。`);
+    }
+  });
 
   let chineseDir = app.isPackaged
     ? join (RESOURCES, 'chinese')
@@ -203,6 +220,10 @@ export async function tabTest (characterId = '') {
 
 export async function tabScan () {
   return await post ('/stash/tabscan') || { error: 'Service unavailable' };
+}
+
+export async function refreshStashData (characterId = '', timeout = 8) {
+  return await post ('/stash/refresh-data', { character_id: String (characterId), timeout: Number (timeout) }) || { error: 'Service unavailable' };
 }
 
 export async function followCalibrateStatus () {

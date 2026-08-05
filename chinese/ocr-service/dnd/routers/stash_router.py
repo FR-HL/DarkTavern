@@ -31,6 +31,11 @@ class QuickPlaceTestRequest(BaseModel):
     stash_id: int
 
 
+class RefreshDataRequest(BaseModel):
+    character_id: str = ""
+    timeout: float = 8.0
+
+
 def _load_equipment_slots():
     """Equipment page slot layout (slot id -> grid position/size)."""
     global _EQUIPMENT_SLOTS
@@ -185,6 +190,50 @@ def tab_scan():
         "mapping": mapping,
         "labels": [macros.STASH_TYPE_NAMES.get(t, str(t)) for t in mapping],
         "brights": brights,
+    }
+
+
+@router.post("/refresh-data")
+def refresh_data(body: RefreshDataRequest):
+    """One-click inventory data refresh.
+
+    Switches the in-game lobby top-bar page away and back, which makes the
+    game re-request the full character snapshot; the capture then updates
+    the local data automatically (no character re-selection needed).
+    """
+    from dnd import service
+
+    capture = service.get_packet_capture()
+    if not capture.is_active():
+        return {
+            "success": False,
+            "note": "capture_off",
+            "error": "抓包未启动，请先在「角色仓库」页启动抓包。",
+        }
+
+    mgr = service.get_stash_manager()
+    character_id = (body.character_id or "").strip() or None
+    timeout = max(3.0, min(float(body.timeout or 8.0), 20.0))
+    ok, note, received = mgr.refresh_character_data(
+        character_id=character_id,
+        timeout=timeout,
+    )
+
+    if ok:
+        return {"success": True, "note": "ok", "character_id": received}
+
+    messages = {
+        "no_window": "未找到游戏窗口，请确认 Dark and Darker 正在运行。",
+        "click_failed": "顶部栏点击失败，请确认游戏在前台且处于大厅界面。",
+        "timeout": "未收到新的仓库数据。请确认抓包正常，且游戏处于大厅（可手动切换一次顶部栏页面再试点「一键更新」）。",
+        "mismatch": f"游戏内当前角色（{received}）与所选角色不一致，已更新游戏内角色的数据。",
+        "cancelled": "刷新已取消。",
+    }
+    return {
+        "success": False,
+        "note": note,
+        "character_id": received,
+        "error": messages.get(note, "刷新失败。"),
     }
 
 

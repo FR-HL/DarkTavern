@@ -405,6 +405,23 @@ def start_sort_all(character_id: str,
             from dnd.stash.storage import StashType
             from dnd.sort import macros
             mgr = get_stash_manager()
+            # Refresh data once for the whole run (individual sort_stash calls
+            # below skip their own refresh via auto_refresh=False).
+            from dnd.settings import settings_manager as _sm_pre
+            if _sm_pre.get('autoRefreshBeforeSort', True):
+                try:
+                    refreshed, note, received = mgr.refresh_character_data(
+                        character_id=str(character_id),
+                    )
+                    if refreshed:
+                        logger.info("Sort-all: inventory data refreshed")
+                    elif note == "mismatch":
+                        logger.warning(
+                            "Sort-all: in-game character is %s, not the selected one", received)
+                    else:
+                        logger.warning("Sort-all: data refresh skipped (%s)", note)
+                except Exception as exc:
+                    logger.warning("Sort-all: data refresh failed: %s", exc)
             char = mgr.characters_cache.get(str(character_id))
             stashes = (char or {}).get("stashes", {})
             owned_ids = [
@@ -439,6 +456,7 @@ def start_sort_all(character_id: str,
                         stack_mode=stack_mode,
                         group_mode=group_mode,
                         include_inventory=(i == 0),
+                        auto_refresh=False,
                     )
                     if isinstance(r, tuple) and len(r) >= 2:
                         ok = bool(r[0])

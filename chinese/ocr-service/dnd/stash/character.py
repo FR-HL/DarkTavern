@@ -1,6 +1,8 @@
 import os
 import json
 import copy
+import time
+import threading
 from datetime import datetime
 from pathlib import Path
 from google.protobuf.json_format import MessageToJson
@@ -8,6 +10,21 @@ from dnd.protos import _Defins_pb2
 from dnd.appdirs import get_characters_dir
 import logging
 logger = logging.getLogger(__name__)
+
+# Monotonic timestamp + character id of the last full character packet
+# (S2C_LOBBY_CHARACTER_INFO_RES) saved to disk. Used by the pre-sort data
+# refresh to know that a freshly triggered snapshot has arrived.
+last_full_packet_time = 0.0
+last_full_packet_character_id = None
+
+# Signalled the moment a full packet is saved. The refresh waiter blocks on
+# this instead of polling, so it wakes up instantly when new data lands.
+full_packet_event = threading.Event()
+
+
+def get_last_full_packet():
+    """Return (monotonic_time, character_id) of the last full packet."""
+    return last_full_packet_time, last_full_packet_character_id
 
 def policy(message):
     for policy in message.policyList:
@@ -183,6 +200,10 @@ def save_packet_data(message) -> bool:
             data_file = os.path.join(data_dir, f"{char_id}.json")
             with open(data_file, "w", encoding='utf-8') as f:
                 f.write(json_data)
+            global last_full_packet_time, last_full_packet_character_id
+            last_full_packet_time = time.monotonic()
+            last_full_packet_character_id = char_id
+            full_packet_event.set()
             try:
                 payload = json.loads(json_data)
             except json.JSONDecodeError as exc:

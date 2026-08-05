@@ -87,6 +87,10 @@ BASE_LAYOUT = {
     'jump': 40.5,
     'stash_tab_origin': Point(1328, 211),   # centre of the first stash tab selector
     'stash_tab_spacing': 45,                # vertical px between consecutive tab centres
+    # Lobby top-bar page tabs (12 tabs spread across the full width, ~160px
+    # each at 1080p). Tab 6 = stash page, tab 7 = merchant & workshop page.
+    'topbar_stash': Point(880, 30),
+    'topbar_merchant': Point(1040, 30),
 }
 
 # Number of stash tab selectors in the game UI (Storage, Purchased 0-4,
@@ -169,6 +173,7 @@ MANUAL_OVERRIDES = {
     (1280, 720): {
         'stash': Point(918, 132), 'inv': Point(457, 416), 'jump': 27,
         'stash_tab_origin': Point(881, 139), 'stash_tab_spacing': 31,
+        'topbar_stash': Point(587, 20), 'topbar_merchant': Point(693, 20),
     },
 }
 
@@ -231,6 +236,12 @@ def _scaled_layout(resolution):
                 int(round(BASE_LAYOUT['stash_tab_origin'].x * scale + pillarbox)),
                 int(round(BASE_LAYOUT['stash_tab_origin'].y * scale))),
             'stash_tab_spacing': max(BASE_LAYOUT['stash_tab_spacing'] * scale, 1.0),
+            'topbar_stash': Point(
+                int(round(BASE_LAYOUT['topbar_stash'].x * scale + pillarbox)),
+                int(round(BASE_LAYOUT['topbar_stash'].y * scale))),
+            'topbar_merchant': Point(
+                int(round(BASE_LAYOUT['topbar_merchant'].x * scale + pillarbox)),
+                int(round(BASE_LAYOUT['topbar_merchant'].y * scale))),
         }
 
     # Standard (≤16:9) aspect ratio – independent axis scaling
@@ -247,6 +258,10 @@ def _scaled_layout(resolution):
             int(round(BASE_LAYOUT['stash_tab_origin'].x * scale_x)),
             int(round(BASE_LAYOUT['stash_tab_origin'].y * scale_y))),
         'stash_tab_spacing': max(BASE_LAYOUT['stash_tab_spacing'] * scale_y, 1.0),
+        'topbar_stash': Point(int(round(BASE_LAYOUT['topbar_stash'].x * scale_x)),
+                              int(round(BASE_LAYOUT['topbar_stash'].y * scale_y))),
+        'topbar_merchant': Point(int(round(BASE_LAYOUT['topbar_merchant'].x * scale_x)),
+                                 int(round(BASE_LAYOUT['topbar_merchant'].y * scale_y))),
     }
 
 
@@ -614,6 +629,10 @@ def _windowed_screen_positions(window_area):
         'stash_tab_origin': Point(layout['stash_tab_origin'].x + window_left,
                                   layout['stash_tab_origin'].y + window_top),
         'stash_tab_spacing': float(layout['stash_tab_spacing']),
+        'topbar_stash': Point(layout['topbar_stash'].x + window_left,
+                              layout['topbar_stash'].y + window_top),
+        'topbar_merchant': Point(layout['topbar_merchant'].x + window_left,
+                                 layout['topbar_merchant'].y + window_top),
     }
 
 
@@ -766,6 +785,31 @@ def click_stash_tab(stash_type_value: int) -> bool:
     _sleep_with_cancel(0.15)
     logger.info("Clicked stash tab %d (stash type %d) at (%d, %d)",
                 tab_index, stash_type_value, pos.x, pos.y)
+    return True
+
+
+def click_topbar_tab(name: str) -> bool:
+    """Click a lobby top-bar page tab: 'stash' or 'merchant'.
+
+    Switching away from the stash page and back makes the game re-request
+    the full character/stash snapshot from the server, which the packet
+    capture picks up — this is how inventory data gets refreshed without
+    re-selecting the character.
+    """
+    positions = get_screen_positions()
+    pos = positions.get(f'topbar_{name}')
+    if pos is None:
+        logger.warning("No topbar position for '%s'", name)
+        return False
+
+    _ensure_not_cancelled()
+    move_mouse(pos.x, pos.y)
+    _sleep_with_cancel(0.03)
+    mouse_down()
+    _sleep_with_cancel(0.02)
+    mouse_up()
+    _sleep_with_cancel(0.08)
+    logger.info("Clicked topbar tab '%s' at (%d, %d)", name, pos.x, pos.y)
     return True
 
 

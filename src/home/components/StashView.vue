@@ -495,7 +495,7 @@ watch (() => props.stashId, () => reportStashState ());
     </div>
     <div v-else class="empty-hint">
       <div class="empty-t">暂无角色数据</div>
-      <div class="empty-d">启动抓包后，在游戏中选择角色并打开仓库，数据会自动出现在这里。若数据未出现，可在游戏内切换职业（进入该角色），或切换到商人 / 技能页面再切回，触发数据重新下发后点「刷新角色」。</div>
+      <div class="empty-d">启动抓包后，在游戏大厅切换一次顶部栏页面（如切到商人页再切回），数据会自动出现在这里；也可以直接点上方「一键更新」自动完成。整理前会自动刷新数据，无需重复操作。</div>
     </div>
 
     <!-- 仓库网格 -->
