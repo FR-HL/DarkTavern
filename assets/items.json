@@ -50649,6 +50649,27 @@
     "iconPath": "icons/Utility/LuckPotion_4001.webp",
     "name_zh": "大型幸运药水"
   },
+  "LuckPotion_5001": {
+    "id": "LuckPotion_5001",
+    "archetype": "id.item.luck_potion_large",
+    "name": "Great Potion of Luck",
+    "flavor": "A potion said to bring good luck when drunk. The origin of the contents is unknown.",
+    "rarity": "Epic",
+    "item_type": "Utility",
+    "slot_type": "Utility",
+    "hand_type": "two_handed",
+    "utility_type": "drink",
+    "is_droppable": true,
+    "is_tradable": true,
+    "max_stack_size": 1,
+    "inventory_width": 1,
+    "inventory_height": 1,
+    "required_class": [],
+    "origin_id": "id.item.luck_potion_5001",
+    "armor_type": null,
+    "iconHash": null,
+    "iconPath": "icons/Utility/LuckPotion_5001.webp"
+  },
   "LukewarmStew": {
     "id": "LukewarmStew",
     "archetype": "id.item.lukewarm_stew",

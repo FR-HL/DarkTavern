@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 class ItemDataManager:
     def __init__(self):
         self._data: Optional[Dict] = None
+        self._ci: Dict = {}
         self._loaded = False
         self._lock = threading.Lock()
         self._file_path = Path(resource_path("items.json"))
@@ -23,7 +24,15 @@ class ItemDataManager:
                 if not self._loaded:  # Double-check pattern
                     with open(self._file_path, "r", encoding="utf-8") as file:
                         self._data = json.load(file)
+                    self._ci = {k.lower(): v for k, v in self._data.items()}
                     self._loaded = True
+
+    def _get(self, item_id):
+        """Case-insensitive item lookup by id."""
+        self._ensure_loaded()
+        if not item_id:
+            return {}
+        return self._ci.get(item_id.lower(), {})
 
     def reload(self) -> None:
         """Force the item data cache to reload from disk."""
@@ -36,25 +45,21 @@ class ItemDataManager:
             logger.warning("Failed to reload items.json: %s", exc, exc_info=True)
 
     def get_item_dimensions_from_id(self, item_id):
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         width = item.get("inventory_width", 1)
         height = item.get("inventory_height", 1)
         return width, height
 
     def get_item_rarity_from_id(self, item_id):
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         return item.get("rarity", 0)
 
     def get_item_name_from_id(self, item_id):
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         return item.get("name", "")
 
     def get_item_image_path_from_id(self, item_id):
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         icon_path = item.get("iconPath", None)
         if icon_path:
             canonical = canonical_icon_path(icon_path)
@@ -82,38 +87,32 @@ class ItemDataManager:
 
     def get_item_vendor_price(self, item_id):
         """Get vendor price for an item"""
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         return item.get("vendor_price", 0)
 
     def get_item_max_stack_size(self, item_id):
         """Get maximum stack size for an item"""
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         return item.get("max_stack_size", 1)
 
     def get_item_slot_type(self, item_id):
         """Get equipment slot type for an item (e.g. Head, Chest, Hands)."""
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         return item.get("slot_type", "")
 
     def get_item_type(self, item_id):
         """Get item category type (Weapon, Armor, Utility, Accessory, Misc)."""
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         return item.get("item_type", "")
 
     def get_item_archetype(self, item_id):
         """Get item category archetype (e.g. 'id.item.diamond' for gems)."""
-        self._ensure_loaded()
-        item = self._data.get(item_id, {})
+        item = self._get(item_id)
         return item.get("archetype", "")
 
     def get_item_data(self, item_id):
         """Get full item data for an item"""
-        self._ensure_loaded()
-        return self._data.get(item_id, {})
+        return self._get(item_id)
 
     def search_items_by_name(self, query: str, limit: int = 50):
         """Search items by name with lazy loading and pagination"""
