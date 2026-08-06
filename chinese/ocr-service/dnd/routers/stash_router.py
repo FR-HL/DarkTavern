@@ -194,14 +194,23 @@ def first_calibrate():
     import time as _time
     from dnd import service
     from dnd.settings import detect_wireshark_installation
+    from dnd.capture.npcap import check_npcap
 
     capture = service.get_packet_capture()
     if not capture.is_active():
-        if not (getattr(capture, "tshark_path", None) or detect_wireshark_installation()):
+        tshark_path = getattr(capture, "tshark_path", None) or detect_wireshark_installation()
+        if not tshark_path:
             return {
                 "success": False,
                 "stage": "capture",
                 "error": "未找到 TShark。请先安装 Wireshark（安装时保持勾选 TShark 组件），装完重启 冒险者侍从。",
+            }
+        npcap = check_npcap(tshark_path)
+        if not npcap.get("ok"):
+            return {
+                "success": False,
+                "stage": "capture",
+                "error": npcap.get("detail") or "抓包驱动（Npcap）不可用，请先安装 Npcap。",
             }
         capture.start_capture_switch()
         # Wait for the tshark session to actually come up before toggling,

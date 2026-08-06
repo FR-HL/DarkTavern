@@ -18,14 +18,23 @@ class CaptureSettingsUpdate(BaseModel):
 def capture_start():
     from dnd.service import get_packet_capture
     from dnd.settings import detect_wireshark_installation
+    from dnd.capture.npcap import check_npcap
     capture = get_packet_capture()
     if capture.is_active():
         return {"success": True, "message": "Already running", "running": True}
-    if not (getattr(capture, "tshark_path", None) or detect_wireshark_installation()):
+    tshark_path = getattr(capture, "tshark_path", None) or detect_wireshark_installation()
+    if not tshark_path:
         return {
             "success": False,
             "running": False,
             "error": "未找到 TShark。请先安装 Wireshark（安装时保持勾选 TShark 组件），装完重启 冒险者侍从。",
+        }
+    npcap = check_npcap(tshark_path)
+    if not npcap.get("ok"):
+        return {
+            "success": False,
+            "running": False,
+            "error": npcap.get("detail") or "抓包驱动（Npcap）不可用，请先安装 Npcap。",
         }
     result = capture.start_capture_switch()
     return {"success": result, "running": capture.is_active()}
@@ -48,6 +57,16 @@ def capture_restart():
     capture.stop_capture_switch(persist_running_state=True)
     capture.start_capture_switch()
     return {"success": True, "running": capture.is_active()}
+
+
+@router.get("/npcap-status")
+def capture_npcap_status(force: bool = False):
+    from dnd.service import get_packet_capture
+    from dnd.settings import detect_wireshark_installation
+    from dnd.capture.npcap import check_npcap
+    capture = get_packet_capture()
+    tshark_path = getattr(capture, "tshark_path", None) or detect_wireshark_installation()
+    return check_npcap(tshark_path, force=force)
 
 
 @router.get("/status")

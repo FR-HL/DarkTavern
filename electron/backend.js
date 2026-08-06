@@ -176,6 +176,10 @@ export async function captureDiagnose () {
   return await get ('/capture/diagnose');
 }
 
+export async function npcapStatus (force = false) {
+  return await get (`/capture/npcap-status${force ? '?force=true' : ''}`);
+}
+
 export async function captureUpdateSettings (settings) {
   return await post ('/capture/settings', settings) || { error: 'Service unavailable' };
 }

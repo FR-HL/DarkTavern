@@ -280,6 +280,7 @@ app.on ('ready', async () => {
   ipcMain.handle ('dnd:capture-status', () => backend.captureStatus ());
   ipcMain.handle ('dnd:capture-interfaces', () => backend.captureInterfaces ());
   ipcMain.handle ('dnd:capture-diagnose', () => backend.captureDiagnose ());
+  ipcMain.handle ('dnd:npcap-status', (e, force) => backend.npcapStatus (force));
   ipcMain.handle ('dnd:capture-settings', (e, data) => backend.captureUpdateSettings (data));
   ipcMain.handle ('dnd:pick-tshark', async () => {
     const res = await dialog.showOpenDialog ({

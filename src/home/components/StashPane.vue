@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import { capture, tsharkPath, tsharkDetected, tsharkOk, refreshCapture } from '../composables/capture.js';
+import { capture, tsharkPath, tsharkDetected, tsharkOk, npcap, refreshCapture, refreshNpcap } from '../composables/capture.js';
 
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
@@ -41,12 +41,27 @@ async function loadInterfaces () {
   } catch (e) {}
 }
 
-async function loadDiagnose () {
+async function loadDiagnose (force = false) {
   diagBusy.value = true;
   try {
     diag.value = await invoke ('dnd:capture-diagnose');
   } catch (e) {}
+  await refreshNpcap (force);
   diagBusy.value = false;
+}
+
+const npcapBusy = ref (false);
+
+async function recheckNpcap () {
+  if (npcapBusy.value) return;
+  npcapBusy.value = true;
+  try {
+    await refreshNpcap (true);
+  } finally { npcapBusy.value = false; }
+}
+
+function openNpcapDownload () {
+  window.electron.openExternal ('https://npcap.com/#download');
 }
 
 const diagSummary = computed (() => {
@@ -171,10 +186,23 @@ onBeforeUnmount (() => {
         <button class="btn subtle sm" :disabled="tsharkBusy" @click="pickTshark">选择路径</button>
       </div>
 
+      <!-- Npcap 抓包驱动缺失/异常提示 -->
+      <div class="cap-npcap" :class="{ warn: npcap.ok && !npcap.loopback }" v-if="npcap && (!npcap.ok || !npcap.loopback)">
+        <svg class="npcap-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div class="npcap-body">
+          <div class="npcap-t">{{ npcap.ok ? '回环抓包接口缺失' : '抓包驱动（Npcap）不可用' }}</div>
+          <div class="npcap-d">{{ npcap.detail }}</div>
+        </div>
+        <div class="npcap-actions">
+          <button class="btn primary sm" @click="openNpcapDownload">下载 Npcap</button>
+          <button class="btn subtle sm" :disabled="npcapBusy" @click="recheckNpcap">{{ npcapBusy ? '检测中…' : '重新检测' }}</button>
+        </div>
+      </div>
+
       <div class="diag-head" :class="{ open: diagOpen }">
         <div class="diag-summary" :class="{ warn: diag && !diag.game.running }">{{ diagSummary }}</div>
         <div class="diag-actions">
-          <button class="btn subtle sm" :disabled="diagBusy" @click="loadDiagnose">{{ diagBusy ? '检测中…' : '重新检测' }}</button>
+          <button class="btn subtle sm" :disabled="diagBusy" @click="loadDiagnose (true)">{{ diagBusy ? '检测中…' : '重新检测' }}</button>
           <button class="diag-toggle" :class="{ open: diagOpen }" @click="diagOpen = !diagOpen" :title="diagOpen ? '收起链路详情' : '展开链路详情'">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
@@ -281,6 +309,24 @@ onBeforeUnmount (() => {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tshark-path.missing { color: var(--red); }
+
+.cap-npcap {
+  display: flex; align-items: center; gap: 11px;
+  margin-top: 13px; padding: 11px 13px;
+  border-radius: 10px;
+  background: var(--red-soft);
+  border: 1px solid rgba(220,38,38,0.28);
+}
+.cap-npcap.warn {
+  background: var(--amber-soft);
+  border-color: rgba(180,83,9,0.28);
+}
+.npcap-ic { width: 19px; height: 19px; flex: none; color: var(--red); }
+.cap-npcap.warn .npcap-ic { color: var(--amber); }
+.npcap-body { flex: 1; min-width: 0; }
+.npcap-t { font-size: 13px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.npcap-d { margin-top: 2px; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.npcap-actions { display: flex; gap: 8px; flex: none; }
 .cap-left { display: flex; align-items: center; gap: 13px; }
 .mode-tag {
   display: inline-block; padding: 1px 7px; margin-right: 2px;

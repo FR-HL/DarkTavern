@@ -11,6 +11,15 @@ export const capture = ref ({ running: false, interface: '', port_range: { low: 
 export const tsharkPath = ref ('');
 export const tsharkDetected = ref ('');
 export const tsharkOk = computed (() => !!tsharkPath.value);
+// Npcap 抓包驱动健康状态（null = 尚未检测）
+export const npcap = ref (null);
+
+export async function refreshNpcap (force = false) {
+  try {
+    const s = await invoke ('dnd:npcap-status', force);
+    if (s) npcap.value = s;
+  } catch (e) {}
+}
 
 export async function refreshCapture () {
   try {

@@ -841,6 +841,8 @@ class PacketCapture:
                     self.logger.error(f"Failed to create LiveCapture: {capture_error}")
                     if "tshark" in str(capture_error).lower():
                         self.logger.error("This appears to be a tshark-related issue. Make sure tshark is properly installed and accessible.")
+                    if "exit status 13" in str(capture_error) or "exit status 12" in str(capture_error):
+                        self.logger.error("tshark cannot list capture interfaces: the Npcap driver is missing or not working. Install Npcap from https://npcap.com/ and retry.")
                     break
 
                 try:
