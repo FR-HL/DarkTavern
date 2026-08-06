@@ -900,7 +900,7 @@ onBeforeUnmount (() => {
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">DarkerDB API Key</div>
-                <div class="srow-d">在 darkerdb.com 注册获取 · 填入后查价更快、数据更完整</div>
+                <div class="srow-d">在 darkerdb.com 注册获取，填入后查价更完整</div>
               </div>
               <div class="srow-ctl key-ctl">
                 <div class="key-field">
@@ -920,7 +920,7 @@ onBeforeUnmount (() => {
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">触发键</div>
-                <div class="srow-d">支持键盘键（F1–F12、Ctrl/Alt/Shift 组合键）与鼠标中键 / 侧键（左右键除外）</div>
+                <div class="srow-d">键盘键或鼠标中键 / 侧键（左右键除外）</div>
               </div>
               <div class="srow-ctl">
                 <button class="hotkey-cap" :class="{ listening: isListening, saved: scanSaved }"
@@ -932,7 +932,7 @@ onBeforeUnmount (() => {
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">扫描模式</div>
-                <div class="srow-d">手动需悬停后按键，自动则悬停即查</div>
+                <div class="srow-d">手动悬停后按键，自动则悬停即查</div>
               </div>
               <div class="srow-ctl">
                 <div class="seg">
@@ -1079,7 +1079,7 @@ onBeforeUnmount (() => {
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">字体大小</div>
-                <div class="srow-d">调整主页文字大小（不影响游戏内悬浮窗）</div>
+                <div class="srow-d">调整主页文字大小（悬浮窗不受影响）</div>
               </div>
               <div class="srow-ctl">
                 <div class="seg">
@@ -1107,7 +1107,7 @@ onBeforeUnmount (() => {
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">当前版本</div>
-                <div class="srow-d">v{{ appVersion }} · 新版本需手动下载安装，设置与记录不会丢失</div>
+                <div class="srow-d">v{{ appVersion }} · 新版本需手动下载安装</div>
               </div>
               <div class="srow-ctl">
                 <span class="ocr-pill" :class="updatePillCls">{{ updatePill || '未检查' }}</span>
@@ -1118,7 +1118,7 @@ onBeforeUnmount (() => {
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">自动检查更新</div>
-                <div class="srow-d">每天首次打开软件时自动检查一次，发现新版本会提示</div>
+                <div class="srow-d">每天首次打开自动检查更新</div>
               </div>
               <div class="srow-ctl">
                 <label class="switch"><input type="checkbox" :checked="autoCheckUpdate" @change="toggleAutoCheckUpdate"><span class="track"></span></label>
@@ -1133,7 +1133,7 @@ onBeforeUnmount (() => {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.2" fill="currentColor" stroke="none"/></svg>
               <div class="srow-info">
                 <div class="srow-t">数据汉化</div>
-                <div class="srow-d">中文 ↔ 英文翻译映射，由 DarkerDB API 同步生成，自定义条目可手动维护</div>
+                <div class="srow-d">中英翻译映射，自定义条目可手动维护</div>
               </div>
               <svg class="dev-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
@@ -1178,7 +1178,7 @@ onBeforeUnmount (() => {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
               <div class="srow-info">
                 <div class="srow-t">数据包</div>
-                <div class="srow-d">查看抓包捕获的原始游戏数据包与解码结果</div>
+                <div class="srow-d">查看原始游戏数据包与解码结果</div>
               </div>
               <svg class="dev-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </div>

@@ -468,7 +468,7 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">排序方案</div>
-            <div class="srow-d">决定物品的摆放顺序；可随时切换，重启后保留</div>
+            <div class="srow-d">决定物品摆放顺序，可随时切换</div>
           </div>
           <div class="srow-ctl">
             <div class="seg">
@@ -483,7 +483,7 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow speed-row">
           <div class="srow-info">
             <div class="srow-t">整理速度</div>
-            <div class="srow-d">极速≈10 倍提速；若出现漏放/串位，改用中或慢</div>
+            <div class="srow-d">极速≈10 倍提速；漏放/串位请用中或慢</div>
           </div>
           <div class="srow-ctl">
             <div class="seg">
@@ -498,7 +498,7 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">游戏仓库跟随</div>
-            <div class="srow-d">游戏内切换仓库时，软件自动识别并跟随当前仓库</div>
+            <div class="srow-d">游戏内切仓时自动识别跟随</div>
           </div>
           <div class="srow-ctl">
             <div class="seg">
@@ -531,7 +531,7 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">保留相同物品原位</div>
-            <div class="srow-d">已放好的相同物品不移动，减少无谓拖动；关闭后按排序彻底重排</div>
+            <div class="srow-d">原位不动，减少拖动；关闭则彻底重排</div>
           </div>
           <div class="srow-ctl">
             <label class="switch"><input type="checkbox" :checked="props.keepInPlace" @change="emit('update:keepInPlace', $event.target.checked)"><span class="track"></span></label>
@@ -540,7 +540,7 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">快速放置（Shift+右键）</div>
-            <div class="srow-d">跨仓放置时用游戏快速放置代替拖动，更快；落点与规划一致才启用，否则自动退回拖动</div>
+            <div class="srow-d">快速放置更快；落点不符自动退回拖动</div>
           </div>
           <div class="srow-ctl">
             <label class="switch"><input type="checkbox" :checked="quickPlace" @change="toggleQuickPlace()"><span class="track"></span></label>
@@ -568,7 +568,7 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">全仓库顺序整理</div>
-            <div class="srow-d">按游戏内标签顺序逐个整理全部仓库：跳过空仓，背包物品并入首个仓库，单仓失败自动跳过</div>
+            <div class="srow-d">跳过空仓，背包并入首仓，失败自动跳过</div>
           </div>
           <div class="srow-ctl">
             <template v-if="sorting && kind === 'all'">
@@ -616,7 +616,7 @@ watch (() => props.charId, () => loadStashOptions ());
           <div class="srow">
             <div class="srow-info">
               <div class="srow-t">仓库切换键</div>
-              <div class="srow-d">全局快捷键，在仓库列表中循环切换下一个仓库</div>
+              <div class="srow-d">全局快捷键，循环切换下一个仓库</div>
             </div>
             <div class="srow-ctl">
               <button class="hotkey-cap" :class="{ listening: listeningFor === 'stash', saved: savedFlash === 'stash' }"
@@ -684,7 +684,7 @@ watch (() => props.charId, () => loadStashOptions ());
           <div class="srow cal-toggle" @click="miscOpen = !miscOpen">
             <div class="srow-info">
               <div class="srow-t">杂物细分（宝石 / 材料 / 消耗品）</div>
-              <div class="srow-d">杂物类物品按子类指定目标仓库，优先于大类{{ miscOpen ? '' : ' —— 点击展开' }}</div>
+              <div class="srow-d">杂物按子类指定仓库，优先于大类{{ miscOpen ? '' : ' —— 点击展开' }}</div>
             </div>
             <div class="srow-ctl">
               <span class="cal-arrow" :class="{ open: miscOpen }">
@@ -705,7 +705,7 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">仓内整理</div>
-            <div class="srow-d">最后对所有非空仓库做内部摆放优化（按排序方案排列）</div>
+            <div class="srow-d">最后做各仓库内部摆放优化</div>
           </div>
           <div class="srow-ctl">
             <label class="switch"><input type="checkbox" v-model="crossCfg.arrange"><span class="track"></span></label>
@@ -810,8 +810,6 @@ watch (() => props.charId, () => loadStashOptions ());
   font-size: 13px; color: #7a4d0d; line-height: 1.6;
 }
 .uipi-warn b { font-weight: 650; color: #a05a00; }
-
-.speed-row .srow-info { flex: 0 0 300px; }
 
 .run-progress {
   display: flex; align-items: center; gap: 12px;

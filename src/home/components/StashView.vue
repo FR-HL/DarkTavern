@@ -687,8 +687,8 @@ watch (() => props.stashId, () => reportStashState ());
       <div class="srow cal-toggle tabcal-toggle" @click="tabCalExpand = !tabCalExpand">
         <div class="srow-info">
           <div class="srow-t">自定义（仓库标签校准）</div>
-          <div class="srow-d" v-if="followMode === 'pixel'">标签点击坐标 + 选中态特征（像素跟随用）{{ tabCalExpand ? '' : ' —— 点击展开' }}</div>
-          <div class="srow-d" v-else>标签点击坐标（游戏内切换仓库、整理自动选 Tab 用）{{ tabCalExpand ? '' : ' —— 点击展开' }}</div>
+          <div class="srow-d" v-if="followMode === 'pixel'">坐标 + 选中态特征（像素跟随用）{{ tabCalExpand ? '' : ' —— 点击展开' }}</div>
+          <div class="srow-d" v-else>标签点击坐标（切换 / 整理用）{{ tabCalExpand ? '' : ' —— 点击展开' }}</div>
         </div>
         <div class="srow-ctl">
           <span class="cal-arrow" :class="{ open: tabCalExpand }">
@@ -705,7 +705,7 @@ watch (() => props.stashId, () => reportStashState ());
         <div v-if="followMode === 'pixel'" class="srow">
           <div class="srow-info">
             <div class="srow-t">一键自动校准</div>
-            <div class="srow-d">程序自动依次点击游戏里的每个标签并采样选中态特征，约 8 秒完成，请先打开游戏仓库界面</div>
+            <div class="srow-d">自动逐标签点击采样特征，约 8 秒</div>
           </div>
           <div class="srow-ctl">
             <button class="btn primary" :disabled="autoCalBusy" @click="autoCalibrate">{{ autoCalBusy ? '自动校准中…' : '一键自动校准' }}</button>
@@ -734,8 +734,8 @@ watch (() => props.stashId, () => reportStashState ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">保存 / 清除</div>
-            <div class="srow-d" v-if="followMode === 'pixel'">全部记录后保存生效；清除后回退到内置坐标与亮度阈值识别</div>
-            <div class="srow-d" v-else>全部记录后保存生效；清除后回退到内置坐标</div>
+            <div class="srow-d" v-if="followMode === 'pixel'">全部记录后保存；清除回退内置识别</div>
+            <div class="srow-d" v-else>全部记录后保存；清除回退内置坐标</div>
           </div>
           <div class="srow-ctl">
             <button class="btn primary" :disabled="calSaving" @click="saveAllCal">{{ calSaving ? '保存中…' : '保存校准' }}</button>
@@ -746,7 +746,7 @@ watch (() => props.stashId, () => reportStashState ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">标签点测（诊断）</div>
-            <div class="srow-d">自动依次点击游戏里的每个标签，核对实际切换顺序</div>
+            <div class="srow-d">自动依次点击标签，核对切换顺序</div>
           </div>
           <div class="srow-ctl">
             <button class="btn sm" :disabled="tabTesting" @click="runTabTest">{{ tabTesting ? '点测中…' : '开始点测' }}</button>
