@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import shutil
+import sys
 import threading
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -49,6 +50,23 @@ def resolve_tshark_executable(selected_path: Optional[str]) -> Optional[str]:
 
 
 def detect_wireshark_installation() -> str:
+    # Bundled portable Wireshark shipped inside the app resources
+    try:
+        from dnd.appdirs import is_frozen
+        if is_frozen():
+            bundled = os.path.join(
+                os.path.dirname(sys.executable), "..", "..", "wireshark", "tshark.exe"
+            )
+        else:
+            bundled = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "..", "tools", "wireshark", "tshark.exe")
+            )
+        resolved = resolve_tshark_executable(bundled)
+        if resolved:
+            return resolved
+    except Exception:
+        pass
+
     # Prefer tshark when it is already on PATH
     tshark_on_path = shutil.which("tshark")
     if tshark_on_path and Path(tshark_on_path).is_file():

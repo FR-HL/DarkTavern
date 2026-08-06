@@ -20,6 +20,7 @@ win:
   icon: assets/images/icon.ico
   target:
     - nsis
+    - zip
   signtoolOptions: null
   extraFiles:
     - from: chinese/ocr-service/dist/ocr-service/
@@ -28,6 +29,8 @@ win:
       to: resources/chinese/mapping/
     - from: models/
       to: native/models/
+    - from: tools/wireshark/
+      to: resources/wireshark/
 nsis:
   oneClick: false
   perMachine: true
