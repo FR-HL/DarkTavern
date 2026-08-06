@@ -40,6 +40,7 @@ class Item:
         max_stack_size=1,
         slot_type="",
         archetype="",
+        item_type="",
     ):
         self.item_id = item_id
         self.name = name
@@ -51,6 +52,7 @@ class Item:
         self.vendor_price = vendor_price
         self.slot_type = slot_type or ""
         self.archetype = archetype or ""
+        self.item_type = item_type or ""
         self.category = self.slot_type or self.archetype.replace("id.item.", "") or "_other"
         self.quantity = int(quantity) if quantity is not None else 1
         if self.quantity < 1:
@@ -287,4 +289,42 @@ class Item:
     @classmethod
     def copy_sort_order(cls, order=None):
         return copy.deepcopy(order if order is not None else cls.sort_order)
+
+
+_MISC_SUBGROUP_KEYWORDS = {
+    "gem": (
+        "diamond", "ruby", "emerald", "sapphire", "pearl", "gem_",
+        "gold_band", "gold_bangle", "gold_bowl", "gold_chalice",
+        "gold_crown", "gold_candelabra", "gold_candle", "gold_waterpot",
+        "silver_chalice", "metal_cup", "bangle", "crown", "necklace", "ring",
+    ),
+    # Consumables are checked before materials: "throwing_knife" contains
+    # "wing", so the generic material keywords must not shadow it.
+    "consumable": (
+        "potion", "ale", "bandage", "bolt", "arrow", "lockpick",
+        "campfire", "bolas", "throwing", "torch", "trap",
+    ),
+    "ore": (
+        "ore", "ingot", "powder", "coal", "brimstone", "charcoal",
+        "billet", "scrap", "remnant",
+    ),
+    "material": (
+        "essence", "wing", "claw", "eyeball", "tusk", "fang", "hoof",
+        "scale", "tail", "egg", "feather", "shell", "silk", "pelt", "hair",
+        "bone", "skull", "heart", "fluid", "ember", "flakes", "vine",
+        "weed", "flower", "mushroom", "leaf", "rose", "thread", "spool",
+    ),
+}
+
+
+def misc_subgroup(archetype) -> str:
+    """Classify a Misc item archetype into a player-facing subgroup.
+
+    Returns one of: gem / ore / material / consumable / junk.
+    """
+    arch = str(archetype or "").lower()
+    for group, keywords in _MISC_SUBGROUP_KEYWORDS.items():
+        if any(k in arch for k in keywords):
+            return group
+    return "junk"
 

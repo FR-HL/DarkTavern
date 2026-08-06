@@ -260,6 +260,7 @@ class Storage:
                 max_stack = item_data_manager.get_item_max_stack_size(item_id)
                 slot_type = item_data_manager.get_item_slot_type(item_id)
                 archetype = item_data_manager.get_item_archetype(item_id)
+                item_type = item_data_manager.get_item_type(item_id)
 
                 item = Item(
                     item_id,
@@ -274,6 +275,7 @@ class Storage:
                     max_stack_size=max_stack,
                     slot_type=slot_type,
                     archetype=archetype,
+                    item_type=item_type,
                 )
 
             except Exception as e:

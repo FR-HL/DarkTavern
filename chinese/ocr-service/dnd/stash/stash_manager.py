@@ -9,6 +9,7 @@ from .stash_preview import parse_stashes, StashPreviewGenerator, ItemInfo
 from .storage import Storage, StashType
 from dnd.sort.sorter import StashSorter, LayoutPlanner, LayoutPlanError
 from dnd.items.game_data import item_data_manager
+from dnd.items.item import misc_subgroup
 from dnd.sort import macros
 import pygetwindow as gw
 from dnd.appdirs import get_output_dir, resource_path, get_characters_dir
@@ -48,46 +49,6 @@ def simulate_stash_autoplace(grid, width, height, item_w, item_h):
     return None
 
 
-# Player-facing subgroups for Misc (junk-type) items, matched against the
-# item archetype (e.g. "id.item.diamond").
-_MISC_SUBGROUP_KEYWORDS = {
-    "gem": (
-        "diamond", "ruby", "emerald", "sapphire", "pearl", "gem_",
-        "gold_band", "gold_bangle", "gold_bowl", "gold_chalice",
-        "gold_crown", "gold_candelabra", "gold_candle", "gold_waterpot",
-        "silver_chalice", "metal_cup", "bangle", "crown", "necklace", "ring",
-    ),
-    # Consumables are checked before materials: "throwing_knife" contains
-    # "wing", so the generic material keywords must not shadow it.
-    "consumable": (
-        "potion", "ale", "bandage", "bolt", "arrow", "lockpick",
-        "campfire", "bolas", "throwing", "torch", "trap",
-    ),
-    "ore": (
-        "ore", "ingot", "powder", "coal", "brimstone", "charcoal",
-        "billet", "scrap", "remnant",
-    ),
-    "material": (
-        "essence", "wing", "claw", "eyeball", "tusk", "fang", "hoof",
-        "scale", "tail", "egg", "feather", "shell", "silk", "pelt", "hair",
-        "bone", "skull", "heart", "fluid", "ember", "flakes", "vine",
-        "weed", "flower", "mushroom", "leaf", "rose", "thread", "spool",
-    ),
-}
-
-
-def _misc_subgroup(item_data) -> str:
-    """Classify a Misc item into a player-facing subgroup.
-
-    Returns one of: gem / ore / material / consumable / junk.
-    """
-    arch = str(item_data.get("archetype") or "").lower()
-    for group, keywords in _MISC_SUBGROUP_KEYWORDS.items():
-        if any(k in arch for k in keywords):
-            return group
-    return "junk"
-
-
 def _resolve_category_target(item_data, slot_map, category_map, misc_map):
     """Resolve the destination stash id for one item during categorize.
 
@@ -106,7 +67,7 @@ def _resolve_category_target(item_data, slot_map, category_map, misc_map):
 
     candidates = []
     if is_junk_type:
-        candidates.append(misc_map.get(_misc_subgroup(item_data)))
+        candidates.append(misc_map.get(misc_subgroup(item_data.get("archetype"))))
         candidates.append(misc_map.get("junk"))
     candidates.append(slot_map.get(str(item_data.get("slot_type") or "") or "other"))
     candidates.append(slot_map.get("other"))

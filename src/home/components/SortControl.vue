@@ -64,7 +64,7 @@ const SORT_PRESETS = [
     ],
   },
   {
-    id: 'test', label: '品质区分',
+    id: 'sized', label: '品质区分',
     groupMode: 'sized',
     order: [
       { field: 'name', direction: 'asc' },
@@ -80,6 +80,15 @@ const SORT_PRESETS = [
       { field: 'name', direction: 'asc' },
       { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
       { field: 'rarity', direction: 'desc' },
+    ],
+  },
+  {
+    id: 'type', label: '分类摆放',
+    groupMode: 'type',
+    order: [
+      { field: 'name', direction: 'asc' },
+      { field: 'rarity', direction: 'desc' },
+      { field: 'width', direction: 'desc' }, { field: 'height', direction: 'desc' },
     ],
   },
 ];
@@ -183,7 +192,8 @@ async function loadSortOrder () {
       invoke ('dnd:sort-group-get'),
     ]);
     if (g && g.mode === 'category') { sortPreset.value = 'category'; return; }
-    if (g && g.mode === 'sized') { sortPreset.value = 'test'; return; }
+    if (g && g.mode === 'sized') { sortPreset.value = 'sized'; return; }
+    if (g && g.mode === 'type') { sortPreset.value = 'type'; return; }
     if (d && Array.isArray (d.order)) {
       const hit = SORT_PRESETS.find (p => samePreset (d.order, p.order));
       sortPreset.value = hit ? hit.id : 'default';
@@ -260,6 +270,8 @@ const MISC_LABELS = {
   gem: '宝石', ore: '矿石与金属', material: '材料',
   consumable: '消耗品', junk: '杂物',
 };
+const CATEGORY_EXAMPLES = { Weapon: '长剑', Armor: '皮革手套', Utility: '火把', Accessory: '勇气之戒', Misc: '鹅卵石', other: '未识别物品兜底' };
+const MISC_EXAMPLES = { gem: '钻石（普通）', ore: '铁矿', material: '巨型蝙蝠翅膀', consumable: '麦酒', junk: '发霉的面包' };
 const crossCfg = ref ({ categorize: true, categorize_mode: 'auto', category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
 const crossNote = ref ('');
 const crossSteps = ref ([]);
@@ -289,14 +301,20 @@ async function loadStashOptions () {
       .filter (id => !['2', '3'].includes (id))
       .map (id => ({ id, label: stashes[id].label || `仓库${id}` }));
     const cfg = crossCfg.value;
-    const needDefault = Object.keys (CATEGORY_LABELS).every (t => !cfg.category_map[t]);
-    if (needDefault && stashOptions.value.length) {
+    if (stashOptions.value.length) {
       const s = stashOptions.value;
-      cfg.category_map = {
+      const defaults = {
         Weapon: String (s[0]?.id ?? ''), Armor: String (s[0]?.id ?? ''),
         Utility: String (s[1]?.id ?? s[0]?.id ?? ''), Accessory: String (s[1]?.id ?? s[0]?.id ?? ''),
         Misc: String (s[2]?.id ?? s[0]?.id ?? ''), other: String (s[2]?.id ?? s[0]?.id ?? ''),
       };
+      const valid = new Set (stashOptions.value.map (o => o.id));
+      for (const t of Object.keys (CATEGORY_LABELS)) {
+        if (!cfg.category_map[t] || !valid.has (cfg.category_map[t])) cfg.category_map[t] = defaults[t];
+      }
+      for (const t of Object.keys (MISC_LABELS)) {
+        if (!cfg.misc_map[t] || !valid.has (cfg.misc_map[t])) cfg.misc_map[t] = cfg.category_map.Misc;
+      }
     }
   } catch (e) {}
 }
@@ -424,8 +442,8 @@ onMounted (async () => {
   loadSortSpeed ();
   loadSortOrder ();
   loadHotkeys ();
-  loadCrossConfig ();
-  loadStashOptions ();
+  await loadCrossConfig ();
+  await loadStashOptions ();
   loadQuickPlace ();
   try {
     const s = await invoke ('dnd:sort-status');
@@ -665,18 +683,14 @@ watch (() => props.charId, () => loadStashOptions ());
         <template v-if="crossCfg.categorize && crossCfg.categorize_mode === 'manual'">
           <div class="cat-grid">
             <label v-for="(label, type) in CATEGORY_LABELS" :key="type" class="cat-cell">
-              <span class="cat-name">{{ label }}</span>
+              <span class="cat-name">{{ label }}<span class="cat-eg">{{ CATEGORY_EXAMPLES[type] }}</span></span>
               <select class="cross-select" v-model="crossCfg.category_map[type]">
                 <option v-for="s in stashOptions" :key="s.id" :value="String(s.id)">{{ s.label }}</option>
               </select>
             </label>
-          </div>
-          <div class="cat-grid cat-grid-misc">
-            <div class="cat-group-title">杂物细分（宝石 / 材料 / 消耗品）</div>
             <label v-for="(label, type) in MISC_LABELS" :key="'m' + type" class="cat-cell">
-              <span class="cat-name">{{ label }}</span>
+              <span class="cat-name">{{ label }}<span class="cat-eg">{{ MISC_EXAMPLES[type] }}</span></span>
               <select class="cross-select" v-model="crossCfg.misc_map[type]">
-                <option value="">沿用大类</option>
                 <option v-for="s in stashOptions" :key="s.id" :value="String(s.id)">{{ s.label }}</option>
               </select>
             </label>
@@ -754,7 +768,7 @@ watch (() => props.charId, () => loadStashOptions ());
 .cal-note { font-size: 12.5px; color: var(--green); }
 .cat-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px 14px;
   padding: 10px 18px 14px;
   background: var(--card-2);
@@ -762,8 +776,7 @@ watch (() => props.charId, () => loadStashOptions ());
 }
 .cat-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .cat-name { font-size: 11.5px; font-weight: 650; color: var(--text-2); }
-.cat-grid-misc { grid-template-columns: repeat(4, 1fr); }
-.cat-group-title { grid-column: 1 / -1; font-size: 12px; font-weight: 650; color: var(--text); }
+.cat-eg { margin-left: 5px; font-size: 10.5px; font-weight: 450; color: var(--text-3); }
 .cross-select {
   width: 100%;
   padding: 4px 8px;

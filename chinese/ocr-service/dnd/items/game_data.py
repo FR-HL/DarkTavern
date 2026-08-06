@@ -98,6 +98,12 @@ class ItemDataManager:
         item = self._data.get(item_id, {})
         return item.get("slot_type", "")
 
+    def get_item_type(self, item_id):
+        """Get item category type (Weapon, Armor, Utility, Accessory, Misc)."""
+        self._ensure_loaded()
+        item = self._data.get(item_id, {})
+        return item.get("item_type", "")
+
     def get_item_archetype(self, item_id):
         """Get item category archetype (e.g. 'id.item.diamond' for gems)."""
         self._ensure_loaded()

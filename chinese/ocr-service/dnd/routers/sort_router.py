@@ -231,7 +231,7 @@ def get_sort_group_mode():
 @router.post("/group-mode")
 def update_sort_group_mode(body: SortGroupModeUpdate):
     from dnd.settings import settings_manager
-    mode = body.mode if body.mode in ("none", "category", "sized", "neat") else "none"
+    mode = body.mode if body.mode in ("none", "category", "sized", "neat", "type") else "none"
     settings_manager.update({"sortGroupMode": mode}, persist=True)
     return {"success": True, "mode": mode}
 
@@ -329,6 +329,8 @@ def sort_preview(character_id: str, stash_id: str,
                 plan = planner.build_neat_groups(items, comparator=comparator)
             elif group_mode == "category":
                 plan = planner.build_grouped(items, comparator=comparator)
+            elif group_mode == "type":
+                plan = planner.build_type_rows(items, comparator=comparator)
             else:
                 plan = planner.build(items, comparator=comparator)
             break

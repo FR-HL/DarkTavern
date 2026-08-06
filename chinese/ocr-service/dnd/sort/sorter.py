@@ -215,6 +215,8 @@ class LayoutPlanner:
         "Unarmed", "Sash",
     )
 
+    TYPE_ROW_MIN_ITEMS = 3
+
     def __init__(
         self,
         width: int,
@@ -541,6 +543,13 @@ class LayoutPlanner:
             return ("equip", slot)
         return ("sized", item.name or "")
 
+    def _kind_group_key(self, item: Item) -> str:
+        """物品种类键：同原型（archetype）算一种；未识别物品按名称分组。"""
+        arch = (getattr(item, "archetype", "") or "").strip()
+        if arch:
+            return arch
+        return (getattr(item, "name", "") or "").strip() or "_other"
+
     def build_sized_groups(
         self,
         items: List[Item],
@@ -699,6 +708,133 @@ class LayoutPlanner:
                 record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
                 if record:
                     learning_payload[id(itm)] = record
+
+        execution_order = sorted(
+            [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
+            key=lambda entry: (
+                entry.target.y,
+                entry.target.x,
+                -(entry.item.width * entry.item.height),
+            ),
+        )
+        return LayoutPlan(positions=positions, order=execution_order, learning=learning_payload)
+
+    def build_type_rows(
+        self,
+        items: List[Item],
+        comparator: Optional[Callable[[Item, Item], int]] = None,
+    ) -> LayoutPlan:
+        """种类分行布局：同种物品（同原型；未识别物品按名称）独占行块，
+        从上到下按数量降序（多的先摆）排开。
+
+        - 种类内按尺寸分段（大件优先），段内按 comparator（名称→稀有度）排序，
+          行从左往右填充
+        - 种类结束即换行：最后一行没放满也留空，下一种从新行开始
+        - 件数少于 TYPE_ROW_MIN_ITEMS 的小种类不独占行，按同样的
+        数量降序合并到末尾共享行
+        - 高度放不下时溢出到仓库底部兜底
+        """
+        self._reset()
+        self._learning_cache = {}
+        groups: Dict[str, List[Item]] = {}
+        for itm in items:
+            groups.setdefault(self._kind_group_key(itm), []).append(itm)
+
+        def kind_sort_key(key: str) -> Tuple[int, int, str]:
+            g = groups[key]
+            return (-len(g), -sum(i.width * i.height for i in g), key)
+
+        ordered_keys = sorted(groups.keys(), key=kind_sort_key)
+        major_keys = [k for k in ordered_keys if len(groups[k]) >= self.TYPE_ROW_MIN_ITEMS]
+        minor_keys = [k for k in ordered_keys if len(groups[k]) < self.TYPE_ROW_MIN_ITEMS]
+
+        positions: Dict[int, Point] = {}
+        learning_payload: Dict[int, Dict[str, Any]] = {}
+        overflow: List[Item] = []
+        y_anchor = 0
+
+        def place(itm, pos):
+            self._ensure_learning_cache(itm)
+            self._mark(pos, itm)
+            positions[id(itm)] = pos
+            record = self._record_learning_assignment(itm, pos, comparator_used=bool(comparator))
+            if record:
+                learning_payload[id(itm)] = record
+
+        def sort_segment(segment: List[Item]) -> List[Item]:
+            if comparator:
+                return sorted(segment, key=cmp_to_key(comparator))
+            return sorted(segment, key=self._learning_sort_key)
+
+        def size_segments(group: List[Item]) -> List[Tuple[Tuple[int, int], List[Item]]]:
+            by_size: Dict[Tuple[int, int], List[Item]] = {}
+            for itm in group:
+                by_size.setdefault((itm.width, itm.height), []).append(itm)
+            keys = sorted(by_size.keys(), key=lambda d: (-(d[0] * d[1]), -d[0]))
+            return [(k, sort_segment(by_size[k])) for k in keys]
+
+        for key in major_keys:
+            for (w, h), segment in size_segments(groups[key]):
+                n = len(segment)
+                k = max(1, self.width // w)
+                rows = (n + k - 1) // k
+                if y_anchor + rows * h > self.height:
+                    overflow.extend(segment)
+                    continue
+                for i, itm in enumerate(segment):
+                    y = y_anchor + (i // k) * h
+                    x = (i % k) * w
+                    while x + w <= self.width and not self._fits(itm, x, y):
+                        x += w
+                    if x + w > self.width:
+                        overflow.extend(it for it in segment if id(it) not in positions)
+                        break
+                    place(itm, Point(x, y))
+                y_anchor += rows * h
+
+        minor_items: List[Item] = []
+        for key in minor_keys:
+            for _size, segment in size_segments(groups[key]):
+                minor_items.extend(segment)
+        y = y_anchor
+        while minor_items:
+            if y >= self.height:
+                overflow.extend(minor_items)
+                break
+            remaining: List[Item] = []
+            placed_any = False
+            cursor = 0
+            for itm in minor_items:
+                if y + itm.height > self.height:
+                    remaining.append(itm)
+                    continue
+                x = cursor
+                while x + itm.width <= self.width and not self._fits(itm, x, y):
+                    x += 1
+                if x + itm.width <= self.width:
+                    place(itm, Point(x, y))
+                    cursor = x + itm.width
+                    placed_any = True
+                else:
+                    remaining.append(itm)
+            if not placed_any:
+                overflow.extend(remaining)
+                break
+            minor_items = remaining
+            y += 1
+
+        for itm in overflow:
+            if id(itm) in positions:
+                continue
+            self._ensure_learning_cache(itm)
+            slot = self._find_slot_from_bottom(itm)
+            if slot is None:
+                raise LayoutPlanError(f"Unable to place item '{itm}' within stash bounds")
+            self._mark(slot, itm)
+            positions[id(itm)] = slot
+            record = self._record_learning_assignment(itm, slot, comparator_used=bool(comparator))
+            if record:
+                learning_payload[id(itm)] = record
 
         execution_order = sorted(
             [PlanEntry(item=itm, target=positions[id(itm)]) for itm in items],
@@ -2016,7 +2152,7 @@ class StashSorter:
         self.inv = inv
         self.cancel_event = None
         self.stack_mode = bool(stack_mode)
-        self.group_mode = group_mode if group_mode in ("none", "category", "sized", "neat") else "none"
+        self.group_mode = group_mode if group_mode in ("none", "category", "sized", "neat", "type") else "none"
         self.keep_in_place = bool(keep_in_place)
         self.character_id = character_id
         self.stash_id = stash_id
@@ -2947,6 +3083,8 @@ class StashSorter:
                     plan = planner.build_sized_groups(items, comparator=comparator)
                 elif self.group_mode == "neat":
                     plan = planner.build_neat_groups(items, comparator=comparator)
+                elif self.group_mode == "type":
+                    plan = planner.build_type_rows(items, comparator=comparator)
                 else:
                     plan = planner.build(items, comparator=comparator)
                 if fallback_used and comparator is None:
@@ -2956,7 +3094,7 @@ class StashSorter:
                 break
             except LayoutPlanError as exc:
                 if comparator is None:
-                    if self.group_mode in ("category", "sized", "neat"):
+                    if self.group_mode in ("category", "sized", "neat", "type"):
                         logger.warning("Category layout failed; retrying with plain layout: %s", exc)
                         fallback_used = True
                         try:
