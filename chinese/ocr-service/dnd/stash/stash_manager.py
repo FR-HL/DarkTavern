@@ -1253,15 +1253,19 @@ class StashManager:
         # selection is disabled or the target has no tab mapping.
         can_switch_tabs = auto_stash and stash_type_int in macros.STASH_TYPE_TO_TAB_INDEX
         if can_switch_tabs and not include_inventory and inventory and inventory.pq:
-            cleared_slots = self._clear_inventory_to_stashes(
-                inventory, inv_items, stash_type_int, stashes,
-                cancel_event, session,
-            )
-            if cleared_slots:
-                inv_items = [
-                    it for it in inv_items
-                    if it.get("slotId") not in cleared_slots
-                ]
+            total_cells = stash.width * stash.height
+            occupied = sum(it.width * it.height for it in stash.pq)
+            fill_ratio = occupied / total_cells if total_cells else 0
+            if fill_ratio > self._RELIEF_THRESHOLD and inventory.count_free_cells() < self._WORKSPACE_BAG_TARGET:
+                cleared_slots = self._clear_inventory_to_stashes(
+                    inventory, inv_items, stash_type_int, stashes,
+                    cancel_event, session, self._WORKSPACE_BAG_TARGET,
+                )
+                if cleared_slots:
+                    inv_items = [
+                        it for it in inv_items
+                        if it.get("slotId") not in cleared_slots
+                    ]
 
         if cancel_event and cancel_event.is_set():
             return False, "Sort cancelled", session_summary
@@ -1339,8 +1343,10 @@ class StashManager:
         all_stashes,
         cancel_event,
         session,
+        target_free_cells: int = 6,
     ):
-        """Deposit movable inventory items into other stashes to free workspace.
+        """Deposit the minimum movable inventory items into other stashes
+        until the bag reaches *target_free_cells* free workspace.
 
         Returns the set of raw ``slotId`` values that were successfully
         deposited so the caller can prune *inv_items_raw* for downstream
@@ -1373,6 +1379,23 @@ class StashManager:
             if slot_id in supplied_slots:
                 continue
             movable.append((item, slot_id))
+
+        if not movable:
+            return set()
+
+        free = inventory.count_free_cells()
+        if free >= target_free_cells:
+            return set()
+        need = target_free_cells - free
+        movable.sort(key=lambda pair: pair[0].width * pair[0].height)
+        freed = 0
+        limited = []
+        for pair in movable:
+            if freed >= need:
+                break
+            limited.append(pair)
+            freed += pair[0].width * pair[0].height
+        movable = limited
 
         if not movable:
             return set()
@@ -1474,6 +1497,7 @@ class StashManager:
 
     _RELIEF_THRESHOLD = 0.85  # Only relieve if >85% full
     _RELIEF_TARGET = 0.75     # Bring down to ~75% (60 free cells in 240-cell stash)
+    _WORKSPACE_BAG_TARGET = 6  # Bag free cells the sorter needs as workspace
 
     _OVERFLOW_CANDIDATE_TYPES = {
         StashType.STORAGE.value,
