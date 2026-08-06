@@ -937,10 +937,10 @@ onBeforeUnmount (() => {
               <div class="srow-ctl">
                 <div class="seg">
                   <button class="seg-opt" :class="{ on: scanMode === 'manual' }" @click="setMode('manual')">
-                    <span class="seg-t">手动</span><span class="seg-d">按键触发</span>
+                    <span class="seg-t">手动</span>
                   </button>
                   <button class="seg-opt" :class="{ on: scanMode === 'automatic' }" @click="setMode('automatic')">
-                    <span class="seg-t">自动</span><span class="seg-d">悬停触发</span>
+                    <span class="seg-t">自动</span>
                   </button>
                 </div>
               </div>

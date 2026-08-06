@@ -812,11 +812,11 @@ watch (() => props.stashId, () => reportStashState ());
         <div class="stash-meta">
           <div class="stash-preset">
             <span class="stash-k">排序方案</span>
-            <div class="preset-group">
+            <div class="seg">
               <button v-for="o in SORT_PRESETS" :key="o.id"
-                      class="preset-opt" :class="{ active: sortPreset === o.id }"
+                      class="seg-opt" :class="{ on: sortPreset === o.id }"
                       @click="changePreset(o.id)">
-                {{ o.label }}
+                <span class="seg-t">{{ o.label }}</span>
               </button>
             </div>
           </div>
@@ -1018,18 +1018,6 @@ watch (() => props.stashId, () => reportStashState ());
 .stash-k { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); }
 .stash-v { font-size: 14px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .stash-preset { display: flex; align-items: center; gap: 12px; margin-right: auto; min-width: 0; }
-.preset-group { display: flex; gap: 6px; flex-wrap: wrap; }
-.preset-opt {
-  padding: 5px 14px; font-size: 12.5px; font-weight: 600;
-  border: 1px solid var(--line); border-radius: 8px;
-  background: var(--card-2); color: var(--text-2);
-  cursor: pointer; transition: all .15s;
-}
-.preset-opt:hover { border-color: var(--accent-soft); }
-.preset-opt.active {
-  background: var(--accent); border-color: var(--accent);
-  color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.28);
-}
 .scan-bar { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .scan-chip {
   min-width: 26px; padding: 2px 5px;

@@ -260,7 +260,7 @@ const MISC_LABELS = {
   gem: '宝石', ore: '矿石与金属', material: '材料',
   consumable: '消耗品', junk: '杂物',
 };
-const crossCfg = ref ({ categorize: false, categorize_mode: 'auto', category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
+const crossCfg = ref ({ categorize: true, categorize_mode: 'auto', category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
 const miscOpen = ref (false);
 const crossNote = ref ('');
 const crossSteps = ref ([]);
@@ -272,7 +272,7 @@ const stashOptions = ref ([]);
 const crossPosition = computed ({
   get: () => crossCfg.value.categorize
     ? (crossCfg.value.categorize_mode === 'manual' ? 'category' : 'auto')
-    : crossCfg.value.repack ? (crossCfg.value.repack_mode === 'balanced' ? 'balanced' : 'front') : 'none',
+    : crossCfg.value.repack ? (crossCfg.value.repack_mode === 'balanced' ? 'balanced' : 'front') : 'auto',
   set: v => {
     crossCfg.value.categorize = v === 'category' || v === 'auto';
     crossCfg.value.categorize_mode = v === 'category' ? 'manual' : 'auto';
@@ -307,12 +307,16 @@ async function loadCrossConfig () {
     const d = await invoke ('settings:get');
     if (d && d.cross_config) {
       const merged = {
-        categorize: false, categorize_mode: 'auto', category_map: {},
+        categorize: true, categorize_mode: 'auto', category_map: {},
         misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true,
         ...d.cross_config,
       };
       delete merged.merge;
       delete merged.clear_bag;
+      if (!merged.categorize && !merged.repack) {
+        merged.categorize = true;
+        merged.categorize_mode = 'auto';
+      }
       crossCfg.value = merged;
     }
   } catch (e) {}
@@ -466,12 +470,14 @@ watch (() => props.charId, () => loadStashOptions ());
             <div class="srow-t">排序方案</div>
             <div class="srow-d">决定物品的摆放顺序；可随时切换，重启后保留</div>
           </div>
-          <div class="srow-ctl preset-group">
-            <button v-for="o in SORT_PRESETS" :key="o.id"
-                    class="speed-opt" :class="{ active: sortPreset === o.id }"
-                    @click="changePreset(o.id)">
-              {{ o.label }}
-            </button>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in SORT_PRESETS" :key="o.id"
+                      class="seg-opt" :class="{ on: sortPreset === o.id }"
+                      @click="changePreset(o.id)">
+                <span class="seg-t">{{ o.label }}</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="srow speed-row">
@@ -479,12 +485,14 @@ watch (() => props.charId, () => loadStashOptions ());
             <div class="srow-t">整理速度</div>
             <div class="srow-d">极速≈10 倍提速；若出现漏放/串位，改用中或慢</div>
           </div>
-          <div class="srow-ctl speed-group">
-            <button v-for="o in SPEED_OPTIONS" :key="o.id"
-                    class="speed-opt" :class="{ active: sortSpeed === o.id }"
-                    @click="changeSpeed(o.id)">
-              {{ o.label }}
-            </button>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in SPEED_OPTIONS" :key="o.id"
+                      class="seg-opt" :class="{ on: sortSpeed === o.id }"
+                      @click="changeSpeed(o.id)">
+                <span class="seg-t">{{ o.label }}</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="srow">
@@ -492,13 +500,14 @@ watch (() => props.charId, () => loadStashOptions ());
             <div class="srow-t">游戏仓库跟随</div>
             <div class="srow-d">游戏内切换仓库时，软件自动识别并跟随当前仓库</div>
           </div>
-          <div class="srow-ctl speed-group">
-            <button v-for="o in FOLLOW_OPTIONS" :key="o.id"
-                    class="speed-opt" :class="{ active: followMode === o.id }"
-                    :title="o.desc"
-                    @click="changeFollowMode(o.id)">
-              {{ o.label }}
-            </button>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in FOLLOW_OPTIONS" :key="o.id"
+                      class="seg-opt" :class="{ on: followMode === o.id }"
+                      @click="changeFollowMode(o.id)">
+                <span class="seg-t">{{ o.label }}</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="srow">
@@ -626,47 +635,26 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">开始跨仓整理</div>
-            <div class="srow-d">全局快捷键，点击右侧键帽可改</div>
+            <div class="srow-d">按下方位置策略执行跨仓整理</div>
           </div>
           <div class="srow-ctl">
             <button v-if="!(sorting && kind === 'cross')" class="btn primary" :disabled="!props.charId || sorting" @click="startCrossSort">开始跨仓整理</button>
             <button v-else class="btn danger" @click="cancelSort">取消整理</button>
-            <button class="hotkey-cap" :class="{ listening: listeningFor === 'cross', saved: savedFlash === 'cross' }"
-                    @click="startHotkeyListen('cross')" :title="listeningFor === 'cross' ? '按 Esc 取消' : '点击修改'">
-              {{ listeningFor === 'cross' ? '按新键… Esc 取消' : crossHotkey }}
-            </button>
             <span v-if="crossNote" class="cal-note">{{ crossNote }}</span>
           </div>
         </div>
         <div class="srow">
           <div class="srow-info">
-            <div class="srow-t">仓内整理</div>
-            <div class="srow-d">最后对所有非空仓库做内部摆放优化（按排序方案排列）</div>
+            <div class="srow-t">跨仓整理快捷键</div>
+            <div class="srow-d">全局快捷键，点击键帽可改</div>
           </div>
           <div class="srow-ctl">
-            <label class="switch"><input type="checkbox" v-model="crossCfg.arrange"><span class="track"></span></label>
+            <button class="hotkey-cap" :class="{ listening: listeningFor === 'cross', saved: savedFlash === 'cross' }"
+                    @click="startHotkeyListen('cross')" :title="listeningFor === 'cross' ? '按 Esc 取消' : '点击修改'">
+              {{ listeningFor === 'cross' ? '按新键… Esc 取消' : crossHotkey }}
+            </button>
           </div>
         </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">腾空仓库</div>
-            <div class="srow-d">清空勾选的仓库，物品搬到其他仓库</div>
-          </div>
-          <div class="srow-ctl">
-            <label class="switch"><input type="checkbox" v-model="crossCfg.evacuate"><span class="track"></span></label>
-          </div>
-        </div>
-        <template v-if="crossCfg.evacuate">
-          <div class="srow" v-for="s in stashOptions" :key="'e' + s.id">
-            <div class="srow-info">
-              <div class="srow-t">{{ s.label }}</div>
-              <div class="srow-d">整理后该仓库将被清空</div>
-            </div>
-            <div class="srow-ctl">
-            <label class="switch"><input type="checkbox" :value="String(s.id)" v-model="crossCfg.evacuate_stashes"><span class="track"></span></label>
-          </div>
-        </div>
-        </template>
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">位置策略</div>
@@ -674,10 +662,9 @@ watch (() => props.charId, () => loadStashOptions ());
           </div>
           <div class="srow-ctl">
             <div class="seg">
-              <button class="seg-opt" :class="{ on: crossPosition === 'none' }" @click="crossPosition = 'none'"><span class="seg-t">不移动</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'auto' }" @click="crossPosition = 'auto'"><span class="seg-t">自动归类</span></button>
-              <button class="seg-opt" :class="{ on: crossPosition === 'category' }" @click="crossPosition = 'category'"><span class="seg-t">按类别归类</span></button>
-              <button class="seg-opt" :class="{ on: crossPosition === 'front' }" @click="crossPosition = 'front'"><span class="seg-t">前移集中</span></button>
+              <button class="seg-opt" :class="{ on: crossPosition === 'category' }" @click="crossPosition = 'category'"><span class="seg-t">手动定义</span></button>
+              <button class="seg-opt" :class="{ on: crossPosition === 'front' }" @click="crossPosition = 'front'"><span class="seg-t">密集整理</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'balanced' }" @click="crossPosition = 'balanced'"><span class="seg-t">均衡分散</span></button>
             </div>
           </div>
@@ -714,6 +701,35 @@ watch (() => props.charId, () => loadStashOptions ());
               </select>
             </label>
           </div>
+        </template>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">仓内整理</div>
+            <div class="srow-d">最后对所有非空仓库做内部摆放优化（按排序方案排列）</div>
+          </div>
+          <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" v-model="crossCfg.arrange"><span class="track"></span></label>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">腾空仓库</div>
+            <div class="srow-d">清空勾选的仓库，物品搬到其他仓库</div>
+          </div>
+          <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" v-model="crossCfg.evacuate"><span class="track"></span></label>
+          </div>
+        </div>
+        <template v-if="crossCfg.evacuate">
+          <div class="srow" v-for="s in stashOptions" :key="'e' + s.id">
+            <div class="srow-info">
+              <div class="srow-t">{{ s.label }}</div>
+              <div class="srow-d">整理后该仓库将被清空</div>
+            </div>
+            <div class="srow-ctl">
+            <label class="switch"><input type="checkbox" :value="String(s.id)" v-model="crossCfg.evacuate_stashes"><span class="track"></span></label>
+          </div>
+        </div>
         </template>
         <div v-if="kind === 'cross' && sorting" class="run-progress">
           <span class="spin"></span>
@@ -795,19 +811,7 @@ watch (() => props.charId, () => loadStashOptions ());
 }
 .uipi-warn b { font-weight: 650; color: #a05a00; }
 
-.speed-group { display: flex; gap: 6px; }
 .speed-row .srow-info { flex: 0 0 300px; }
-.speed-opt {
-  padding: 6px 16px; font-size: 13px; font-weight: 600;
-  border: 1px solid var(--line); border-radius: 8px;
-  background: var(--card-2); color: var(--text-2);
-  cursor: pointer; transition: all .15s;
-}
-.speed-opt:hover { border-color: var(--accent-soft); }
-.speed-opt.active {
-  background: var(--accent); border-color: var(--accent);
-  color: #fff; box-shadow: 0 2px 8px rgba(0,113,227,0.28);
-}
 
 .run-progress {
   display: flex; align-items: center; gap: 12px;
