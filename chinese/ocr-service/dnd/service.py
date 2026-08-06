@@ -365,7 +365,7 @@ def start_sort(character_id: str, stash_id: str,
     if stack_mode is None:
         stack_mode = bool(settings_manager.get('stashStackMode', False))
     if group_mode is None:
-        group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+        group_mode = str(settings_manager.get('sortGroupMode', 'type') or 'type')
     if keep_in_place is None:
         keep_in_place = bool(settings_manager.get('sortKeepInPlace', True))
 
@@ -439,7 +439,7 @@ def _resolve_sort_options(stack_mode, group_mode):
     if stack_mode is None:
         stack_mode = bool(settings_manager.get('stashStackMode', False))
     if group_mode is None:
-        group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+        group_mode = str(settings_manager.get('sortGroupMode', 'type') or 'type')
     return stack_mode, group_mode
 
 

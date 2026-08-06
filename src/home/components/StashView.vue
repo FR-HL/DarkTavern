@@ -195,7 +195,7 @@ const SORT_PRESETS = [
   },
 ];
 
-const sortPreset = ref ('default');
+const sortPreset = ref ('type');
 
 function samePreset (a, b) {
   if (!Array.isArray (a) || !Array.isArray (b)) return false;

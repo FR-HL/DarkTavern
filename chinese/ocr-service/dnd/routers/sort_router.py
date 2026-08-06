@@ -224,7 +224,7 @@ def get_sort_order():
 @router.get("/group-mode")
 def get_sort_group_mode():
     from dnd.settings import settings_manager
-    mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+    mode = str(settings_manager.get('sortGroupMode', 'type') or 'type')
     return {"mode": mode}
 
 
@@ -307,7 +307,7 @@ def sort_preview(character_id: str, stash_id: str,
     except Exception:
         pass
 
-    group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+    group_mode = str(settings_manager.get('sortGroupMode', 'type') or 'type')
 
     # Same planner fallback chain as StashSorter._build_sort_plan so the
     # preview layout matches what an actual sort will produce.

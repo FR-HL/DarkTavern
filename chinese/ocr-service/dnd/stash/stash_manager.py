@@ -1129,12 +1129,11 @@ class StashManager:
             session.add_log("The equipment page is not sortable — gear is worn, not stored.")
             logger.warning("Sorting refused: equipment stash %s", stash_id)
             return False, "装备页不可整理", session_summary
-        stash_items = char.get('stashes', {}).get(str(stash_id))
+        stash_items = char.get('stashes', {}).get(str(stash_id)) or []
         if not stash_items:
-            session.update_status("Selected stash is empty or missing.", status="error")
-            session.add_log(f"Stash {stash_id} could not be found for this character.")
-            logger.warning("Stash %s not found for character %s", stash_id, character_id)
-            return False, "Stash not found", session_summary
+            session.add_log(
+                f"Stash {stash_id} is empty in cached data — will refresh before sorting."
+            )
         session.update_status("Locating Dark and Darker window...", status="info")
         windows = [w for w in gw.getAllWindows() if w.title == "Dark and Darker  "]
         if not windows:
@@ -2595,7 +2594,7 @@ class StashManager:
         _time.sleep(0.5)
 
         stack_mode = bool(settings_manager.get('stashStackMode', False))
-        group_mode = str(settings_manager.get('sortGroupMode', 'none') or 'none')
+        group_mode = str(settings_manager.get('sortGroupMode', 'type') or 'type')
         keep_in_place = bool(settings_manager.get('sortKeepInPlace', True))
 
         sorter = StashSorter(
