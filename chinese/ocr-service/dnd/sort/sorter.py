@@ -14,7 +14,7 @@ import pygetwindow as gw
 
 from dnd.sort import macros
 from dnd.overlay_stub import NullOverlaySession, SortOverlaySession, overlay_manager
-from dnd.items.item import Item
+from dnd.items.item import Item, misc_subgroup
 from dnd.sort.point import Point
 from dnd.stash.stash_preview import parse_stashes
 from dnd.stash.storage import Storage, StashType
@@ -724,15 +724,16 @@ class LayoutPlanner:
         items: List[Item],
         comparator: Optional[Callable[[Item, Item], int]] = None,
     ) -> LayoutPlan:
-        """种类分行布局：同种物品（同原型；未识别物品按名称）独占行块，
-        从上到下按数量降序（多的先摆）排开。
+        """种类分行布局：同种物品（同原型；未识别物品按名称）独占行块。
 
+        - 行序：有部位的种类按部位分块（头→胸→腿→脚→手→背→项链→戒指→
+          主手→副手→工具），同部位内数量降序；无部位种类按族（药水/宝石/
+          矿石/材料/杂项，同族相邻）总量降序分块，族内种类数量降序
         - 种类内按尺寸分段（大件优先），段内按 comparator（名称→稀有度）排序，
           行从左往右填充
         - 种类结束即换行：最后一行没放满也留空，下一种从新行开始
-        - 件数少于 TYPE_ROW_MIN_ITEMS 的小种类不独占行，按同样的
-        数量降序合并到末尾共享行
-        - 高度放不下时溢出到仓库底部兜底
+        - 件数过少或行块高度放不下的种类不独占行，按同样顺序合并到末尾
+          共享行；共享行也放不下的零散物品溢出到仓库底部兜底
         """
         self._reset()
         self._learning_cache = {}
@@ -740,18 +741,28 @@ class LayoutPlanner:
         for itm in items:
             groups.setdefault(self._kind_group_key(itm), []).append(itm)
 
-        def kind_sort_key(key: str) -> Tuple[int, int, str]:
+        def kind_sort_key(key: str) -> Tuple[int, int, str, int, str]:
             g = groups[key]
-            return (-len(g), -sum(i.width * i.height for i in g), key)
+            slot = (getattr(g[0], "slot_type", "") or "").strip()
+            if slot:
+                slot_idx = self.EQUIP_GROUP_ORDER.index(slot) if slot in self.EQUIP_GROUP_ORDER else len(self.EQUIP_GROUP_ORDER)
+                return (0, slot_idx, "", -len(g), key)
+            fam = misc_subgroup(getattr(g[0], "archetype", "") or "")
+            return (1, -family_totals.get(fam, 0), fam, -len(g), key)
+
+        family_totals: Dict[str, int] = {}
+        for key, g in groups.items():
+            if (getattr(g[0], "slot_type", "") or "").strip():
+                continue
+            fam = misc_subgroup(getattr(g[0], "archetype", "") or "")
+            family_totals[fam] = family_totals.get(fam, 0) + len(g)
 
         ordered_keys = sorted(groups.keys(), key=kind_sort_key)
         major_keys = [k for k in ordered_keys if len(groups[k]) >= self.TYPE_ROW_MIN_ITEMS]
-        minor_keys = [k for k in ordered_keys if len(groups[k]) < self.TYPE_ROW_MIN_ITEMS]
 
         positions: Dict[int, Point] = {}
         learning_payload: Dict[int, Dict[str, Any]] = {}
         overflow: List[Item] = []
-        y_anchor = 0
 
         def place(itm, pos):
             self._ensure_learning_cache(itm)
@@ -773,7 +784,87 @@ class LayoutPlanner:
             keys = sorted(by_size.keys(), key=lambda d: (-(d[0] * d[1]), -d[0]))
             return [(k, sort_segment(by_size[k])) for k in keys]
 
+        def band_height(group: List[Item]) -> int:
+            total = 0
+            for (w, h), segment in size_segments(group):
+                per_row = max(1, self.width // w)
+                total += ((len(segment) + per_row - 1) // per_row) * h
+            return total
+
+        def shared_items(keys: List[str]) -> List[Item]:
+            out: List[Item] = []
+            for key in keys:
+                for _size, segment in size_segments(groups[key]):
+                    out.extend(segment)
+            return out
+
+        def pack_rows(
+            seq: List[Item], y_start: int, height_limit: int,
+            occ: List[List[bool]], record: bool,
+        ) -> Tuple[List[Item], int]:
+            """多种类共享行：从上到下逐行、行内优先行尾续摆、续不上填空中
+            穴。record=True 时真正落位（place），否则只在给定占位网格上试排。
+            返回 (放不下的物品, 用到的行底)。"""
+            unplaced: List[Item] = []
+            y = y_start
+            remaining = list(seq)
+            while remaining:
+                if y >= height_limit:
+                    unplaced.extend(remaining)
+                    break
+
+                def fits_at(itm: Item, x: int) -> bool:
+                    return all(not occ[x + dx][y + dy]
+                               for dx in range(itm.width) for dy in range(itm.height))
+
+                next_remaining: List[Item] = []
+                placed_any = False
+                cursor = 0
+                for itm in remaining:
+                    if y + itm.height > height_limit:
+                        next_remaining.append(itm)
+                        continue
+                    x = None
+                    if cursor + itm.width <= self.width and fits_at(itm, cursor):
+                        x = cursor
+                    else:
+                        probe = 0
+                        while probe + itm.width <= self.width and not fits_at(itm, probe):
+                            probe += 1
+                        if probe + itm.width <= self.width:
+                            x = probe
+                    if x is not None:
+                        if record:
+                            place(itm, Point(x, y))
+                        else:
+                            for dx in range(itm.width):
+                                for dy in range(itm.height):
+                                    occ[x + dx][y + dy] = True
+                        cursor = max(cursor, x + itm.width)
+                        placed_any = True
+                    else:
+                        next_remaining.append(itm)
+                if not placed_any:
+                    unplaced.extend(next_remaining)
+                    break
+                remaining = next_remaining
+                y += 1
+            return unplaced, y
+
+        fit_keys: List[str] = []
+        used = 0
         for key in major_keys:
+            hb = band_height(groups[key])
+            if used + hb <= self.height:
+                fit_keys.append(key)
+                used += hb
+
+        def shared_keys() -> List[str]:
+            fit_set = set(fit_keys)
+            return [k for k in ordered_keys if k not in fit_set]
+
+        y_anchor = 0
+        for key in fit_keys:
             for (w, h), segment in size_segments(groups[key]):
                 n = len(segment)
                 k = max(1, self.width // w)
@@ -792,36 +883,7 @@ class LayoutPlanner:
                     place(itm, Point(x, y))
                 y_anchor += rows * h
 
-        minor_items: List[Item] = []
-        for key in minor_keys:
-            for _size, segment in size_segments(groups[key]):
-                minor_items.extend(segment)
-        y = y_anchor
-        while minor_items:
-            if y >= self.height:
-                overflow.extend(minor_items)
-                break
-            remaining: List[Item] = []
-            placed_any = False
-            cursor = 0
-            for itm in minor_items:
-                if y + itm.height > self.height:
-                    remaining.append(itm)
-                    continue
-                x = cursor
-                while x + itm.width <= self.width and not self._fits(itm, x, y):
-                    x += 1
-                if x + itm.width <= self.width:
-                    place(itm, Point(x, y))
-                    cursor = x + itm.width
-                    placed_any = True
-                else:
-                    remaining.append(itm)
-            if not placed_any:
-                overflow.extend(remaining)
-                break
-            minor_items = remaining
-            y += 1
+        overflow.extend(pack_rows(shared_items(shared_keys()), y_anchor, self.height, self.occupancy, True)[0])
 
         for itm in overflow:
             if id(itm) in positions:

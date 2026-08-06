@@ -2249,17 +2249,27 @@ class StashManager:
                             continue
                         pos = self._sim_find(sims[dst_sid], item)
                         if pos is None:
-                            # Target stash is full — overflow to the first other
-                            # stash (in tab order) that still has room, so the
-                            # item is placed instead of silently skipped.
+                            # Target stash is full — spill to the other stash
+                            # with the most free space so overflow spreads
+                            # instead of stuffing a single stash.
+                            best_sid = None
+                            best_free = -1
                             for alt_sid in tab_order:
                                 if alt_sid == src_sid or alt_sid == dst_sid:
                                     continue
-                                pos = self._sim_find(sims[alt_sid], item)
+                                if not self._sim_fits(sims[alt_sid], item):
+                                    continue
+                                free = sum(
+                                    1 for row in sims[alt_sid]["grid"] for c in row if c == 0
+                                )
+                                if free > best_free:
+                                    best_free = free
+                                    best_sid = alt_sid
+                            if best_sid is not None:
+                                pos = self._sim_find(sims[best_sid], item)
                                 if pos is not None:
-                                    dst_sid = alt_sid
+                                    dst_sid = best_sid
                                     overflowed += 1
-                                    break
                         if pos is not None:
                             moves.append((src_sid, item, dst_sid, pos))
                 done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
@@ -2351,6 +2361,16 @@ class StashManager:
                 "grid": [row[:] for row in st.grid],
             }
         return sims
+
+    def _sim_fits(self, sim, item) -> bool:
+        """Whether the item fits anywhere on the simulated grid (no reserve)."""
+        grid = sim["grid"]
+        w, h = item.width, item.height
+        for y in range(0, sim["height"] - h + 1):
+            for x in range(0, sim["width"] - w + 1):
+                if all(grid[x + dx][y + dy] == 0 for dx in range(w) for dy in range(h)):
+                    return True
+        return False
 
     def _sim_find(self, sim, item):
         """Find a free slot on the simulated grid and reserve it. Returns a
