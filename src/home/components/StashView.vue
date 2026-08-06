@@ -382,6 +382,7 @@ async function firstCalibrate () {
       await loadFollowCal ();
     } else {
       calibResult.value = { ok: false, text: r?.error || '校准失败，请确认游戏已启动并重试', hints: r?.hints || [] };
+      await reloadCharacters ();
     }
   } catch (e) {
     calibResult.value = { ok: false, text: '校准失败：后端服务未就绪' };
@@ -668,9 +669,14 @@ watch (() => props.stashId, () => reportStashState ());
             <div class="calib-d">{{ calibrating ? '正在启动抓包并在游戏内切换页面获取数据，请勿操作游戏…' : '一键完成：自动启动抓包 → 游戏内切页两次 → 获取仓库数据（首次整理前必做）' }}</div>
           </div>
         </div>
-        <button class="btn primary" :disabled="calibrating" @click="firstCalibrate">
-          {{ calibrating ? '校准中…' : '开始校准' }}
-        </button>
+        <div class="calib-row-btns">
+          <button class="btn primary" :disabled="calibrating" @click="firstCalibrate">
+            {{ calibrating ? '校准中…' : '开始校准' }}
+          </button>
+          <button class="btn" :class="{ on: tabCalExpand }" @click="tabCalExpand = !tabCalExpand">
+            自定义
+          </button>
+        </div>
       </div>
       <div v-if="calibResult" class="calib-result" :class="calibResult.ok ? 'ok' : 'err'">
         <svg v-if="calibResult.ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -684,20 +690,12 @@ watch (() => props.stashId, () => reportStashState ());
       </div>
 
       <!-- 自定义：仓库标签校准 -->
-      <div class="srow cal-toggle tabcal-toggle" @click="tabCalExpand = !tabCalExpand">
-        <div class="srow-info">
-          <div class="srow-t">自定义（仓库标签校准）</div>
-          <div class="srow-d" v-if="followMode === 'pixel'">坐标 + 选中态特征（像素跟随用）{{ tabCalExpand ? '' : ' —— 点击展开' }}</div>
-          <div class="srow-d" v-else>标签点击坐标（切换 / 整理用）{{ tabCalExpand ? '' : ' —— 点击展开' }}</div>
-        </div>
-        <div class="srow-ctl">
-          <span class="cal-arrow" :class="{ open: tabCalExpand }">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </span>
-        </div>
-      </div>
-
       <template v-if="tabCalExpand">
+        <div class="tabcal-head">
+          <div class="tabcal-title">仓库标签校准</div>
+          <div class="tabcal-desc" v-if="followMode === 'pixel'">点击坐标 + 选中态特征（像素跟随用）</div>
+          <div class="tabcal-desc" v-else>标签点击坐标（切换 / 整理用）</div>
+        </div>
         <div class="term-body">
           <p v-if="followMode === 'pixel'">手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」——一次同时记录坐标与特征；也可用「一键自动校准」自动采集特征。</p>
           <p v-else>手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」记录其坐标（坐标校准需手动完成，程序无法得知游戏内标签的真实位置）。</p>
@@ -912,16 +910,17 @@ watch (() => props.stashId, () => reportStashState ());
 }
 
 /* custom: stash tab calibration */
-.tabcal-toggle { margin-top: 13px; border-top: 1px solid var(--line-soft); border-radius: 0 0 10px 10px; }
-.cal-toggle { cursor: pointer; user-select: none; }
-.cal-toggle:hover .srow-t { color: var(--accent); }
-.cal-arrow {
-  display: inline-flex; align-items: center;
-  color: var(--text-3);
-  transition: transform .22s var(--ease);
+.calib-row-btns { display: flex; align-items: center; gap: 8px; flex: none; }
+.calib-row-btns .btn.on {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  box-shadow: 0 2px 8px rgba(0,113,227,0.28);
 }
-.cal-arrow svg { width: 15px; height: 15px; }
-.cal-arrow.open { transform: rotate(180deg); color: var(--accent); }
+.tabcal-head {
+  margin-top: 14px; padding: 12px 16px 1px;
+  border-top: 1px solid var(--line-soft);
+}
+.tabcal-title { font-size: 13.5px; font-weight: 650; color: var(--text); }
+.tabcal-desc { margin-top: 3px; font-size: 12px; color: var(--text-3); line-height: 1.5; }
 .cal-note { font-size: 12.5px; color: var(--green); }
 .cal-sep { margin: 0 6px; color: var(--line); }
 

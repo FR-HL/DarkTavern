@@ -102,6 +102,18 @@ def _migrate_legacy_appdata(appdata):
 
 
 def get_appdata_dir():
+    """Application data directory.
+
+    Dev (source) runs keep everything inside the project's ``squire_data/``
+    folder so config/logs/data live next to the code (easy to back up and
+    inspect). Packaged builds fall back to ``%LOCALAPPDATA%\\AdventurersSquire``
+    because the install folder (Program Files) is not writable.
+    """
+    if not is_frozen():
+        dev_dir = os.path.join(get_base_path(), 'squire_data')
+        os.makedirs(dev_dir, exist_ok=True)
+        return dev_dir
+
     appdata = os.environ.get('LOCALAPPDATA') or os.path.expanduser('~\\AppData\\Local')
     _migrate_legacy_appdata(appdata)
     app_dir = os.path.join(appdata, APP_DIR_NAME)

@@ -261,7 +261,6 @@ const MISC_LABELS = {
   consumable: '消耗品', junk: '杂物',
 };
 const crossCfg = ref ({ categorize: true, categorize_mode: 'auto', category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
-const miscOpen = ref (false);
 const crossNote = ref ('');
 const crossSteps = ref ([]);
 const crossStepIndex = ref (0);
@@ -639,6 +638,18 @@ watch (() => props.charId, () => loadStashOptions ());
         </div>
         <div class="srow">
           <div class="srow-info">
+            <div class="srow-t">跨仓整理快捷键</div>
+            <div class="srow-d">全局快捷键，点击键帽可改</div>
+          </div>
+          <div class="srow-ctl">
+            <button class="hotkey-cap" :class="{ listening: listeningFor === 'cross', saved: savedFlash === 'cross' }"
+                    @click="startHotkeyListen('cross')" :title="listeningFor === 'cross' ? '按 Esc 取消' : '点击修改'">
+              {{ listeningFor === 'cross' ? '按新键… Esc 取消' : crossHotkey }}
+            </button>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
             <div class="srow-t">位置策略</div>
             <div class="srow-d">物品摆放规则（归类与重排互斥）</div>
           </div>
@@ -651,18 +662,6 @@ watch (() => props.charId, () => loadStashOptions ());
             </div>
           </div>
         </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">跨仓整理快捷键</div>
-            <div class="srow-d">全局快捷键，点击键帽可改</div>
-          </div>
-          <div class="srow-ctl">
-            <button class="hotkey-cap" :class="{ listening: listeningFor === 'cross', saved: savedFlash === 'cross' }"
-                    @click="startHotkeyListen('cross')" :title="listeningFor === 'cross' ? '按 Esc 取消' : '点击修改'">
-              {{ listeningFor === 'cross' ? '按新键… Esc 取消' : crossHotkey }}
-            </button>
-          </div>
-        </div>
         <template v-if="crossCfg.categorize && crossCfg.categorize_mode === 'manual'">
           <div class="cat-grid">
             <label v-for="(label, type) in CATEGORY_LABELS" :key="type" class="cat-cell">
@@ -672,18 +671,8 @@ watch (() => props.charId, () => loadStashOptions ());
               </select>
             </label>
           </div>
-          <div class="srow cal-toggle" @click="miscOpen = !miscOpen">
-            <div class="srow-info">
-              <div class="srow-t">杂物细分（宝石 / 材料 / 消耗品）</div>
-              <div class="srow-d">杂物按子类指定仓库，优先于大类{{ miscOpen ? '' : ' —— 点击展开' }}</div>
-            </div>
-            <div class="srow-ctl">
-              <span class="cal-arrow" :class="{ open: miscOpen }">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </span>
-            </div>
-          </div>
-          <div v-if="miscOpen" class="cat-grid">
+          <div class="cat-grid cat-grid-misc">
+            <div class="cat-group-title">杂物细分（宝石 / 材料 / 消耗品）</div>
             <label v-for="(label, type) in MISC_LABELS" :key="'m' + type" class="cat-cell">
               <span class="cat-name">{{ label }}</span>
               <select class="cross-select" v-model="crossCfg.misc_map[type]">
@@ -773,6 +762,8 @@ watch (() => props.charId, () => loadStashOptions ());
 }
 .cat-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .cat-name { font-size: 11.5px; font-weight: 650; color: var(--text-2); }
+.cat-grid-misc { grid-template-columns: repeat(4, 1fr); }
+.cat-group-title { grid-column: 1 / -1; font-size: 12px; font-weight: 650; color: var(--text); }
 .cross-select {
   width: 100%;
   padding: 4px 8px;
@@ -782,15 +773,6 @@ watch (() => props.charId, () => loadStashOptions ());
   cursor: pointer; outline: none;
 }
 .cross-select:hover { border-color: var(--accent-soft); }
-.cal-toggle { cursor: pointer; user-select: none; }
-.cal-toggle:hover .srow-t { color: var(--accent); }
-.cal-arrow {
-  display: inline-flex; align-items: center;
-  color: var(--text-3);
-  transition: transform .22s var(--ease);
-}
-.cal-arrow svg { width: 15px; height: 15px; }
-.cal-arrow.open { transform: rotate(180deg); color: var(--accent); }
 
 .uipi-warn {
   display: flex; flex-direction: column; gap: 6px;

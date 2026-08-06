@@ -4,8 +4,9 @@ const { app } = electron;
 import merge from 'deepmerge';
 import { parse, stringify } from 'ini';
 import { logger } from './logger.js';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dataDir } from './config.js';
 
 const defaults = {
   general: {
@@ -49,7 +50,7 @@ const defaults = {
   },
 };
 
-const settingsPath = join (app.getPath ('userData'), 'settings.ini');
+const settingsPath = join (dataDir (app), 'settings.ini');
 
 let settings = {};
 
@@ -117,6 +118,7 @@ function toList (s, values) {
 
 function saveSettings () {
   try {
+    mkdirSync (dirname (settingsPath), { recursive: true });
     writeFileSync (settingsPath, stringify (settings));
   } catch (error) {
     logger.error ('Failed to save settings:', error);

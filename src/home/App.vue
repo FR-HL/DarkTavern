@@ -1412,7 +1412,7 @@ onBeforeUnmount (() => {
             <div class="card term-card">
               <div class="term-head">其他问题</div>
               <div class="term-body">
-                <p>在交流群提问（侧边栏「交流群」可复制群号），或到 GitHub Issues 反馈；附上日志（用户目录 AdventurersSquire/logs）能更快定位。</p>
+                <p>在交流群提问（侧边栏「交流群」可复制群号），或到 GitHub Issues 反馈；附上日志（项目目录 squire_data/logs）能更快定位。</p>
               </div>
             </div>
           </div>

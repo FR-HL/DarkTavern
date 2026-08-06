@@ -27,6 +27,7 @@ Thumbs.db
 
 # Runtime logs
 logs/
+squire_data/
 
 # Debug
 debug/

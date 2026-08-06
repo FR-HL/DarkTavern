@@ -225,6 +225,18 @@ def first_calibrate():
     if ok:
         return {"success": True, "note": "ok", "character_id": received}
 
+    # 兜底：即使自动切页没触发到快照，只要已抓到过角色数据（用户可能已手动
+    # 在游戏里切页/移动物品），也算成功——数据在缓存里即可直接使用。
+    if mgr.characters_cache:
+        cached_id = service.last_snapshot_character_id
+        if not cached_id or str(cached_id) not in mgr.characters_cache:
+            cached_id = next(iter(mgr.characters_cache))
+        return {
+            "success": True,
+            "note": "cached",
+            "character_id": str(cached_id),
+        }
+
     messages = {
         "no_window": "未找到游戏窗口。请先启动 Dark and Darker 并进入大厅，再点「首次校准」。",
         "click_failed": "顶部栏点击失败，请确认游戏在前台且处于大厅界面。",

@@ -3,10 +3,10 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import winston from 'winston';
 import 'winston-daily-rotate-file';
-import { isDebug } from './config.js';
+import { isDebug, dataDir } from './config.js';
 
 const { app } = electron;
-const logPath = join (app.getPath ('userData'), 'logs');
+const logPath = join (dataDir (app), 'logs');
 
 if (!existsSync (logPath)) {
   mkdirSync (logPath, { recursive: true });

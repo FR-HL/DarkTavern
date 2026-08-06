@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 
 const _require = createRequire (import.meta.url);
 import { logger, logPath } from './logger.js';
-import { ROOT, SOURCE } from './config.js';
+import { ROOT, SOURCE, dataDir } from './config.js';
 import { settings, saveSettings } from './settings.js';
 import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
 import { wire } from './scan.js';
@@ -1057,7 +1057,7 @@ const HISTORY_MAX = 1000;
 let priceHistory = null;
 
 function historyPath () {
-  return join (app.getPath ('userData'), 'price_history.json');
+  return join (dataDir (app), 'price_history.json');
 }
 
 function loadHistory () {
