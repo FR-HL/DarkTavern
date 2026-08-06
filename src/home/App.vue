@@ -84,7 +84,8 @@ const updateLatest = ref ('');
 const updateUrl = ref ('');
 
 const isListening = ref (false);
-const newKeybind = ref (null);
+const scanSaved = ref (false);
+let scanSavedTimer = null;
 
 const ALIGNMENTS = [
   { key: 'attached', label: '贴附物品' },
@@ -216,10 +217,6 @@ const subHtml = computed (() => {
   return '已检测到游戏窗口，按下 <span class="kbd">' + esc (scanKey.value) + '</span> 即刻查价';
 });
 const scaleVal = computed (() => scale.value.toFixed (1) + '×');
-const keybindLabel = computed (() => {
-  if (isListening.value) return '等待输入…（按 Esc 取消）';
-  return newKeybind.value || '点击此处，然后按下新按键';
-});
 const counts = computed (() => {
   const c = {};
   for (const t of TABS) c[t.key] = Object.keys (allMappings[t.key] || {}).length;
@@ -501,6 +498,10 @@ async function loadSettings () {
     const d = await invoke ('settings:get');
     apiKey.value = d.api_key || '';
     scanKey.value = d.scan_key || 'XButton1';
+    if (isBannedScanKey (scanKey.value)) {
+      scanKey.value = 'XButton1';
+      invoke ('settings:save', { scan_key: 'XButton1' });
+    }
     scanMode.value = d.default_mode || 'manual';
     alignment.value = d.alignment || 'attached';
     scale.value = d.scale || 1.0;
@@ -609,22 +610,25 @@ function toggleDevCard (name) {
   if (devCard.value === 'mapping' && !mappingsLoaded.value) loadMappings ();
 }
 
-function startListening () { isListening.value = true; newKeybind.value = null; }
+function isBannedScanKey (key) {
+  return /^(Mouse(Left|Right))$/.test (key || '');
+}
+
+function startListening () { isListening.value = true; }
 function stopListening () { isListening.value = false; }
 function onKeyDown (e) {
   if (!isListening.value) return;
   e.preventDefault ();
   if (e.key === 'Escape') { stopListening (); return; }
   if (['F5', 'F6', 'F7', 'F8'].includes (e.key)) { showSettingsStatus ('F5–F8 为系统保留键，请另选', 'error'); return; }
+  if (e.key === 'Control' || e.key === 'Alt' || e.key === 'Shift') return;
   let key = '';
   if (e.ctrlKey) key += 'Ctrl+';
   if (e.altKey) key += 'Alt+';
   if (e.shiftKey) key += 'Shift+';
-  if (e.key !== 'Control' && e.key !== 'Alt' && e.key !== 'Shift') {
-    key += e.key.length === 1 ? e.key.toUpperCase () : e.key;
-    newKeybind.value = key;
-    stopListening ();
-  }
+  key += e.key.length === 1 ? e.key.toUpperCase () : e.key;
+  stopListening ();
+  void saveScanKey (key);
 }
 function onMouseDown (e) {
   if (!isListening.value) return;
@@ -632,13 +636,20 @@ function onMouseDown (e) {
   const names = { 0: 'MouseLeft', 1: 'MouseMiddle', 2: 'MouseRight', 3: 'XButton1', 4: 'XButton2' };
   const name = names[e.button];
   if (!name) return;
-  newKeybind.value = name;
+  if (isBannedScanKey (name)) { showSettingsStatus ('鼠标左右键不可用作快捷键，请用中键或侧键', 'error'); return; }
   stopListening ();
+  void saveScanKey (name);
 }
-async function saveKeybind () {
-  if (!newKeybind.value) { showSettingsStatus ('请先点击按钮并按下新按键', 'error'); return; }
-  const r = await invoke ('settings:save', { scan_key: newKeybind.value });
-  if (r.success) { scanKey.value = newKeybind.value; showToast ('已保存'); }
+async function saveScanKey (key) {
+  const r = await invoke ('settings:save', { scan_key: key });
+  if (r.success) {
+    scanKey.value = key;
+    scanSaved.value = true;
+    clearTimeout (scanSavedTimer);
+    scanSavedTimer = setTimeout (() => { scanSaved.value = false; }, 900);
+  } else {
+    showSettingsStatus ('保存失败', 'error');
+  }
 }
 async function saveMode () { const r = await invoke ('settings:save', { default_mode: scanMode.value }); if (r.success) showToast ('已保存'); }
 async function saveAlignment () { const r = await invoke ('settings:save', { alignment: alignment.value }); if (r.success) showToast ('已保存 · 下次扫描生效'); }
@@ -725,6 +736,7 @@ onMounted (() => {
 onBeforeUnmount (() => {
   document.removeEventListener ('keydown', onKeyDown);
   document.removeEventListener ('mousedown', onMouseDown);
+  if (scanSavedTimer) clearTimeout (scanSavedTimer);
   clearInterval (uptimeTimer);
   clearInterval (overviewTimer);
 });
@@ -908,12 +920,13 @@ onBeforeUnmount (() => {
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">触发键</div>
-                <div class="srow-d">支持键盘键（F1–F12、Ctrl 组合键）与鼠标侧键</div>
+                <div class="srow-d">支持键盘键（F1–F12、Ctrl/Alt/Shift 组合键）与鼠标中键 / 侧键（左右键除外）</div>
               </div>
               <div class="srow-ctl">
-                <span class="kbd">{{ scanKey }}</span>
-                <button class="keybind-btn" :class="{ listening: isListening }" @click="startListening">{{ keybindLabel }}</button>
-                <button class="btn primary" @click="saveKeybind">保存</button>
+                <button class="hotkey-cap" :class="{ listening: isListening, saved: scanSaved }"
+                        @click="startListening" :title="isListening ? '按 Esc 取消' : '点击修改'">
+                  {{ isListening ? '按新键… Esc 取消' : scanKey }}
+                </button>
               </div>
             </div>
             <div class="srow">

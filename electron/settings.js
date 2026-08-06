@@ -81,7 +81,7 @@ settings.general.disclaimer_agreed_version = settings.general.disclaimer_agreed_
 settings.general.auto_check_update = settings.general.auto_check_update === false || settings.general.auto_check_update === 'false' ? false : true;
 settings.general.last_update_check = settings.general.last_update_check || '';
 
-settings.hotkeys.run_price_check = settings.hotkeys.run_price_check || 'XButton1';
+settings.hotkeys.run_price_check = (/^(Mouse(Left|Right))$/.test (settings.hotkeys.run_price_check)) ? 'XButton1' : (settings.hotkeys.run_price_check || 'XButton1');
 
 settings.dnd.sort_hotkey = settings.dnd.sort_hotkey || 'Ctrl+R';
 settings.dnd.cancel_hotkey = settings.dnd.cancel_hotkey || 'Ctrl+T';

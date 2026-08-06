@@ -315,25 +315,34 @@ input:focus, select:focus {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.keybind-btn {
-  min-width: 190px;
-  padding: 8px 14px;
-  border-radius: var(--r-ctl);
+.hotkey-cap {
+  min-width: 132px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2.5px;
+  background: var(--card-2);
+  font-family: var(--mono);
+  font-size: 12.5px; font-weight: 650;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   cursor: pointer; text-align: center;
-  background: var(--field);
-  border: 1.5px dashed var(--line);
-  color: var(--text-3);
-  font-size: 12.5px; font-weight: 500; font-family: var(--font);
-  transition: all .2s var(--ease);
+  transition: all .18s var(--ease);
 }
-.keybind-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-softer); }
-.keybind-btn.listening {
-  border-style: solid;
+.hotkey-cap:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-softer); }
+.hotkey-cap.listening {
+  border-style: dashed;
   border-color: var(--accent);
   color: var(--accent);
   background: var(--accent-softer);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  font-family: var(--font);
   animation: listenPulse 1.4s var(--ease) infinite;
+}
+.hotkey-cap.saved {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-soft);
 }
 @keyframes listenPulse { 0%,100% { box-shadow: 0 0 0 3px var(--accent-soft); } 50% { box-shadow: 0 0 0 6px rgba(0,113,227,0.05); } }
 
@@ -1167,7 +1176,6 @@ html[data-theme="dark"] .content::-webkit-scrollbar-thumb { background: rgba(255
 html[data-theme="dark"] .content::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.30); border: 3px solid transparent; background-clip: padding-box; }
 html[data-theme="dark"] .table-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border: 2px solid transparent; background-clip: padding-box; }
 html[data-theme="dark"] tbody tr:hover { background: var(--accent-softer); }
-html[data-theme="dark"] .keybind-btn { background: var(--field); }
 
 /* 关于页金色区块适配 */
 html[data-theme="dark"] .keeper {

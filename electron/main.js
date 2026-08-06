@@ -523,11 +523,15 @@ function scheduleDailyUpdateCheck () {
 
 async function registerScanHotkey (overlay) {
   let key = settings.hotkeys.run_price_check;
-  if (RESERVED_KEYS.includes (key)) key = 'XButton1';
+  if (RESERVED_KEYS.includes (key) || /^(Mouse(Left|Right))$/.test (key)) {
+    key = 'XButton1';
+    settings.hotkeys.run_price_check = 'XButton1';
+    saveSettings ();
+  }
 
   const mouseMap = {
     'XButton1': 'mousebutton4', 'XButton2': 'mousebutton5',
-    'MouseLeft': 'mousebutton0', 'MouseMiddle': 'mousebutton1', 'MouseRight': 'mousebutton2',
+    'MouseMiddle': 'mousebutton1',
     'MouseButton4': 'mousebutton4', 'MouseButton5': 'mousebutton5',
   };
 
@@ -540,7 +544,7 @@ async function registerScanHotkey (overlay) {
   if (global._mousePollInterval) { clearInterval (global._mousePollInterval); global._mousePollInterval = null; }
 
   if (isMouse) {
-    const vkMap = { 'mousebutton0': 0x01, 'mousebutton1': 0x04, 'mousebutton2': 0x02, 'mousebutton4': 0x05, 'mousebutton5': 0x06 };
+    const vkMap = { 'mousebutton1': 0x04, 'mousebutton4': 0x05, 'mousebutton5': 0x06 };
     const vkCode = vkMap[accelerator] || 0x05;
 
     try {

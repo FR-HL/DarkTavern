@@ -25,7 +25,8 @@ const cancelHotkey = ref ('Ctrl+T');
 const stashNextKey = ref ('Ctrl+E');
 const crossHotkey = ref ('Ctrl+F12');
 const listeningFor = ref (null);
-const newHotkey = ref (null);
+const savedFlash = ref (null);
+let savedFlashTimer = null;
 const quickPlace = ref (true);
 
 async function loadQuickPlace () {
@@ -90,20 +91,15 @@ const uipiBlocked = computed (() => !!(uipi.value && uipi.value.blocked));
 const canStart = computed (() =>
   !!props.charId && props.stashId !== '' && !props.equipment && !sorting.value && !uipiBlocked.value);
 
-function hotkeyLabel (target) {
-  if (listeningFor.value === target) return '等待输入…（按 Esc 取消）';
-  return newHotkey.value || '点击此处，然后按下新按键';
-}
-
 function startHotkeyListen (target) {
   listeningFor.value = target;
-  newHotkey.value = null;
 }
 function stopHotkeyListen () { listeningFor.value = null; }
-function cancelHotkeyListen () { listeningFor.value = null; newHotkey.value = null; }
+function cancelHotkeyListen () { listeningFor.value = null; }
 
 function onHotkeyKeyDown (e) {
-  if (!listeningFor.value) return;
+  const target = listeningFor.value;
+  if (!target) return;
   e.preventDefault ();
   if (e.key === 'Escape') { cancelHotkeyListen (); return; }
   if (RESERVED_HOTKEYS.includes (e.key)) return;
@@ -115,21 +111,22 @@ function onHotkeyKeyDown (e) {
   const base = e.key.length === 1 ? e.key.toUpperCase () : e.key;
   key += base;
   if (['F1', 'F2', 'F3', 'F4', 'F9', 'F10', 'F11', 'F12', 'Home', 'End', 'PageUp', 'PageDown', 'Insert', 'Delete'].includes (base) || key.includes ('+')) {
-    newHotkey.value = key;
     stopHotkeyListen ();
+    void saveHotkey (target, key);
   }
 }
 
-async function saveHotkey (target) {
-  if (!newHotkey.value) return;
+async function saveHotkey (target, key) {
   const field = target === 'sort' ? 'sort_hotkey' : target === 'cancel' ? 'cancel_hotkey' : target === 'stash' ? 'stash_next_key' : 'cross_hotkey';
-  const r = await invoke ('settings:save', { [field]: newHotkey.value });
+  const r = await invoke ('settings:save', { [field]: key });
   if (r?.success) {
-    if (target === 'sort') sortHotkey.value = newHotkey.value;
-    else if (target === 'cancel') cancelHotkey.value = newHotkey.value;
-    else if (target === 'stash') stashNextKey.value = newHotkey.value;
-    else crossHotkey.value = newHotkey.value;
-    newHotkey.value = null;
+    if (target === 'sort') sortHotkey.value = key;
+    else if (target === 'cancel') cancelHotkey.value = key;
+    else if (target === 'stash') stashNextKey.value = key;
+    else crossHotkey.value = key;
+    savedFlash.value = target;
+    clearTimeout (savedFlashTimer);
+    savedFlashTimer = setTimeout (() => { savedFlash.value = null; }, 900);
   }
 }
 
@@ -442,6 +439,7 @@ onMounted (async () => {
 onBeforeUnmount (() => {
   if (poll) clearInterval (poll);
   if (crossSaveTimer) clearTimeout (crossSaveTimer);
+  if (savedFlashTimer) clearTimeout (savedFlashTimer);
   document.removeEventListener ('keydown', onHotkeyKeyDown);
   unsubs.forEach (u => u ());
   unsubs = [];
@@ -588,9 +586,10 @@ watch (() => props.charId, () => loadStashOptions ());
               <div class="srow-d">全局快捷键，支持 F1–F12 及 Ctrl/Alt/Shift 组合</div>
             </div>
             <div class="srow-ctl">
-              <span class="kbd">{{ sortHotkey }}</span>
-              <button class="keybind-btn" :class="{ listening: listeningFor === 'sort' }" @click="startHotkeyListen('sort')">{{ hotkeyLabel('sort') }}</button>
-              <button class="btn primary" @click="saveHotkey('sort')">保存</button>
+              <button class="hotkey-cap" :class="{ listening: listeningFor === 'sort', saved: savedFlash === 'sort' }"
+                      @click="startHotkeyListen('sort')" :title="listeningFor === 'sort' ? '按 Esc 取消' : '点击修改'">
+                {{ listeningFor === 'sort' ? '按新键… Esc 取消' : sortHotkey }}
+              </button>
             </div>
           </div>
           <div class="srow">
@@ -599,9 +598,10 @@ watch (() => props.charId, () => loadStashOptions ());
               <div class="srow-d">全局快捷键，随时中断整理</div>
             </div>
             <div class="srow-ctl">
-              <span class="kbd">{{ cancelHotkey }}</span>
-              <button class="keybind-btn" :class="{ listening: listeningFor === 'cancel' }" @click="startHotkeyListen('cancel')">{{ hotkeyLabel('cancel') }}</button>
-              <button class="btn primary" @click="saveHotkey('cancel')">保存</button>
+              <button class="hotkey-cap" :class="{ listening: listeningFor === 'cancel', saved: savedFlash === 'cancel' }"
+                      @click="startHotkeyListen('cancel')" :title="listeningFor === 'cancel' ? '按 Esc 取消' : '点击修改'">
+                {{ listeningFor === 'cancel' ? '按新键… Esc 取消' : cancelHotkey }}
+              </button>
             </div>
           </div>
           <div class="srow">
@@ -610,9 +610,10 @@ watch (() => props.charId, () => loadStashOptions ());
               <div class="srow-d">全局快捷键，在仓库列表中循环切换下一个仓库</div>
             </div>
             <div class="srow-ctl">
-              <span class="kbd">{{ stashNextKey }}</span>
-              <button class="keybind-btn" :class="{ listening: listeningFor === 'stash' }" @click="startHotkeyListen('stash')">{{ hotkeyLabel('stash') }}</button>
-              <button class="btn primary" @click="saveHotkey('stash')">保存</button>
+              <button class="hotkey-cap" :class="{ listening: listeningFor === 'stash', saved: savedFlash === 'stash' }"
+                      @click="startHotkeyListen('stash')" :title="listeningFor === 'stash' ? '按 Esc 取消' : '点击修改'">
+                {{ listeningFor === 'stash' ? '按新键… Esc 取消' : stashNextKey }}
+              </button>
             </div>
           </div>
         </div>
@@ -625,13 +626,15 @@ watch (() => props.charId, () => loadStashOptions ());
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">开始跨仓整理</div>
-            <div class="srow-d">全局快捷键 <span class="kbd">{{ crossHotkey }}</span>，点击右侧「录制」可改</div>
+            <div class="srow-d">全局快捷键，点击右侧键帽可改</div>
           </div>
           <div class="srow-ctl">
             <button v-if="!(sorting && kind === 'cross')" class="btn primary" :disabled="!props.charId || sorting" @click="startCrossSort">开始跨仓整理</button>
             <button v-else class="btn danger" @click="cancelSort">取消整理</button>
-            <button class="keybind-btn" :class="{ listening: listeningFor === 'cross' }" @click="startHotkeyListen('cross')">{{ hotkeyLabel('cross') }}</button>
-            <button class="btn" @click="saveHotkey('cross')">保存</button>
+            <button class="hotkey-cap" :class="{ listening: listeningFor === 'cross', saved: savedFlash === 'cross' }"
+                    @click="startHotkeyListen('cross')" :title="listeningFor === 'cross' ? '按 Esc 取消' : '点击修改'">
+              {{ listeningFor === 'cross' ? '按新键… Esc 取消' : crossHotkey }}
+            </button>
             <span v-if="crossNote" class="cal-note">{{ crossNote }}</span>
           </div>
         </div>
