@@ -170,97 +170,6 @@ async function changeFollowMode (id) {
   await invoke ('settings:save', { follow_mode: id });
 }
 
-// ── 仓库标签校准（可折叠） ──
-const calExpand = ref (false);
-
-// ── 跟随校准（像素识别用，逐 Tab 记录选中态特征） ──
-const fCalItems = ref ([]);
-const fCalPending = ref ([]);
-const autoCalBusy = ref (false);
-
-async function loadFollowCal () {
-  try {
-    const r = await invoke ('stash:follow-calibrate-status');
-    if (r && Array.isArray (r.mapping)) {
-      fCalItems.value = r.mapping.map ((t, i) => ({
-        type: t,
-        label: (r.labels && r.labels[i]) || String (t),
-        saved: r.saved && r.saved[i],
-      }));
-      fCalPending.value = (r.pending || []).slice ();
-    }
-  } catch (e) {}
-}
-
-async function autoCalibrate () {
-  if (autoCalBusy.value) return;
-  autoCalBusy.value = true;
-  calNote.value = '自动校准中：程序将依次点击游戏里的每个仓库标签并采样…请勿移动鼠标';
-  try {
-    const r = await invoke ('stash:follow-calibrate-auto');
-    if (r && r.success) {
-      calNote.value = '自动校准完成并已保存（特征）';
-      await loadFollowCal ();
-    } else if (r) {
-      const msg = r.error === 'uipi_blocked' ? '鼠标模拟被拦截（需管理员权限运行 冒险者侍从）'
-        : r.error === 'game_not_found' ? '未检测到游戏窗口，请先打开游戏仓库界面'
-        : '自动校准失败：' + (r.error || '未知错误');
-      calNote.value = msg;
-    } else {
-      calNote.value = '自动校准失败';
-    }
-  } catch (e) { calNote.value = '自动校准失败'; }
-  autoCalBusy.value = false;
-}
-
-// ── 合并记录 / 保存 / 清除（坐标 + 特征一次完成） ──
-async function recordBothCal (index) {
-  calNote.value = '';
-  const r1 = await invoke ('stash:calibration-record', index);
-  const r2 = await invoke ('stash:follow-calibrate-record', index);
-  if (r1 && r1.success) {
-    const next = calPending.value.slice ();
-    next[index] = { x: r1.x, y: r1.y };
-    calPending.value = next;
-  }
-  if (r2 && r2.success) {
-    const next = fCalPending.value.slice ();
-    next[index] = { avg: r2.avg, gold: r2.gold };
-    fCalPending.value = next;
-  }
-  if ((!r1 || !r1.success) && (!r2 || !r2.success)) calNote.value = '记录失败，请重试';
-}
-
-async function saveAllCal () {
-  if (calSaving.value) return;
-  calSaving.value = true;
-  calNote.value = '';
-  try {
-    const pixel = followMode.value === 'pixel';
-    const r1 = await invoke ('stash:calibration-save', '');
-    const r2 = pixel ? await invoke ('stash:follow-calibrate-save') : null;
-    if (r1 && r1.success && (!pixel || (r2 && r2.success))) {
-      calNote.value = pixel ? '校准已保存（坐标 + 特征）' : '坐标校准已保存';
-      await loadCalibration ();
-      if (pixel) await loadFollowCal ();
-    } else {
-      const parts = [];
-      if (r1 && Array.isArray (r1.missing)) parts.push (`坐标还有 ${r1.missing.length} 项未记录`);
-      if (pixel && r2 && Array.isArray (r2.missing)) parts.push (`特征还有 ${r2.missing.length} 项未记录`);
-      calNote.value = parts.join ('；') || '保存失败';
-    }
-  } catch (e) { calNote.value = '保存失败'; }
-  calSaving.value = false;
-}
-
-async function resetAllCal () {
-  calNote.value = '';
-  await invoke ('stash:calibration-reset');
-  await invoke ('stash:follow-calibrate-reset');
-  await loadCalibration ();
-  await loadFollowCal ();
-}
-
 function samePreset (a, b) {
   if (!Array.isArray (a) || !Array.isArray (b)) return false;
   for (let i = 0; i < b.length; i++) {
@@ -509,59 +418,12 @@ function onSortCancelled () {
   sorting.value = false;
 }
 
-// ── 仓库标签校准 ──
-const calItems = ref ([]);
-const calPending = ref ([]);
-const calSaving = ref (false);
-const calNote = ref ('');
-
-async function loadCalibration () {
-  try {
-    const r = await invoke ('stash:calibration-status');
-    if (r && Array.isArray (r.mapping)) {
-      calItems.value = r.mapping.map ((t, i) => ({
-        type: t,
-        label: (r.labels && r.labels[i]) || String (t),
-        saved: r.saved_positions && r.saved_positions[i],
-      }));
-      calPending.value = (r.pending || []).slice ();
-    }
-  } catch (e) {}
-}
-
-// ── 标签点测（诊断） ──
-const tabTesting = ref (false);
-const tabTestNote = ref ('');
-
-async function runTabTest () {
-  tabTesting.value = true;
-  tabTestNote.value = '请盯着游戏里的仓库标签栏，程序将每隔 1.5 秒自动点击一个标签…';
-  try {
-    const r = await invoke ('stash:tab-test', props.charId);
-    if (r && r.success) {
-      if (r.reason === 'uipi_blocked') {
-        tabTestNote.value = '鼠标模拟被系统拦截（需管理员权限），点测无法执行';
-      } else if (r.reason === 'game_not_found') {
-        tabTestNote.value = '未检测到游戏窗口，点测未执行';
-      } else {
-        const order = (r.positions || []).map (p => `${p.label}@(${p.x},${p.y})`).join (' → ');
-        tabTestNote.value = `点测完成（${r.positions.length} 格）：${order}。请把游戏里实际打开的仓库顺序告诉我。`;
-      }
-    } else {
-      tabTestNote.value = '点测失败';
-    }
-  } catch (e) { tabTestNote.value = '点测失败'; }
-  tabTesting.value = false;
-}
-
 let unsubs = [];
 onMounted (async () => {
   checkUipi ();
   loadSortSpeed ();
   loadSortOrder ();
   loadHotkeys ();
-  loadCalibration ();
-  loadFollowCal ();
   loadCrossConfig ();
   loadStashOptions ();
   loadQuickPlace ();
@@ -677,79 +539,6 @@ watch (() => props.charId, () => loadStashOptions ());
             <label class="switch"><input type="checkbox" :checked="quickPlace" @change="toggleQuickPlace()"><span class="track"></span></label>
           </div>
         </div>
-
-        <div class="srow cal-toggle" @click="calExpand = !calExpand">
-          <div class="srow-info">
-            <div class="srow-t">仓库标签校准</div>
-            <div class="srow-d" v-if="followMode === 'pixel'">点击坐标（切换/整理用）+ 选中态特征（像素识别用）{{ calExpand ? '' : ' —— 点击展开' }}</div>
-            <div class="srow-d" v-else>点击坐标（游戏内切换、整理自动选 Tab 用）{{ calExpand ? '' : ' —— 点击展开' }}</div>
-          </div>
-          <div class="srow-ctl">
-            <span class="cal-arrow" :class="{ open: calExpand }">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </span>
-          </div>
-        </div>
-
-        <template v-if="calExpand">
-          <div class="term-body">
-            <p v-if="followMode === 'pixel'">手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」——一次同时记录坐标与特征；也可用「一键自动校准」自动采集特征。</p>
-            <p v-else>手动：<b>先在游戏中点击该仓库标签</b>，再回来点「记录」记录其坐标（坐标校准需手动完成，程序无法得知游戏内标签的真实位置）。</p>
-          </div>
-          <div v-if="followMode === 'pixel'" class="srow">
-            <div class="srow-info">
-              <div class="srow-t">一键自动校准</div>
-              <div class="srow-d">程序自动依次点击游戏里的每个标签并采样选中态特征，约 8 秒完成，请先打开游戏仓库界面</div>
-            </div>
-            <div class="srow-ctl">
-              <button class="btn primary" :disabled="autoCalBusy" @click="autoCalibrate">{{ autoCalBusy ? '自动校准中…' : '一键自动校准' }}</button>
-            </div>
-          </div>
-          <div class="srow" v-for="(it, i) in calItems" :key="i">
-            <div class="srow-info">
-              <div class="srow-t">{{ it.label }}</div>
-              <div class="srow-d">
-                坐标：
-                <template v-if="calPending[i]">待保存 ({{ calPending[i].x }}, {{ calPending[i].y }})</template>
-                <template v-else-if="it.saved">已校准 ({{ it.saved.x }}, {{ it.saved.y }})</template>
-                <template v-else>未校准</template>
-                <template v-if="followMode === 'pixel'">
-                  <span class="cal-sep">·</span>特征：
-                  <template v-if="fCalPending[i]">待保存 ({{ fCalPending[i].avg }}, {{ fCalPending[i].gold }})</template>
-                  <template v-else-if="fCalItems[i] && fCalItems[i].saved">已校准 ({{ fCalItems[i].saved.avg }}, {{ fCalItems[i].saved.gold }})</template>
-                  <template v-else>未记录</template>
-                </template>
-              </div>
-            </div>
-            <div class="srow-ctl">
-              <button class="btn sm" @click="recordBothCal(i)">记录</button>
-            </div>
-          </div>
-          <div class="srow">
-            <div class="srow-info">
-              <div class="srow-t">保存 / 清除</div>
-              <div class="srow-d" v-if="followMode === 'pixel'">全部记录后保存生效；清除后回退到内置坐标与亮度阈值识别</div>
-              <div class="srow-d" v-else>全部记录后保存生效；清除后回退到内置坐标</div>
-            </div>
-            <div class="srow-ctl">
-              <button class="btn primary" :disabled="calSaving" @click="saveAllCal">{{ calSaving ? '保存中…' : '保存校准' }}</button>
-              <button class="btn subtle" @click="resetAllCal">清除校准</button>
-              <span v-if="calNote" class="cal-note">{{ calNote }}</span>
-            </div>
-          </div>
-          <div class="srow">
-            <div class="srow-info">
-              <div class="srow-t">标签点测（诊断）</div>
-              <div class="srow-d">自动依次点击游戏里的每个标签，核对实际切换顺序</div>
-            </div>
-            <div class="srow-ctl">
-              <button class="btn sm" :disabled="tabTesting" @click="runTabTest">{{ tabTesting ? '点测中…' : '开始点测' }}</button>
-            </div>
-          </div>
-          <div v-if="tabTestNote" class="term-body">
-            <p>{{ tabTestNote }}</p>
-          </div>
-        </template>
       </div>
     </div>
 
@@ -964,7 +753,6 @@ watch (() => props.charId, () => loadStashOptions ());
 .sar-row.ok .sar-msg { color: var(--green); }
 .sar-row.bad .sar-msg { color: var(--red); }
 .cal-note { font-size: 12.5px; color: var(--green); }
-.cal-sep { margin: 0 6px; color: var(--line); }
 .auto-note { padding: 0 18px 12px; font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
 .cat-grid {
   display: grid;
