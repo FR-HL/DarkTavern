@@ -574,7 +574,7 @@ watch (() => props.charId, () => loadStashOptions ());
         </div>
 
         <div v-if="error" class="status error">{{ error }}</div>
-        <div v-if="result" class="status" :class="result.success ? 'success' : 'error'">{{ result.message }}</div>
+        <div v-if="result" class="status" :class="result.success ? 'success' : 'error'">{{ result.message || (result.success ? '整理完成' : '整理失败') }}</div>
         <div v-if="sortAllInfo.results.length" class="sort-all-results">
           <div v-for="r in sortAllInfo.results" :key="r.stash_id" class="sar-row" :class="r.success ? 'ok' : 'bad'">
             <span class="sar-name">{{ r.label }}</span>
@@ -628,25 +628,13 @@ watch (() => props.charId, () => loadStashOptions ());
       <div class="card">
         <div class="srow">
           <div class="srow-info">
-            <div class="srow-t">开始跨仓整理</div>
-            <div class="srow-d">按下方位置策略执行跨仓整理</div>
+            <div class="srow-t">跨仓库整理</div>
+            <div class="srow-d">按下方位置策略跨仓库整理</div>
           </div>
           <div class="srow-ctl">
             <button v-if="!(sorting && kind === 'cross')" class="btn primary" :disabled="!props.charId || sorting" @click="startCrossSort">开始跨仓整理</button>
             <button v-else class="btn danger" @click="cancelSort">取消整理</button>
             <span v-if="crossNote" class="cal-note">{{ crossNote }}</span>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">跨仓整理快捷键</div>
-            <div class="srow-d">全局快捷键，点击键帽可改</div>
-          </div>
-          <div class="srow-ctl">
-            <button class="hotkey-cap" :class="{ listening: listeningFor === 'cross', saved: savedFlash === 'cross' }"
-                    @click="startHotkeyListen('cross')" :title="listeningFor === 'cross' ? '按 Esc 取消' : '点击修改'">
-              {{ listeningFor === 'cross' ? '按新键… Esc 取消' : crossHotkey }}
-            </button>
           </div>
         </div>
         <div class="srow">
@@ -661,6 +649,18 @@ watch (() => props.charId, () => loadStashOptions ());
               <button class="seg-opt" :class="{ on: crossPosition === 'front' }" @click="crossPosition = 'front'"><span class="seg-t">密集整理</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'balanced' }" @click="crossPosition = 'balanced'"><span class="seg-t">均衡分散</span></button>
             </div>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">跨仓整理快捷键</div>
+            <div class="srow-d">全局快捷键，点击键帽可改</div>
+          </div>
+          <div class="srow-ctl">
+            <button class="hotkey-cap" :class="{ listening: listeningFor === 'cross', saved: savedFlash === 'cross' }"
+                    @click="startHotkeyListen('cross')" :title="listeningFor === 'cross' ? '按 Esc 取消' : '点击修改'">
+              {{ listeningFor === 'cross' ? '按新键… Esc 取消' : crossHotkey }}
+            </button>
           </div>
         </div>
         <template v-if="crossCfg.categorize && crossCfg.categorize_mode === 'manual'">

@@ -1351,7 +1351,11 @@ class StashManager:
                     "Refresh character data and try again with pack mode off."
                 ), sorter.get_feedback_summary()
         session_summary = sorter.get_feedback_summary()
-        return success, None, session_summary
+        if success:
+            moved = int(getattr(sorter, "_move_progress_done", 0) or 0)
+            return True, f"整理完成：移动 {moved} 件物品", session_summary
+        reason = getattr(sorter, "_failure_reason", None)
+        return False, ("整理失败：" + str(reason)) if reason else "整理失败，请重试", session_summary
 
     def _reset_modifier_state(self, session: Union[SortOverlaySession, NullOverlaySession]) -> None:
         if not hasattr(macros, "tap_alt"):
