@@ -324,10 +324,6 @@ export async function setQuickPlace (enabled) {
   return await post ('/sort/quickplace', { enabled: !!enabled }) || { error: 'Service unavailable' };
 }
 
-export async function quickPlaceTest (characterId, stashId) {
-  return await post ('/stash/quickplace-test', { character_id: String (characterId), stash_id: Number (stashId) }) || { error: 'Service unavailable' };
-}
-
 export async function sortPreview (params) {
   const q = new URLSearchParams ({ character_id: params.character_id, stash_id: params.stash_id });
   if (params.stack_mode !== undefined) q.set ('stack_mode', params.stack_mode ? 'true' : 'false');

@@ -44,23 +44,6 @@ async function toggleQuickPlace () {
   } catch (e) { quickPlace.value = next; }
 }
 
-const qpTesting = ref (false);
-const qpTestNote = ref ('');
-async function quickPlaceCalibrate () {
-  if (!props.charId || !props.stashId) { qpTestNote.value = '请先选择角色和仓库'; return; }
-  qpTesting.value = true;
-  qpTestNote.value = '';
-  try {
-    const r = await invoke ('dnd:quickplace-test', props.charId, props.stashId);
-    if (r && r.success) {
-      qpTestNote.value = `已快速放置「${r.item}」(${r.size[0]}x${r.size[1]})。预测落点 x=${r.predicted.x}, y=${r.predicted.y}。请在游戏里核对实际落点是否一致。`;
-    } else {
-      qpTestNote.value = '校准失败：' + (r?.error || '未知错误');
-    }
-  } catch (e) { qpTestNote.value = '校准失败'; }
-  qpTesting.value = false;
-}
-
 const SPEED_OPTIONS = [
   { id: 'slow', label: '慢', desc: '最稳，每步约 1.5s' },
   { id: 'relaxed', label: '较慢', desc: '较稳，每步约 0.8s' },
@@ -371,7 +354,7 @@ const MISC_LABELS = {
   gem: '宝石', ore: '矿石与金属', material: '材料',
   consumable: '消耗品', junk: '杂物',
 };
-const crossCfg = ref ({ merge: true, clear_bag: false, categorize: false, categorize_mode: 'auto', category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
+const crossCfg = ref ({ categorize: false, categorize_mode: 'auto', category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
 const miscOpen = ref (false);
 const crossNote = ref ('');
 const crossSteps = ref ([]);
@@ -417,11 +400,14 @@ async function loadCrossConfig () {
   try {
     const d = await invoke ('settings:get');
     if (d && d.cross_config) {
-      crossCfg.value = {
-        merge: true, clear_bag: false, categorize: false, categorize_mode: 'auto', category_map: {},
+      const merged = {
+        categorize: false, categorize_mode: 'auto', category_map: {},
         misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true,
         ...d.cross_config,
       };
+      delete merged.merge;
+      delete merged.clear_bag;
+      crossCfg.value = merged;
     }
   } catch (e) {}
 }
@@ -445,6 +431,8 @@ async function startCrossSort () {
   crossResults.value = [];
   try {
     const cfg = JSON.parse (JSON.stringify (crossCfg.value));
+    cfg.merge = props.stackMode;
+    cfg.clear_bag = props.includeInv;
     const r = await invoke ('dnd:cross-sort-start', { character_id: props.charId, config: cfg });
     if (!r?.success) {
       error.value = r?.error || ('启动失败：' + JSON.stringify (r));
@@ -641,6 +629,20 @@ watch (() => props.charId, () => loadStashOptions ());
         </div>
         <div class="srow">
           <div class="srow-info">
+            <div class="srow-t">游戏仓库跟随</div>
+            <div class="srow-d">游戏内切换仓库时，软件自动识别并跟随当前仓库</div>
+          </div>
+          <div class="srow-ctl speed-group">
+            <button v-for="o in FOLLOW_OPTIONS" :key="o.id"
+                    class="speed-opt" :class="{ active: followMode === o.id }"
+                    :title="o.desc"
+                    @click="changeFollowMode(o.id)">
+              {{ o.label }}
+            </button>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
             <div class="srow-t">堆叠模式</div>
             <div class="srow-d">先合并可堆叠物品再整理</div>
           </div>
@@ -673,34 +675,6 @@ watch (() => props.charId, () => loadStashOptions ());
           </div>
           <div class="srow-ctl">
             <label class="switch"><input type="checkbox" :checked="quickPlace" @change="toggleQuickPlace()"><span class="track"></span></label>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">校准快速放置</div>
-            <div class="srow-d">把 1 个背包物品快速放入当前仓库并给出预测落点；请先在游戏里打开该仓库界面，再点此校准，核对实际落点</div>
-          </div>
-          <div class="srow-ctl">
-            <button class="btn subtle" :disabled="qpTesting || !props.charId || !props.stashId" @click="quickPlaceCalibrate">
-              {{ qpTesting ? '校准中…' : '校准' }}
-            </button>
-          </div>
-        </div>
-        <div v-if="qpTestNote" class="qp-note">{{ qpTestNote }}</div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">游戏仓库跟随</div>
-            <div class="srow-d">游戏内切换仓库时，软件自动识别并跟随当前仓库</div>
-          </div>
-          <div class="srow-ctl">
-            <div class="seg">
-              <button v-for="o in FOLLOW_OPTIONS" :key="o.id"
-                      class="seg-opt" :class="{ on: followMode === o.id }"
-                      @click="changeFollowMode(o.id)">
-                <span class="seg-t">{{ o.label }}</span>
-                <span class="seg-d">{{ o.desc }}</span>
-              </button>
-            </div>
           </div>
         </div>
 
@@ -874,24 +848,6 @@ watch (() => props.charId, () => loadStashOptions ());
         </div>
         <div class="srow">
           <div class="srow-info">
-            <div class="srow-t">堆叠合并</div>
-            <div class="srow-d">同仓 / 跨仓 / 背包的可堆叠物全部合并到满堆</div>
-          </div>
-          <div class="srow-ctl">
-            <label class="switch"><input type="checkbox" v-model="crossCfg.merge"><span class="track"></span></label>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">背包清空</div>
-            <div class="srow-d">背包物品按顺序存入仓库（自动找空位）</div>
-          </div>
-          <div class="srow-ctl">
-            <label class="switch"><input type="checkbox" v-model="crossCfg.clear_bag"><span class="track"></span></label>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
             <div class="srow-t">仓内整理</div>
             <div class="srow-d">最后对所有非空仓库做内部摆放优化（按排序方案排列）</div>
           </div>
@@ -1009,7 +965,6 @@ watch (() => props.charId, () => loadStashOptions ());
 .sar-row.bad .sar-msg { color: var(--red); }
 .cal-note { font-size: 12.5px; color: var(--green); }
 .cal-sep { margin: 0 6px; color: var(--line); }
-.qp-note { padding: 0 18px 12px; font-size: 12.5px; color: var(--accent); line-height: 1.5; }
 .auto-note { padding: 0 18px 12px; font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
 .cat-grid {
   display: grid;

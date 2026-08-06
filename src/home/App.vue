@@ -1255,7 +1255,7 @@ onBeforeUnmount (() => {
               <div class="step"><div class="step-n">3</div><div class="step-t">若数据<b>未出现或不完整</b>：确认抓包运行中、游戏处于<b>大厅</b>（顶部栏可见），再点一次「首次校准」即可。<b>每次开始整理前软件会自动刷新数据</b>，无需手动重复此步</div></div>
               <div class="step"><div class="step-n">4</div><div class="step-t">游戏内<b>打开要整理的仓库界面</b>（若在「仓库配置」页开启了<b>仓库跟随</b>，软件会自动识别并同步高亮当前仓库）</div></div>
               <div class="step"><div class="step-n">5</div><div class="step-t">在仓库网格上方选择<b>排序方案</b>（默认整理 / 品质区分 / 装备优先），可先点<b>「排序预览」</b>确认摆放效果，不满意再调整</div></div>
-              <div class="step"><div class="step-n">6</div><div class="step-t">进入「仓库配置」页：选择<b>整理角色</b>、目标仓库与模式（单仓库 / 全仓库顺序整理），按需调整<b>整理速度、堆叠合并、包含背包、保留原位、快速放置</b>等选项</div></div>
+              <div class="step"><div class="step-n">6</div><div class="step-t">进入「仓库配置」页：选择<b>整理角色</b>、目标仓库与模式（单仓库 / 全仓库顺序整理），按需调整<b>整理速度、堆叠模式、包含背包物品、保留原位、快速放置</b>等选项</div></div>
               <div class="step"><div class="step-n">7</div><div class="step-t">确认游戏窗口<b>在前台</b>且仓库界面已打开，按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理；整理期间<b>保持游戏前台、不要移动鼠标</b>（软件会自动最小化主页避免遮挡）</div></div>
               <div class="step"><div class="step-n">8</div><div class="step-t">随时可按 <span class="kbd">{{ cancelHotkey }}</span> 中断；结束后查看整理结果，误放可手动微调</div></div>
             </div>
@@ -1271,7 +1271,7 @@ onBeforeUnmount (() => {
             <div class="steps two-col">
               <div class="step-col">
                 <div class="step-col-t">跨仓整理</div>
-                <div class="step"><div class="step-n">1</div><div class="step-t">在「仓库配置」页配置<b>跨仓策略</b>（自动归类 / 堆叠合并 / 背包清空 / 腾空仓库等）与目标仓库</div></div>
+                <div class="step"><div class="step-n">1</div><div class="step-t">在「仓库配置」页配置<b>跨仓策略</b>（自动归类 / 腾空仓库等）与目标仓库</div></div>
                 <div class="step"><div class="step-n">2</div><div class="step-t">游戏内打开目标仓库，按下 <span class="kbd">{{ crossHotkey }}</span> 开始；目标仓满自动溢出，可按 <span class="kbd">{{ cancelHotkey }}</span> 中止</div></div>
               </div>
               <div class="step-col">
