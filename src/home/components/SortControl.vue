@@ -554,28 +554,22 @@ watch (() => props.charId, () => loadStashOptions ());
       <div class="card run-card">
         <div class="srow">
           <div class="srow-info">
-            <div class="srow-t">单仓库整理</div>
-            <div class="srow-d">整理当前选中的仓库（快捷键 <span class="kbd">{{ sortHotkey }}</span>）</div>
+            <div class="srow-t">开始整理</div>
+            <div class="srow-d">单仓库整理选中仓库；全仓按标签顺序逐个整理全部仓库</div>
           </div>
           <div class="srow-ctl">
-            <template v-if="sorting && kind === 'single'">
-              <span class="run-inline"><span class="spin"></span> 整理中…</span>
+            <template v-if="sorting">
+              <span class="run-inline">
+                <span class="spin"></span>
+                <template v-if="kind === 'all'"><b>{{ sortAllInfo.current }}/{{ sortAllInfo.total }}</b> · {{ sortAllInfo.label }}</template>
+                <template v-else>整理中…</template>
+              </span>
               <button class="btn danger" @click="cancelSort">取消</button>
             </template>
-            <button v-else class="btn primary" :disabled="!canStart || sorting" @click="startSort">开始整理</button>
-          </div>
-        </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">全仓库顺序整理</div>
-            <div class="srow-d">跳过空仓，背包并入首仓，失败自动跳过</div>
-          </div>
-          <div class="srow-ctl">
-            <template v-if="sorting && kind === 'all'">
-              <span class="run-inline"><span class="spin"></span> <b>{{ sortAllInfo.current }}/{{ sortAllInfo.total }}</b> · {{ sortAllInfo.label }}</span>
-              <button class="btn danger" @click="cancelSort">取消</button>
+            <template v-else>
+              <button class="btn primary" :disabled="!canStart" @click="startSort">单仓库整理</button>
+              <button class="btn primary" :disabled="!props.charId" @click="startSortAll">全仓库整理</button>
             </template>
-            <button v-else class="btn primary" :disabled="!props.charId || sorting" @click="startSortAll">开始全仓整理</button>
           </div>
         </div>
 
@@ -592,7 +586,7 @@ watch (() => props.charId, () => loadStashOptions ());
           <div class="srow">
             <div class="srow-info">
               <div class="srow-t">开始整理键</div>
-              <div class="srow-d">全局快捷键，支持 F1–F12 及 Ctrl/Alt/Shift 组合</div>
+              <div class="srow-d">单仓库整理的全局快捷键，支持 F1–F12 及 Ctrl/Alt/Shift 组合</div>
             </div>
             <div class="srow-ctl">
               <button class="hotkey-cap" :class="{ listening: listeningFor === 'sort', saved: savedFlash === 'sort' }"
@@ -668,9 +662,6 @@ watch (() => props.charId, () => loadStashOptions ());
               <button class="seg-opt" :class="{ on: crossPosition === 'balanced' }" @click="crossPosition = 'balanced'"><span class="seg-t">均衡分散</span></button>
             </div>
           </div>
-        </div>
-        <div v-if="crossCfg.categorize && crossCfg.categorize_mode === 'auto'" class="auto-note">
-          无需配置：按仓库顺序给每类物品（武器/护甲/工具/饰品/杂物/其他）各分一个仓库；目标仓库放满时，会自动溢出到其他有空位的仓库。
         </div>
         <template v-if="crossCfg.categorize && crossCfg.categorize_mode === 'manual'">
           <div class="cat-grid">
@@ -772,7 +763,6 @@ watch (() => props.charId, () => loadStashOptions ());
 .sar-row.ok .sar-msg { color: var(--green); }
 .sar-row.bad .sar-msg { color: var(--red); }
 .cal-note { font-size: 12.5px; color: var(--green); }
-.auto-note { padding: 0 18px 12px; font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -811,6 +801,7 @@ watch (() => props.charId, () => loadStashOptions ());
 }
 .uipi-warn b { font-weight: 650; color: #a05a00; }
 
+.run-inline { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); white-space: nowrap; }
 .run-progress {
   display: flex; align-items: center; gap: 12px;
   margin-top: 15px; padding: 13px 15px;
