@@ -1,37 +1,22 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { capture, tsharkPath, tsharkDetected, tsharkOk, refreshCapture } from '../composables/capture.js';
 
 const invoke = (ch, d) => window.electron.invoke (ch, d);
 
 const error = ref ('');
 
-const capture = ref ({ running: false, interface: '', port_range: { low: 20200, high: 20300 } });
 const captureBusy = ref (false);
 
 const interfaces = ref ([]);
 const selectedIface = ref ('');
 const ifaceBusy = ref (false);
 
-const tsharkPath = ref ('');
-const tsharkDetected = ref ('');
 const tsharkBusy = ref (false);
-const tsharkOk = computed (() => !!tsharkPath.value);
 
 const diag = ref (null);
 const diagBusy = ref (false);
 const diagOpen = ref (false);
-
-async function refreshCapture () {
-  try {
-    const s = await invoke ('dnd:capture-status');
-    if (s) {
-      capture.value = s;
-      // 只认解析成功的 tshark 路径，避免无效选择误显示为绿点就绪
-      tsharkPath.value = s.tshark_path || '';
-      tsharkDetected.value = s.tshark_detected || '';
-    }
-  } catch (e) {}
-}
 
 async function pickTshark () {
   if (tsharkBusy.value) return;
@@ -111,20 +96,6 @@ async function clearData () {
   window.dispatchEvent (new CustomEvent ('dnd:characters-refresh'));
 }
 
-const refreshBusy = ref (false);
-
-async function oneClickRefresh () {
-  if (refreshBusy.value) return;
-  refreshBusy.value = true;
-  error.value = '';
-  try {
-    const r = await invoke ('stash:refresh-data', {});
-    if (r && r.error) error.value = r.error;
-  } catch (e) {}
-  window.dispatchEvent (new CustomEvent ('dnd:characters-refresh'));
-  refreshBusy.value = false;
-}
-
 let refreshTimer = null;
 let ocrReady = false;
 
@@ -185,9 +156,6 @@ onBeforeUnmount (() => {
           </select>
         </div>
         <div class="cap-actions">
-          <button class="btn subtle" :disabled="refreshBusy" title="自动切换游戏顶部栏页面，让游戏重新下发仓库数据（无需重新选角）" @click="oneClickRefresh">
-            {{ refreshBusy ? '更新中…' : '一键更新' }}
-          </button>
           <button class="btn danger" @click="clearData">清除数据</button>
           <button class="btn" :class="capture.running ? 'warn' : 'primary'" :disabled="captureBusy" @click="toggleCapture">
             {{ capture.running ? '停止抓包' : '启动抓包' }}

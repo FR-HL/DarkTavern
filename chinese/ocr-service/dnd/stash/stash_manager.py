@@ -1042,6 +1042,7 @@ class StashManager:
         character_id=None,
         timeout: float = 8.0,
         cancel_event=None,
+        toggles: int = 1,
     ):
         """Refresh inventory data in-game and wait for the new snapshot.
 
@@ -1050,7 +1051,9 @@ class StashManager:
         the packet capture saves it and updates the local cache. Returns
         the instant a snapshot arrives (event-driven, late packets included);
         gives up after a short wait so a non-responsive game never stalls
-        the sort for long.
+        the sort for long. ``toggles`` (1-3) repeats the away-&-back switch
+        when the previous round produced no snapshot (first-time calibration
+        uses 2 for extra reliability).
 
         Returns ``(ok, note, received_character_id)``:
           ok=True  — a fresh snapshot arrived (and the cache was reloaded);
@@ -1071,7 +1074,8 @@ class StashManager:
         character_store.full_packet_event.clear()
         start_marker = _time.monotonic()
         deadline = start_marker + timeout
-        round_wait = 2.0   # wait for the snapshot after the toggle
+        toggle_rounds = max(1, min(int(toggles or 1), 3))
+        round_wait = 2.0   # wait for the snapshot after each toggle
         toggle_gap = 0.3   # gap between the away-click and the back-click
 
         def _fresh_packet():
@@ -1099,34 +1103,40 @@ class StashManager:
         try:
             # Let the forced window activation settle before clicking.
             _time.sleep(0.15)
-            if not macros.click_topbar_tab('merchant'):
-                return False, "click_failed", None
-            _time.sleep(toggle_gap)
-            if not macros.click_topbar_tab('stash'):
-                return False, "click_failed", None
+            for round_idx in range(toggle_rounds):
+                if round_idx:
+                    logger.info(
+                        "refresh_character_data: no snapshot yet — toggling again (%d/%d)",
+                        round_idx + 1, toggle_rounds,
+                    )
+                if not macros.click_topbar_tab('merchant'):
+                    return False, "click_failed", None
+                _time.sleep(toggle_gap)
+                if not macros.click_topbar_tab('stash'):
+                    return False, "click_failed", None
 
-            round_end = min(_time.monotonic() + round_wait, deadline)
-            while True:
-                remaining = round_end - _time.monotonic()
-                if remaining <= 0:
-                    break
-                if cancel_event is not None and cancel_event.is_set():
-                    return False, "cancelled", None
-                # Block until the capture thread signals a newly saved full
-                # packet — instant wake-up even if it is late, no polling.
-                # The 0.2s cap keeps the cancel check responsive.
-                character_store.full_packet_event.wait(min(remaining, 0.2))
-                character_store.full_packet_event.clear()
-                pkt_time, pkt_char = _fresh_packet()
-                if pkt_time is not None:
-                    return _consume(pkt_char)
+                round_end = min(_time.monotonic() + round_wait, deadline)
+                while True:
+                    remaining = round_end - _time.monotonic()
+                    if remaining <= 0:
+                        break
+                    if cancel_event is not None and cancel_event.is_set():
+                        return False, "cancelled", None
+                    # Block until the capture thread signals a newly saved full
+                    # packet — instant wake-up even if it is late, no polling.
+                    # The 0.2s cap keeps the cancel check responsive.
+                    character_store.full_packet_event.wait(min(remaining, 0.2))
+                    character_store.full_packet_event.clear()
+                    pkt_time, pkt_char = _fresh_packet()
+                    if pkt_time is not None:
+                        return _consume(pkt_char)
         except macros.MacroCancelled:
             return False, "cancelled", None
         finally:
             if cancel_event is not None:
                 macros.pop_cancel_event(cancel_event)
 
-        logger.warning("refresh_character_data: no snapshot after toggle")
+        logger.warning("refresh_character_data: no snapshot after %d toggle(s)", toggle_rounds)
         return False, "timeout", None
 
     def sort_stash(

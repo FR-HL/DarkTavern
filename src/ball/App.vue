@@ -19,6 +19,9 @@ const status = reactive ({
   sortJustFinished: false,
   sortOk: false,
   charJustUpdated: false,
+  calibrateRunning: false,
+  calibrateJustFinished: false,
+  calibrateOk: false,
   character: null,
   frontStash: null,
   stashJustChanged: false,
@@ -45,10 +48,13 @@ const center = computed (() => {
     if (t.kind === 'fail') return { t1: '未找到', cls: 'bad' };
     if (t.kind === 'sortok') return { t1: '完成', cls: 'ok' };
     if (t.kind === 'sortfail') return { t1: '失败', cls: 'bad' };
+    if (t.kind === 'calibrateok') return { t1: '完成', cls: 'ok' };
+    if (t.kind === 'calibratefail') return { t1: '失败', cls: 'bad' };
     if (t.kind === 'char') return { t1: t.sub, cls: 'busy', small: true };
     if (t.kind === 'stash') return { t1: t.sub, cls: 'busy', small: true };
   }
   if (!status.ocr) return { t1: '故障', cls: 'bad' };
+  if (status.calibrateRunning) return { t1: '校准', cls: 'warn' };
   if (status.sortingRunning) return { t1: '整理', cls: 'busy' };
   if (!status.game) return { t1: '待机', cls: 'warn' };
   return { t1: '就绪', cls: 'ok' };
@@ -105,6 +111,9 @@ function onStatus (d) {
   }
   if (d.sortJustFinished) {
     setTransient (d.sortOk ? 'sortok' : 'sortfail', '', 3000);
+  }
+  if (d.calibrateJustFinished) {
+    setTransient (d.calibrateOk ? 'calibrateok' : 'calibratefail', '', 3000);
   }
 }
 

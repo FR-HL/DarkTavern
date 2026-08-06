@@ -222,8 +222,8 @@ export async function tabScan () {
   return await post ('/stash/tabscan') || { error: 'Service unavailable' };
 }
 
-export async function refreshStashData (characterId = '', timeout = 8) {
-  return await post ('/stash/refresh-data', { character_id: String (characterId), timeout: Number (timeout) }) || { error: 'Service unavailable' };
+export async function firstCalibrate () {
+  return await post ('/stash/first-calibrate') || { error: 'Service unavailable' };
 }
 
 export async function followCalibrateStatus () {

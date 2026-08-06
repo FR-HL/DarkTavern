@@ -867,8 +867,8 @@ onBeforeUnmount (() => {
               </div>
               <div class="step-col">
                 <div class="step-col-t">整理仓库</div>
-                <div class="step"><div class="step-n">1</div><div class="step-t">启动<b>抓包</b>（角色仓库页）</div></div>
-                <div class="step"><div class="step-n">2</div><div class="step-t">游戏大厅<b>切换一次顶部栏页面</b>，或点「一键更新」（取仓库数据）</div></div>
+                <div class="step"><div class="step-n">1</div><div class="step-t">角色仓库页点<b>「首次校准」</b>（自动启动抓包并获取仓库数据）</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t">数据未出现时，再点一次<b>「首次校准」</b>，或在游戏大厅切换一次顶部栏页面</div></div>
                 <div class="step"><div class="step-n">3</div><div class="step-t">游戏中<b>打开要整理的仓库</b>界面</div></div>
                 <div class="step"><div class="step-n">4</div><div class="step-t">按下 <span class="kbd">{{ sortHotkey }}</span> 开始整理（整理前会自动刷新数据）</div></div>
               </div>
@@ -1250,9 +1250,9 @@ onBeforeUnmount (() => {
           <div class="sec-label">三、自动整理 · 操作流程</div>
           <div class="card">
             <div class="steps">
-              <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>「启动抓包」</b>，然后点<b>「一键更新」</b>（会自动切换游戏顶部栏页面，让游戏重新下发仓库数据）；也可以手动在游戏大厅<b>切换到其他顶部栏页面再切回</b>，效果相同</div></div>
-              <div class="step"><div class="step-n">2</div><div class="step-t">角色仓库与背包数据<b>自动出现</b>在列表中（数据保存在本机，重启软件无需重抓；如需重抓，可先「清除数据」再「一键更新」）</div></div>
-              <div class="step"><div class="step-n">3</div><div class="step-t">若数据<b>未出现或不完整</b>：确认抓包运行中、游戏处于<b>大厅</b>（顶部栏可见），再点一次「一键更新」即可。<b>每次开始整理前软件会自动刷新数据</b>，无需手动重复此步</div></div>
+              <div class="step"><div class="step-n">1</div><div class="step-t">进入「角色仓库」页，点击<b>「首次校准」</b>——自动启动抓包、在游戏内切换顶部栏页面并获取仓库数据，全程无需手动操作；失败时按提示重试即可</div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">角色仓库与背包数据<b>自动出现</b>在列表中（数据保存在本机，重启软件无需重抓；如需重抓，可先「清除数据」再「首次校准」）</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">若数据<b>未出现或不完整</b>：确认抓包运行中、游戏处于<b>大厅</b>（顶部栏可见），再点一次「首次校准」即可。<b>每次开始整理前软件会自动刷新数据</b>，无需手动重复此步</div></div>
               <div class="step"><div class="step-n">4</div><div class="step-t">游戏内<b>打开要整理的仓库界面</b>（若在「仓库配置」页开启了<b>仓库跟随</b>，软件会自动识别并同步高亮当前仓库）</div></div>
               <div class="step"><div class="step-n">5</div><div class="step-t">在仓库网格上方选择<b>排序方案</b>（默认整理 / 品质区分 / 装备优先），可先点<b>「排序预览」</b>确认摆放效果，不满意再调整</div></div>
               <div class="step"><div class="step-n">6</div><div class="step-t">进入「仓库配置」页：选择<b>整理角色</b>、目标仓库与模式（单仓库 / 全仓库顺序整理），按需调整<b>整理速度、堆叠合并、包含背包、保留原位、快速放置</b>等选项</div></div>
@@ -1380,7 +1380,7 @@ onBeforeUnmount (() => {
             <div class="card term-card">
               <div class="term-head">角色仓库没有数据</div>
               <div class="term-body">
-                <p>确认已安装 Wireshark（提供 tshark）；在「角色仓库」页启动抓包后，点<b>「一键更新」</b>（或手动在游戏大厅切换到其他顶部栏页面再切回），游戏会重新下发全量仓库数据。注意游戏需处于<b>大厅</b>（顶部栏可见），副本内无法取得数据。</p>
+                <p>确认已安装 Wireshark（提供 tshark）；在「角色仓库」页点<b>「首次校准」</b>（自动启动抓包并获取数据），失败时按提示重试，或手动在游戏大厅切换到其他顶部栏页面再切回。注意游戏需处于<b>大厅</b>（顶部栏可见），副本内无法取得数据。</p>
               </div>
             </div>
             <div class="card term-card">

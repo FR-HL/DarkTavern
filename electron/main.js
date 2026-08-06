@@ -40,6 +40,9 @@ let lastStashKey = '';
 let frontStash = null;
 let frontStashList = [];
 let stashJustChanged = false;
+let calibrateRunning = false;
+let calibrateJustFinished = false;
+let calibrateOk = false;
 let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', pricing: null, attributes: { primary: [], secondary: [] }, reverseAttributes: {}, message: '', ts: 0 };
 const BALL_SIZE = { w: 82, h: 82 };
 
@@ -232,7 +235,17 @@ app.on ('ready', async () => {
   });
   ipcMain.handle ('stash:tab-test', (e, characterId = '') => backend.tabTest (characterId));
   ipcMain.handle ('stash:tab-scan', () => backend.tabScan ());
-  ipcMain.handle ('stash:refresh-data', (e, data = {}) => backend.refreshStashData (data?.character_id || '', data?.timeout || 8));
+  ipcMain.handle ('stash:first-calibrate', async () => {
+    calibrateRunning = true;
+    pushBallStatus ();
+    let r = null;
+    try { r = await backend.firstCalibrate (); } catch (e) { r = { error: e?.message || '' }; }
+    calibrateRunning = false;
+    calibrateJustFinished = true;
+    calibrateOk = !!r?.success;
+    pushBallStatus ();
+    return r;
+  });
   ipcMain.handle ('stash:follow-calibrate-status', () => backend.followCalibrateStatus ());
   ipcMain.handle ('stash:follow-calibrate-record', (e, index) => backend.followCalibrateRecord (Number (index)));
   ipcMain.handle ('stash:follow-calibrate-auto', () => backend.followCalibrateAuto ());
@@ -953,6 +966,10 @@ async function gatherBallStatus () {
   const stashChanged = stashJustChanged;
   stashJustChanged = false;
 
+  // 首次校准完成标记（一次性，推送后清除）
+  const calibrateDone = calibrateJustFinished;
+  calibrateJustFinished = false;
+
   let lastSortText = '';
   if (sorting.result) {
     lastSortText = sorting.result.success ? '成功 ✓' : ('失败：' + (sorting.result.message || ''));
@@ -978,6 +995,9 @@ async function gatherBallStatus () {
     lastSortText,
     frontStash,
     stashJustChanged: stashChanged,
+    calibrateRunning,
+    calibrateJustFinished: calibrateDone,
+    calibrateOk,
     character: current ? {
       nickname: current.nickname,
       cls: current.class,

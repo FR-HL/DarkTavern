@@ -31,11 +31,6 @@ class QuickPlaceTestRequest(BaseModel):
     stash_id: int
 
 
-class RefreshDataRequest(BaseModel):
-    character_id: str = ""
-    timeout: float = 8.0
-
-
 def _load_equipment_slots():
     """Equipment page slot layout (slot id -> grid position/size)."""
     global _EQUIPMENT_SLOTS
@@ -193,47 +188,68 @@ def tab_scan():
     }
 
 
-@router.post("/refresh-data")
-def refresh_data(body: RefreshDataRequest):
-    """One-click inventory data refresh.
+@router.post("/first-calibrate")
+def first_calibrate():
+    """One-click first-time calibration.
 
-    Switches the in-game lobby top-bar page away and back, which makes the
-    game re-request the full character snapshot; the capture then updates
-    the local data automatically (no character re-selection needed).
+    Starts the packet capture when needed, waits for it to come up, then
+    toggles the in-game top-bar page twice to pull the full character
+    snapshot. Returns once the data has landed (or with a staged error).
     """
+    import time as _time
     from dnd import service
+    from dnd.settings import detect_wireshark_installation
 
     capture = service.get_packet_capture()
     if not capture.is_active():
+        if not (getattr(capture, "tshark_path", None) or detect_wireshark_installation()):
+            return {
+                "success": False,
+                "stage": "capture",
+                "error": "未找到 TShark。请先安装 Wireshark（安装时保持勾选 TShark 组件），装完重启 冒险者侍从。",
+            }
+        capture.start_capture_switch()
+        # Wait for the tshark session to actually come up before toggling,
+        # otherwise the snapshot packet would be missed.
+        deadline = _time.monotonic() + 8.0
+        while _time.monotonic() < deadline:
+            if getattr(capture, "_current_capture", None) is not None:
+                break
+            _time.sleep(0.2)
+        _time.sleep(0.3)
+    if not capture.is_active():
         return {
             "success": False,
-            "note": "capture_off",
-            "error": "抓包未启动，请先在「角色仓库」页启动抓包。",
+            "stage": "capture",
+            "error": "抓包启动失败，请在「角色仓库」页查看链路诊断。",
         }
 
     mgr = service.get_stash_manager()
-    character_id = (body.character_id or "").strip() or None
-    timeout = max(3.0, min(float(body.timeout or 8.0), 20.0))
-    ok, note, received = mgr.refresh_character_data(
-        character_id=character_id,
-        timeout=timeout,
-    )
+    ok, note, received = mgr.refresh_character_data(toggles=2, timeout=12.0)
 
     if ok:
         return {"success": True, "note": "ok", "character_id": received}
 
     messages = {
-        "no_window": "未找到游戏窗口，请确认 Dark and Darker 正在运行。",
+        "no_window": "未找到游戏窗口。请先启动 Dark and Darker 并进入大厅，再点「首次校准」。",
         "click_failed": "顶部栏点击失败，请确认游戏在前台且处于大厅界面。",
-        "timeout": "未收到新的仓库数据。请确认抓包正常，且游戏处于大厅（可手动切换一次顶部栏页面再试点「一键更新」）。",
-        "mismatch": f"游戏内当前角色（{received}）与所选角色不一致，已更新游戏内角色的数据。",
-        "cancelled": "刷新已取消。",
+        "timeout": "抓包已启动，但未收到仓库数据。",
+        "mismatch": f"已获取到游戏内角色（{received}）的数据。",
+        "cancelled": "校准已取消。",
+    }
+    hints = {
+        "timeout": [
+            "请确认游戏处于大厅（顶部栏可见）后重试",
+            "也可手动在游戏中切换一次顶部栏页面",
+            "首次校准请在仓库内随意移动几件物品，才能获得仓库数据",
+        ],
     }
     return {
-        "success": False,
+        "success": note == "mismatch",
         "note": note,
         "character_id": received,
-        "error": messages.get(note, "刷新失败。"),
+        "error": messages.get(note, "校准失败。"),
+        "hints": hints.get(note, []),
     }
 
 

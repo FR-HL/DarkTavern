@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import StashPane from './StashPane.vue';
+import { refreshCapture } from '../composables/capture.js';
 
 const props = defineProps ({
   charId: { type: String, default: '' },
@@ -348,6 +349,46 @@ async function reloadCharacters () {
 
 const onCharactersRefresh = () => reloadCharacters ();
 
+const calibrating = ref (false);
+const calibResult = ref (null); // { ok: boolean, text: string, hints: string[] } | null
+const stashNextKey = ref ('Ctrl+E');
+
+async function loadStashNextKey () {
+  try {
+    const d = await invoke ('settings:get');
+    if (d?.stash_next_key) stashNextKey.value = d.stash_next_key;
+  } catch (e) {}
+}
+
+async function firstCalibrate () {
+  if (calibrating.value) return;
+  calibrating.value = true;
+  calibResult.value = null;
+  // 校准会先启动抓包：中途补一次状态刷新，让抓包控制卡片及时亮起
+  const midTimer = setTimeout (() => { if (calibrating.value) refreshCapture (); }, 2500);
+  try {
+    const r = await invoke ('stash:first-calibrate');
+    if (r?.success) {
+      calibResult.value = {
+        ok: true,
+        text: '仓库数据已就绪，选择角色后即可开始整理',
+        hints: [
+          `按快捷键 ${stashNextKey.value} 可快捷切换仓库`,
+          '每次整理前确保软件内仓库与游戏内仓库一致；游戏内选择仓库可能识别错误，推荐用快捷键切换',
+        ],
+      };
+      await reloadCharacters ();
+    } else {
+      calibResult.value = { ok: false, text: r?.error || '校准失败，请确认游戏已启动并重试', hints: r?.hints || [] };
+    }
+  } catch (e) {
+    calibResult.value = { ok: false, text: '校准失败：后端服务未就绪' };
+  }
+  clearTimeout (midTimer);
+  await refreshCapture ();
+  calibrating.value = false;
+}
+
 async function loadCharacters () {
   try {
     const d = await invoke ('dnd:characters');
@@ -445,6 +486,7 @@ onMounted (async () => {
   loadSortOrder ();
   await loadFollowMode ();
   await loadLocks ();
+  loadStashNextKey ();
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
   connectEvents ();
   reportStashState ();
@@ -478,6 +520,34 @@ watch (() => props.stashId, () => reportStashState ());
   <div>
     <StashPane />
 
+    <!-- 首次校准 -->
+    <div class="calib-card card">
+      <div class="calib-row">
+        <div class="calib-left">
+          <div class="calib-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/><line x1="12" y1="1.5" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22.5" y2="12"/></svg>
+          </div>
+          <div class="calib-info">
+            <div class="calib-t">首次校准</div>
+            <div class="calib-d">{{ calibrating ? '正在启动抓包并在游戏内切换页面获取数据，请勿操作游戏…' : '一键完成：自动启动抓包 → 游戏内切页两次 → 获取仓库数据（首次整理前必做）' }}</div>
+          </div>
+        </div>
+        <button class="btn primary" :disabled="calibrating" @click="firstCalibrate">
+          {{ calibrating ? '校准中…' : '开始校准' }}
+        </button>
+      </div>
+      <div v-if="calibResult" class="calib-result" :class="calibResult.ok ? 'ok' : 'err'">
+        <svg v-if="calibResult.ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <div class="calib-rbody">
+          <div class="calib-rline"><b>{{ calibResult.ok ? '首次校准完成' : '校准未完成' }}</b>{{ calibResult.text }}</div>
+          <ul v-if="calibResult.hints && calibResult.hints.length" class="calib-hints">
+            <li v-for="(h, i) in calibResult.hints" :key="i">{{ h }}</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
     <!-- 角色选择 -->
     <div class="sec" v-if="characters.length">
       <div class="sec-label">角色</div>
@@ -495,7 +565,7 @@ watch (() => props.stashId, () => reportStashState ());
     </div>
     <div v-else class="empty-hint">
       <div class="empty-t">暂无角色数据</div>
-      <div class="empty-d">启动抓包后，在游戏大厅切换一次顶部栏页面（如切到商人页再切回），数据会自动出现在这里；也可以直接点上方「一键更新」自动完成。整理前会自动刷新数据，无需重复操作。</div>
+      <div class="empty-d">点上方「开始校准」即可自动启动抓包并获取数据；也可以手动启动抓包后，在游戏大厅切换一次顶部栏页面（如切到商人页再切回），数据会自动出现在这里。整理前会自动刷新数据，无需重复操作。</div>
     </div>
 
     <!-- 仓库网格 -->
@@ -590,6 +660,46 @@ watch (() => props.stashId, () => reportStashState ());
 
 <style scoped>
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+/* first-time calibration card */
+.calib-card {
+  display: flex; flex-direction: column;
+  padding: 16px 18px; margin-bottom: 20px;
+  animation: paneIn .32s var(--ease) both;
+}
+.calib-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.calib-left { display: flex; align-items: center; gap: 13px; }
+.calib-ic {
+  width: 38px; height: 38px; flex: none; display: grid; place-items: center;
+  border-radius: 10px; color: #fff;
+  background: linear-gradient(150deg, #2a8bf2, var(--accent) 50%, var(--accent-strong));
+  box-shadow: 0 2px 7px rgba(0,113,227,0.32);
+}
+.calib-ic svg { width: 19px; height: 19px; }
+.calib-t { font-size: 14.5px; font-weight: 650; color: var(--text); letter-spacing: -0.01em; }
+.calib-d { margin-top: 3px; font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
+.calib-result {
+  display: flex; align-items: flex-start; gap: 9px;
+  margin-top: 13px; padding: 11px 13px;
+  border-radius: 9px;
+  font-size: 13px; font-weight: 550; line-height: 1.55;
+  animation: paneIn .3s var(--ease) both;
+}
+.calib-result svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.calib-result b { font-weight: 700; margin-right: 8px; }
+.calib-result.ok { background: var(--green-soft); color: var(--green); border: 1px solid rgba(31,157,85,0.28); }
+.calib-result.err { background: var(--red-soft); color: var(--red); border: 1px solid rgba(217,45,32,0.25); }
+.calib-rbody { flex: 1; min-width: 0; }
+.calib-hints { margin: 7px 0 0; padding: 0; list-style: none; }
+.calib-hints li {
+  position: relative; padding-left: 14px; margin-top: 4px;
+  font-size: 12.5px; font-weight: 500; line-height: 1.5; opacity: .92;
+}
+.calib-hints li::before {
+  content: ''; position: absolute; left: 2px; top: 7px;
+  width: 4px; height: 4px; border-radius: 50%;
+  background: currentColor; opacity: .75;
+}
 
 /* character cards */
 .char-row { display: flex; flex-wrap: wrap; gap: 10px; }
