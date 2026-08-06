@@ -45,11 +45,80 @@ _mouse_listener_lock = threading.Lock()
 _MOUSE_TAB_HIT_RATIO = 0.45  # < 0.5 so neighbouring tabs never overlap
 
 
+# Game executable names (process image name, case-insensitive) that own a
+# "game window". Dark and Darker's launcher/game process is DungeonCrawler.exe.
+# Add more games here — the foreground check accepts any of them.
+_GAME_EXE_NAMES = ("dungeoncrawler.exe",)
+
+# Window-title prefixes (case-insensitive) that count as the game window.
+# Tolerates title variants (trailing spaces, "- 汉化版", launcher suffixes, …).
+_GAME_TITLE_PREFIXES = ("dark and darker", "dungeoncrawler")
+
+
+def _game_is_foreground():
+    """Return True when a game window is the foreground window.
+
+    Two-layer check so it works regardless of privilege levels:
+      1) process-name match — GetWindowThreadProcessId + QueryFullProcessImageNameW
+         on the foreground window. Reliable even when the game runs elevated
+         while this tool does not (UIPI can block GetWindowTextW / FindWindow
+         across privilege levels is title-based).
+      2) title-prefix fallback — tolerate title variants (e.g. trailing spaces)
+         when the process-name query is unavailable.
+    """
+    try:
+        import ctypes
+        import win32gui
+        user32 = ctypes.windll.user32
+        fg = user32.GetForegroundWindow()
+        if not fg:
+            return False
+
+        # 1) Process image name of the foreground window's owner process.
+        try:
+            pid = ctypes.wintypes.DWORD()
+            user32.GetWindowThreadProcessId(fg, ctypes.byref(pid))
+            if pid.value:
+                import ctypes.wintypes as wt
+                h = ctypes.windll.kernel32.OpenProcess(
+                    0x1000,  # PROCESS_QUERY_LIMITED_INFORMATION
+                    False,
+                    pid.value,
+                )
+                if h:
+                    try:
+                        buf = ctypes.create_unicode_buffer(1024)
+                        size = ctypes.c_ulong(1024)
+                        if ctypes.windll.kernel32.QueryFullProcessImageNameW(
+                            h, 0, buf, ctypes.byref(size)
+                        ):
+                            name = buf.value.rsplit("\\", 1)[-1].lower()
+                            if name in _GAME_EXE_NAMES:
+                                return True
+                    finally:
+                        ctypes.windll.kernel32.CloseHandle(h)
+        except Exception:
+            pass
+
+        # 2) Title-prefix fallback.
+        n = user32.GetWindowTextLengthW(fg)
+        if n <= 0:
+            return False
+        buf = ctypes.create_unicode_buffer(n + 1)
+        user32.GetWindowTextW(fg, buf, n + 1)
+        title = buf.value.strip().lower()
+        return any(title.startswith(p) for p in _GAME_TITLE_PREFIXES)
+    except Exception:
+        return False
+
+
 def _on_mouse_click(x, y, button, pressed):
     """pynput mouse callback — must never raise (a crash here kills the host
     process), so the whole body is guarded."""
     try:
         if not pressed or not hasattr(button, "name") or button.name != "left":
+            return
+        if not _game_is_foreground():
             return
         _handle_stash_tab_click(x, y)
     except Exception:
