@@ -176,6 +176,29 @@ async function changeFollowMode (id) {
   await invoke ('settings:save', { follow_mode: id });
 }
 
+// ── 窄屏（非 16:9）点击落点适配 ──
+const narrowAnchor = ref ('center');
+const NARROW_ANCHOR_OPTIONS = [
+  { id: 'center', label: '居中', desc: '垂直居中' },
+  { id: 'top', label: '贴顶', desc: '靠上对齐' },
+  { id: 'bottom', label: '贴底', desc: '靠下对齐' },
+];
+
+async function loadNarrowAnchor () {
+  try {
+    const r = await invoke ('dnd:narrow-anchor-get');
+    if (r && r.anchor) narrowAnchor.value = r.anchor;
+  } catch (e) {}
+}
+
+async function changeNarrowAnchor (id) {
+  narrowAnchor.value = id;
+  try {
+    const r = await invoke ('dnd:narrow-anchor-set', id);
+    if (r && r.anchor) narrowAnchor.value = r.anchor;
+  } catch (e) {}
+}
+
 function samePreset (a, b) {
   if (!Array.isArray (a) || !Array.isArray (b)) return false;
   for (let i = 0; i < b.length; i++) {
@@ -445,6 +468,7 @@ onMounted (async () => {
   await loadCrossConfig ();
   await loadStashOptions ();
   loadQuickPlace ();
+  loadNarrowAnchor ();
   try {
     const s = await invoke ('dnd:sort-status');
     if (s && s.running) sorting.value = true;
@@ -561,6 +585,21 @@ watch (() => props.charId, () => loadStashOptions ());
           </div>
           <div class="srow-ctl">
             <label class="switch"><input type="checkbox" :checked="quickPlace" @change="toggleQuickPlace()"><span class="track"></span></label>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">窄屏（16:10）适配</div>
+            <div class="srow-d">2560x1600 等非 16:9 分辨率点击偏移时切换尝试；16:9 与超宽不受影响</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in NARROW_ANCHOR_OPTIONS" :key="o.id"
+                      class="seg-opt" :class="{ on: narrowAnchor === o.id }"
+                      @click="changeNarrowAnchor(o.id)">
+                <span class="seg-t">{{ o.label }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

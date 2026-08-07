@@ -328,6 +328,14 @@ export async function setQuickPlace (enabled) {
   return await post ('/sort/quickplace', { enabled: !!enabled }) || { error: 'Service unavailable' };
 }
 
+export async function getNarrowAnchor () {
+  return await get ('/sort/narrow-anchor');
+}
+
+export async function setNarrowAnchor (anchor) {
+  return await post ('/sort/narrow-anchor', { anchor }) || { error: 'Service unavailable' };
+}
+
 export async function sortPreview (params) {
   const q = new URLSearchParams ({ character_id: params.character_id, stash_id: params.stash_id });
   if (params.stack_mode !== undefined) q.set ('stack_mode', params.stack_mode ? 'true' : 'false');

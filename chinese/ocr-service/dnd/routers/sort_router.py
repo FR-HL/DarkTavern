@@ -35,6 +35,10 @@ class QuickPlaceUpdate(BaseModel):
     enabled: bool = True
 
 
+class NarrowAnchorUpdate(BaseModel):
+    anchor: str = "center"
+
+
 class SortOrderItem(BaseModel):
     field: str
     direction: str = "desc"
@@ -248,6 +252,28 @@ def set_quick_place(body: QuickPlaceUpdate):
     enabled = bool(body.enabled)
     settings_manager.update({"useQuickPlace": enabled}, persist=True)
     return {"success": True, "enabled": enabled}
+
+
+_NARROW_ANCHORS = ("center", "top", "bottom")
+
+
+@router.get("/narrow-anchor")
+def get_narrow_anchor():
+    from dnd.settings import settings_manager
+    anchor = str(settings_manager.get("narrowScaleAnchor", "center") or "center").lower()
+    if anchor not in _NARROW_ANCHORS:
+        anchor = "center"
+    return {"anchor": anchor}
+
+
+@router.post("/narrow-anchor")
+def set_narrow_anchor(body: NarrowAnchorUpdate):
+    from dnd.settings import settings_manager
+    anchor = str(body.anchor or "center").lower()
+    if anchor not in _NARROW_ANCHORS:
+        anchor = "center"
+    settings_manager.update({"narrowScaleAnchor": anchor}, persist=True)
+    return {"success": True, "anchor": anchor}
 
 
 @router.post("/order")

@@ -214,6 +214,29 @@ def _is_ultrawide(resolution):
     return (w / max(1, h)) > (STANDARD_ASPECT + 0.01)
 
 
+def _is_narrow(resolution):
+    """Return True if the resolution has a narrower aspect ratio than 16:9
+    (e.g. 16:10 laptop panels)."""
+    w, h = resolution
+    return (w / max(1, h)) < (STANDARD_ASPECT - 0.01)
+
+
+def _narrow_anchor_offset(width, height):
+    """Vertical letterbox offset for a narrower-than-16:9 resolution.
+
+    The game UI scales uniformly (grid cells stay square), so we fit to the
+    width and centre / top / bottom-anchor the 16:9 content vertically.  The
+    anchor is user-configurable because it cannot be inferred reliably.
+    """
+    gap = max(0.0, height - width / STANDARD_ASPECT)
+    anchor = str(settings_manager.get('narrowScaleAnchor', 'center') or 'center').lower()
+    if anchor == 'top':
+        return 0.0
+    if anchor == 'bottom':
+        return gap
+    return gap / 2.0
+
+
 def _scaled_layout(resolution):
     w, h = resolution
 
@@ -244,7 +267,30 @@ def _scaled_layout(resolution):
                 int(round(BASE_LAYOUT['topbar_merchant'].y * scale))),
         }
 
-    # Standard (≤16:9) aspect ratio – independent axis scaling
+    if _is_narrow(resolution):
+        # Narrower than 16:9 (e.g. 16:10): scale uniformly by width so grid
+        # cells stay square, then offset vertically for the letterbox.
+        # Independent axis scaling here would over-stretch Y and `jump`.
+        scale = w / BASE_RESOLUTION[0]
+        oy = _narrow_anchor_offset(w, h)
+        return {
+            'stash': Point(int(round(BASE_LAYOUT['stash'].x * scale)),
+                           int(round(BASE_LAYOUT['stash'].y * scale + oy))),
+            'inv': Point(int(round(BASE_LAYOUT['inv'].x * scale)),
+                         int(round(BASE_LAYOUT['inv'].y * scale + oy))),
+            'jump': max(BASE_LAYOUT['jump'] * scale, 1.0),
+            'stash_tab_origin': Point(
+                int(round(BASE_LAYOUT['stash_tab_origin'].x * scale)),
+                int(round(BASE_LAYOUT['stash_tab_origin'].y * scale + oy))),
+            'stash_tab_spacing': max(BASE_LAYOUT['stash_tab_spacing'] * scale, 1.0),
+            'topbar_stash': Point(int(round(BASE_LAYOUT['topbar_stash'].x * scale)),
+                                  int(round(BASE_LAYOUT['topbar_stash'].y * scale + oy))),
+            'topbar_merchant': Point(int(round(BASE_LAYOUT['topbar_merchant'].x * scale)),
+                                     int(round(BASE_LAYOUT['topbar_merchant'].y * scale + oy))),
+        }
+
+    # Standard (16:9) aspect ratio – independent axis scaling
+    # (scale_x == scale_y here, so this is effectively uniform)
     scale_x = w / BASE_RESOLUTION[0]
     scale_y = h / BASE_RESOLUTION[1]
 
@@ -284,6 +330,10 @@ RESOLUTION_POSITIONS = {
 
 
 def _ensure_positions(resolution):
+    if _is_narrow(resolution):
+        # Narrow layouts depend on the narrowScaleAnchor setting; recompute
+        # fresh each time so a setting change takes effect without a restart.
+        return get_positions_for_resolution(resolution)
     positions = RESOLUTION_POSITIONS.get(resolution)
     if positions is None:
         positions = get_positions_for_resolution(resolution)
