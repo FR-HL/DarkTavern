@@ -806,7 +806,7 @@ watch (() => props.stashId, () => reportStashState ());
                   @click.stop="toggleLock(s.id)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                 <template v-if="isLocked(s.id)">
-                  <rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+                  <rect x="5" y="11" width="14" height="9" rx="2" fill="currentColor"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
                 </template>
                 <template v-else>
                   <rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/>
@@ -1003,19 +1003,34 @@ watch (() => props.stashId, () => reportStashState ());
 .side-tab .count { color: var(--text-3); font-size: 14px; font-variant-numeric: tabular-nums; flex: none; }
 .side-tab.active .count { color: rgba(255,255,255,0.85); }
 .side-tab.active .tab-ic { color: rgba(255,255,255,0.9); }
+/* Lock button: an outlined chip so it's clearly visible & clickable by default */
 .lock-btn {
   display: inline-flex; align-items: center; justify-content: center;
-  flex: none; width: 20px; height: 20px; border-radius: 5px;
-  color: var(--text-3); opacity: 0.35;
+  flex: none; width: 22px; height: 22px; border-radius: 6px;
+  border: 1px solid var(--line);
+  color: var(--text-2);
   transition: all .15s var(--ease);
 }
 .lock-btn svg { width: 14px; height: 14px; }
-.side-tab:hover .lock-btn { opacity: 0.8; }
-.lock-btn:hover { background: rgba(120,140,170,0.18); }
-.lock-btn.on { color: var(--accent); opacity: 1; }
-.side-tab.active .lock-btn { color: rgba(255,255,255,0.75); opacity: 0.85; }
-.side-tab.active .lock-btn.on { color: #fff; opacity: 1; }
-.side-tab.locked { border-style: dashed; }
+.side-tab:hover .lock-btn { color: var(--accent); border-color: var(--accent-soft); }
+.lock-btn:hover { background: var(--accent-softer); border-color: var(--accent); color: var(--accent); }
+.side-tab.active .lock-btn { color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.45); }
+
+/* Locked: prominent filled amber badge with a solid padlock */
+.side-tab .lock-btn.on {
+  color: #fff; background: #f59e0b; border-color: #f59e0b;
+  box-shadow: 0 1px 5px rgba(245,158,11,0.5);
+}
+.side-tab .lock-btn.on svg { stroke-width: 2.2; }
+.side-tab:hover .lock-btn.on { color: #fff; border-color: #f59e0b; }
+.side-tab.active .lock-btn.on { color: #fff; background: #f59e0b; border-color: rgba(255,255,255,0.75); }
+
+/* Locked tab: amber dashed border + amber tint — unmistakable */
+.side-tab.locked { border: 1.5px dashed #f59e0b; background: rgba(245,158,11,0.10); }
+.side-tab.locked:hover { border-color: #f59e0b; }
+
+/* Active + locked: keep the active fill, mark locked with a white dashed edge */
+.side-tab.active.locked { border: 1.5px dashed rgba(255,255,255,0.9); background: var(--accent); }
 .stash-body { padding: 0; flex: 1; min-width: 0; }
 .stash-meta {
   display: flex; align-items: center; gap: 22px;
