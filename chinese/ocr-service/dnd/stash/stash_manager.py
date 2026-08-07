@@ -1399,10 +1399,15 @@ class StashManager:
         if not movable:
             return set()
 
-        # Find destination stashes with room (exclude the stash being sorted)
+        # Find destination stashes with room (exclude the stash being sorted
+        # and any locked stashes — a locked stash is treated as nonexistent).
+        from dnd.settings import settings_manager as _sm
+        _locked = set(int(x) for x in (_sm.get("lockedStashes", []) or []))
         destinations = []
         for stash_type_val in self._OVERFLOW_CANDIDATE_TYPES:
             if stash_type_val == source_stash_id:
+                continue
+            if stash_type_val in _locked:
                 continue
             if stash_type_val not in macros.STASH_TYPE_TO_TAB_INDEX:
                 continue
@@ -1614,8 +1619,12 @@ class StashManager:
         """Quick check: does any other stash have significant free space?"""
         if not all_stashes:
             return False
+        from dnd.settings import settings_manager as _sm
+        _locked = set(int(x) for x in (_sm.get("lockedStashes", []) or []))
         for stash_type_val in self._OVERFLOW_CANDIDATE_TYPES:
             if stash_type_val == source_stash_id:
+                continue
+            if stash_type_val in _locked:
                 continue
             if stash_type_val not in macros.STASH_TYPE_TO_TAB_INDEX:
                 continue
@@ -1641,8 +1650,12 @@ class StashManager:
         best_id = None
         best_free = 0
 
+        from dnd.settings import settings_manager as _sm
+        _locked = set(int(x) for x in (_sm.get("lockedStashes", []) or []))
         for stash_type_val in self._OVERFLOW_CANDIDATE_TYPES:
             if stash_type_val == source_stash_id:
+                continue
+            if stash_type_val in _locked:
                 continue
             if stash_type_val not in macros.STASH_TYPE_TO_TAB_INDEX:
                 continue
