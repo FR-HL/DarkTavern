@@ -1,34 +1,62 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import net from 'node:net';
 import { app } from 'electron';
 import { logger } from './logger.js';
 import { ROOT, RESOURCES } from './config.js';
 
-const OCR_PORT = 19528;
-const OCR_URL = `http://127.0.0.1:${OCR_PORT}`;
+// The backend picks a FREE port at startup instead of a fixed one, so it never
+// fights over 19528 (leftover process, another tool, first-launch conflict).
+// The frontend asks for the actual port via 'dnd:service-port'.
+let servicePort = 19528;
+let OCR_URL = `http://127.0.0.1:${servicePort}`;
 
 let ocrProcess = null;
 
-async function portAlreadyServing () {
-  try {
-    const res = await fetch (OCR_URL + '/health', { signal: AbortSignal.timeout (1500) });
-    return res.ok;
-  } catch (e) { return false; }
+// Ask the OS for a currently-free TCP port.
+function findFreePort () {
+  return new Promise ((resolve, reject) => {
+    const srv = net.createServer ();
+    srv.unref ();
+    srv.on ('error', reject);
+    srv.listen (0, '127.0.0.1', () => {
+      const port = srv.address ().port;
+      srv.close (() => resolve (port));
+    });
+  });
 }
 
-export function startService (pythonPath) {
+// Kill any leftover ocr-service.exe that survived an unclean exit. A dynamic
+// port means it cannot block us, but it would keep capturing and writing to
+// the same data files, so clean it up anyway. The single-instance lock means
+// any ocr-service.exe present at startup is an orphan (a dev server.py runs
+// under python.exe and is untouched).
+function killLeftoverOcr () {
+  return new Promise ((resolve) => {
+    try {
+      execFile ('taskkill', ['/F', '/IM', 'ocr-service.exe', '/T'], { timeout: 8000 }, (err) => {
+        resolve (!err);
+      });
+    } catch (e) { resolve (false); }
+  });
+}
+
+export async function startService (pythonPath) {
   if (ocrProcess) return;
 
-  // If something already answers on the service port, the spawn below will
-  // fail to bind and the app would silently talk to that foreign process
-  // (e.g. a leftover server.py from a dev session — possibly running with
-  // different privileges, which trips the UIPI warning). Surface it loudly.
-  portAlreadyServing ().then (inUse => {
-    if (inUse) {
-      logger.warn (`[Backend] 端口 ${OCR_PORT} 已被其他进程占用：新后端可能无法启动，应用将连接到该外部进程。请关闭残留的 server.py / ocr-service.exe 后重启本软件。`);
-    }
-  });
+  // Grab a free port first (fast) so the frontend can be told the real port
+  // ASAP, then clean up any leftover backend so it stops capturing/writing.
+  try {
+    servicePort = await findFreePort ();
+    OCR_URL = `http://127.0.0.1:${servicePort}`;
+    logger.info (`[Backend] 使用动态端口 ${servicePort}`);
+  } catch (e) {
+    logger.warn (`[Backend] 端口准备失败，回退默认端口 ${servicePort}: ${e.message}`);
+  }
+  try {
+    if (await killLeftoverOcr ()) logger.info ('[Backend] 已清理残留的 ocr-service.exe');
+  } catch (e) {}
 
   let chineseDir = app.isPackaged
     ? join (RESOURCES, 'chinese')
@@ -46,7 +74,7 @@ export function startService (pythonPath) {
   env.SQUIRE_REC_MODEL = join (modelsDir, 'paddle', 'ch', 'rec.onnx');
   env.SQUIRE_REC_DICT = join (modelsDir, 'paddle', 'ch', 'dict.txt');
   env.SQUIRE_MAPPING_DIR = join (chineseDir, 'mapping');
-  env.SQUIRE_OCR_PORT = String (OCR_PORT);
+  env.SQUIRE_OCR_PORT = String (servicePort);
 
   let cmd, args;
 
@@ -199,7 +227,7 @@ export async function getCharacter (id) {
 }
 
 export function getServicePort () {
-  return OCR_PORT;
+  return servicePort;
 }
 
 export async function clearCharacters () {

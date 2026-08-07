@@ -51,6 +51,14 @@ process.on ('unhandledRejection', (r) => logger.error (`Unhandled Rejection: ${r
 process.on ('SIGTERM', () => process.exit (0));
 process.on ('SIGINT', () => process.exit (0));
 
+// ── Exit / crash diagnostics: record WHY the app goes down, so a future
+//    "flash quit" can be diagnosed from the log instead of guessed. ──
+app.on ('quit', (e, exitCode) => logger.info (`[App] quit (exitCode=${exitCode})`));
+app.on ('render-process-gone', (e, wc, details) =>
+  logger.error (`[App] render-process-gone: reason=${details?.reason} exitCode=${details?.exitCode}`));
+app.on ('child-process-gone', (e, details) =>
+  logger.error (`[App] child-process-gone: type=${details?.type} reason=${details?.reason}`));
+
 app.commandLine.appendSwitch ('high-dpi-support', 1);
 app.commandLine.appendSwitch ('force-device-scale-factor', 1);
 app.commandLine.appendSwitch ('disable-crash-reporter');
@@ -67,7 +75,11 @@ if (settings.general.launch_on_startup) {
 }
 
 if (!app.requestSingleInstanceLock ()) app.quit ();
-app.on ('second-instance', () => {});
+app.on ('second-instance', () => {
+  // Already running in the background: surface the existing window instead of
+  // silently quitting the new instance (which looked like a "flash quit").
+  openHomeWindow ();
+});
 
 let quitCleanupDone = false;
 
