@@ -585,7 +585,7 @@ class PacketCapture:
         self.port_range = port_range
         self.packet_data = b""
         self.logger = logging.getLogger(__name__)
-        self.MAX_BUFFER_SIZE = 1024 * 1024  # 1MB
+        self.MAX_BUFFER_SIZE = 4 * 1024 * 1024  # 4MB (大于 2MB 包长上限，杜绝缓冲闸误杀 1~2MB 大包)
         self.expected_packet_length = None
         self.expected_proto_type = None
         # Per-TCP-stream reassembly buffers (keyed by tshark stream index).
