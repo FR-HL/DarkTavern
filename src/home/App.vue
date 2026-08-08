@@ -517,7 +517,7 @@ async function loadSettings () {
     fontScale.value = parseFloat (d.font_scale) || 1.0;
     applyFont ();
     appVersion.value = d.app_version || '';
-    if (appVersion.value && d.disclaimer_agreed_version !== appVersion.value) {
+    if (appVersion.value) {
       disclaimerFull.value = false;
       disclaimerShow.value = true;
     }

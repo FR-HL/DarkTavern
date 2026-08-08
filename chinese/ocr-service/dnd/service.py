@@ -799,11 +799,13 @@ def diagnose_capture() -> dict:
         cap["interface"] = find_loopback_interface(detect_wireshark_installation() or None)
         cap["filter"] = det_filter or f"tcp.port == {det_ports[0] if det_ports else 0}"
     else:
-        iface = settings_manager.get("interface") or detect_default_interface()
-        cap["interface"] = iface
-        lo = int(os.getenv("CAPTURE_PORT_LOW", 20200))
-        hi = int(os.getenv("CAPTURE_PORT_HIGH", 20300))
-        cap["filter"] = f"tcp.srcport >= {lo} and tcp.srcport <= {hi}"
+        cap["interface"] = det_iface or (settings_manager.get("interface") or detect_default_interface())
+        if det_filter:
+            cap["filter"] = det_filter
+        else:
+            lo = int(os.getenv("CAPTURE_PORT_LOW", 20200))
+            hi = int(os.getenv("CAPTURE_PORT_HIGH", 20300))
+            cap["filter"] = f"tcp.port >= {lo} and tcp.port <= {hi}"
     result["capture"] = cap
 
     # Actual running-capture state, if a capture object already exists.

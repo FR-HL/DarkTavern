@@ -246,7 +246,7 @@ def detect_game_proxy_port(retries: int = 2) -> Optional[int]:
     return None
 
 
-def detect_game_capture_point(exclude_proxy_port: Optional[int] = None):
+def detect_game_capture_point(exclude_proxy_port: Optional[int] = None, default_port_range=(20200, 20300)):
     """Locate where the game's plaintext traffic actually flows.
 
     Returns a tuple ``(mode, interface, display_filter, proxy_port)``:
@@ -325,8 +325,19 @@ def detect_game_capture_point(exclude_proxy_port: Optional[int] = None):
     if not local_ports:
         return None, None, None, None
 
+    # Prefer connections that reach the *game server* port range (default
+    # 20200-20300) — they carry the game protocol. CDN/login connections
+    # (80/443) would otherwise dominate the port range and miss the real game
+    # traffic. Always merge the default server range too, so a server link that
+    # is established a moment *after* detection is still captured.
+    server_ports = sorted({
+        lp for (_, lp, _, rp, _) in game_conns
+        if default_port_range[0] <= rp <= default_port_range[1]
+    })
+    base_ports = server_ports or local_ports
+    lo = min(base_ports[0], default_port_range[0])
+    hi = max(base_ports[-1], default_port_range[1])
     iface = _find_interface_for_ips(local_ips_used)
-    lo, hi = local_ports[0], local_ports[-1]
     logger.info(f"[capture-detect] 采用直连模式: iface={iface}, 端口范围 {lo}-{hi}")
     return 'direct', iface, f'tcp.port >= {lo} and tcp.port <= {hi}', None
 
@@ -402,6 +413,145 @@ def probe_loopback_port(tshark_path: Optional[str], proxy_port: int, timeout: fl
     return probe_interface_port(tshark_path, None, f'tcp.port == {proxy_port}', timeout)
 
 
+# ─── UTF-8 sanitization for protobuf string fields ───────────────────────────
+# The game occasionally puts non-UTF-8 bytes into a proto `string` field (e.g.
+# an odd player nickname). protobuf (upb) strictly validates UTF-8 and then
+# rejects the WHOLE message with "String field had bad UTF-8", losing the
+# entire character snapshot. The bytes are otherwise intact, so we walk the
+# wire format with the message descriptor and replace invalid UTF-8 only inside
+# KNOWN string fields (nested messages recurse; bytes/unknown fields are copied
+# verbatim — unknown fields never trigger UTF-8 validation).
+def _read_varint(buf: bytes, i: int):
+    result = 0
+    shift = 0
+    n = len(buf)
+    while i < n:
+        b = buf[i]
+        i += 1
+        result |= (b & 0x7F) << shift
+        if not (b & 0x80):
+            return result, i
+        shift += 7
+    raise ValueError("truncated varint")
+
+
+def _encode_varint(value: int) -> bytes:
+    out = bytearray()
+    while True:
+        b = value & 0x7F
+        value >>= 7
+        if value:
+            out.append(b | 0x80)
+        else:
+            out.append(b)
+            return bytes(out)
+
+
+def _sanitize_utf8(raw: bytes, descriptor) -> bytes:
+    """Return *raw* with invalid UTF-8 in known string fields replaced by U+FFFD."""
+    from google.protobuf.descriptor import FieldDescriptor
+    out = bytearray()
+    i = 0
+    n = len(raw)
+    fields_by_number = descriptor.fields_by_number
+    try:
+        while i < n:
+            tag, i = _read_varint(raw, i)
+            field_number = tag >> 3
+            wire_type = tag & 0x7
+            fd = fields_by_number.get(field_number)
+            if wire_type == 0:          # varint
+                val, i = _read_varint(raw, i)
+                out += _encode_varint(tag) + _encode_varint(val)
+            elif wire_type == 1:        # 64-bit fixed
+                out += _encode_varint(tag) + raw[i:i + 8]
+                i += 8
+            elif wire_type == 5:        # 32-bit fixed
+                out += _encode_varint(tag) + raw[i:i + 4]
+                i += 4
+            elif wire_type == 2:        # length-delimited
+                length, i = _read_varint(raw, i)
+                payload = raw[i:i + length]
+                i += length
+                if fd is not None and fd.type == FieldDescriptor.TYPE_STRING:
+                    try:
+                        payload.decode('utf-8')
+                    except UnicodeDecodeError:
+                        payload = payload.decode('utf-8', errors='replace').encode('utf-8')
+                    out += _encode_varint(tag) + _encode_varint(len(payload)) + payload
+                elif fd is not None and fd.type == FieldDescriptor.TYPE_MESSAGE and fd.message_type is not None:
+                    fixed = _sanitize_utf8(payload, fd.message_type)
+                    out += _encode_varint(tag) + _encode_varint(len(fixed)) + fixed
+                else:
+                    # bytes field or unknown field: copy verbatim
+                    out += _encode_varint(tag) + _encode_varint(length) + payload
+            else:
+                # wire types 3/4 (groups) or anything unexpected: copy the rest
+                # verbatim and stop, preserving whatever remains.
+                out += _encode_varint(tag) + raw[i:]
+                break
+    except (ValueError, IndexError):
+        # Malformed walk — return what we have plus the untouched remainder.
+        out += raw[i:]
+    return bytes(out)
+
+
+class _RawTsharkCapture:
+    """Minimal pyshark-compatible wrapper around a raw tshark subprocess.
+
+    pyshark 0.6's output parsing corrupts very large packets: a 150KB+ character
+    snapshot becomes a ~300KB hex field / XML node, and pyshark's 64KB read
+    batches can misalign frame boundaries — bytes from one TCP stream leak into
+    another, poisoning stream reassembly (even small packets get hit). We bypass
+    pyshark entirely: tshark emits plain ``-T fields`` lines and we read them
+    synchronously (``readline`` has no length limit).
+    """
+    def __init__(self, proc):
+        self._proc = proc
+        self._running_processes = [proc] if proc and proc.poll() is None else []
+
+    def close(self):
+        proc = self._proc
+        try:
+            if proc is not None and proc.poll() is None:
+                proc.kill()
+        except Exception:
+            pass
+
+    def close_async(self):
+        self.close()
+        async def _noop():
+            return None
+        return _noop()
+
+    def is_alive(self):
+        proc = self._proc
+        return proc is not None and proc.poll() is None
+
+
+def _display_filter_to_bpf(display_filter):
+    """Convert a simple tcp.port display filter into a BPF capture filter.
+
+    Used with ``tshark -w`` so only game frames are written to the pcap (the
+    capture side stays lightweight — no per-frame dissection, which is what
+    made ``-T fields`` live capture drop frames on large snapshots).
+    """
+    import re
+    if not display_filter:
+        return None
+    m = re.search(r'tcp\.port\s*==\s*(\d+)', display_filter)
+    if m:
+        return "tcp port %d" % int(m.group(1))
+    m = re.search(r'tcp\.port\s*>=\s*(\d+)\s+and\s+tcp\.port\s*<=\s*(\d+)', display_filter)
+    if m:
+        bpf = "tcp portrange %d-%d" % (int(m.group(1)), int(m.group(2)))
+        ipm = re.search(r'ip\.addr\s*==\s*([\d.]+)', display_filter)
+        if ipm:
+            bpf = "host %s and %s" % (ipm.group(1), bpf)
+        return bpf
+    return None
+
+
 class _StreamState:
     """Per-TCP-stream reassembly buffer for the game's length-framed protocol.
 
@@ -409,12 +559,20 @@ class _StreamState:
     an independent byte stream, so they must be reassembled separately — mixing
     their bytes into one buffer corrupts the length framing.
     """
-    __slots__ = ("data", "expected_length", "expected_proto")
+    __slots__ = ("data", "expected_length", "expected_proto", "last_seen",
+                 "segments", "next_seq")
 
     def __init__(self):
         self.data = b""
         self.expected_length = None
         self.expected_proto = None
+        self.last_seen = 0.0
+        # Out-of-order TCP segment handling: NICs with RSS/multiple queues can
+        # deliver segments of one connection out of order; appending them in
+        # arrival order corrupts the length-framed stream.  We buffer segments
+        # by sequence number and splice them in order.
+        self.segments = {}
+        self.next_seq = None
 
 
 class PacketCapture:
@@ -574,7 +732,49 @@ class PacketCapture:
                 name = _PacketCommand_pb2.PacketCommand.Name(proto_type)
             except (ValueError, KeyError):
                 name = str(proto_type)
-            self.logger.debug(f"Failed to parse {name} via {message_class.__name__}: {e}")
+            # Dump the full raw packet (incl. the 8-byte header) so the exact
+            # corruption can be analyzed offline.
+            try:
+                from dnd.appdirs import get_appdata_dir
+                dump_dir = os.path.join(get_appdata_dir(), 'debug')
+                os.makedirs(dump_dir, exist_ok=True)
+                fn = os.path.join(dump_dir, "parsefail_%s_%d.bin" % (proto_type, int(time.time() * 1000)))
+                with open(fn, 'wb') as df:
+                    df.write(packet_data)
+                self.logger.warning("PARSE-DUMP %s (%d bytes) -> %s", name, len(packet_data), fn)
+            except Exception as dump_err:
+                self.logger.debug("PARSE-DUMP failed: %s", dump_err)
+            # protobuf strictly validates UTF-8 on string fields and rejects the
+            # WHOLE message ("String field had bad UTF-8") even though the rest
+            # of the bytes are intact. Sanitize the offending string field and
+            # retry instead of losing the entire character snapshot.
+            if 'utf-8' in str(e).lower():
+                try:
+                    fixed = _sanitize_utf8(data, message_class.DESCRIPTOR)
+                    recovered = message_class()
+                    recovered.ParseFromString(fixed)
+                    self.logger.info("PARSE-RECOVERED %s (type=%s) via UTF-8 sanitize", name, proto_type)
+                    return recovered
+                except Exception as e2:
+                    self.logger.warning(
+                        "PARSE-RECOVER-FAIL %s (type=%s): %s: %s",
+                        name, proto_type, type(e2).__name__, e2,
+                    )
+            # Detailed diagnostics: dump head/mid/tail of the payload plus a
+            # checksum so a single reproduction can tell whether a large frame
+            # is misaligned, corrupted mid-buffer, or padded with trailing
+            # garbage. A valid Type 44 payload starts 08 01 12 ...
+            import zlib
+            head = data[:64].hex()
+            mid_off = max(0, len(data) // 2 - 32)
+            mid = data[mid_off:mid_off + 64].hex()
+            tail = data[-32:].hex() if len(data) > 64 else ''
+            crc = format(zlib.crc32(data) & 0xFFFFFFFF, '08x')
+            self.logger.warning(
+                "PARSE-FAIL %s (type=%s) via %s len=%d jumbo=%s crc32=%s err=%s: %s | head64=%s mid64=%s tail32=%s",
+                name, proto_type, message_class.__name__, len(data),
+                len(data) > 64000, crc, type(e).__name__, e, head, mid, tail,
+            )
             return None
 
     def get_local_ip(self) -> Optional[str]:
@@ -589,28 +789,85 @@ class PacketCapture:
         if not _PacketCommand_pb2:
             return False
         valid_packet_range = (8, 2 * 1024 * 1024)
-        return (
-            valid_packet_range[0] <= length <= valid_packet_range[1] and
-            proto_type in _PacketCommand_pb2.PacketCommand.values() and 
-            padding in [0, 256]
-        )
+        return valid_packet_range[0] <= length <= valid_packet_range[1]
 
-    def process_packet(self, data: bytes, stream_key: Any = None) -> Optional[bool]:
+    def process_packet(self, data: bytes, stream_key: Any = None, seq: Optional[int] = None) -> Optional[bool]:
         if len(data) == 0:
             return False
 
         if stream_key is None:
             stream_key = "default"
         st = self._streams.get(stream_key)
+        if st is not None:
+            # A stream that has been waiting *for a declared packet* for a long
+            # time without completing it is stuck — its segments were dropped.
+            # Reset it so stale bytes cannot poison later packets. The threshold
+            # must be generous (60s): the game can pause mid-snapshot longer
+            # than a heartbeat interval, and resetting a live stream then
+            # silently kills the character snapshot.
+            if (
+                st.expected_length is not None
+                and (st.data or st.segments)
+                and time.time() - st.last_seen > 60.0
+            ):
+                self.logger.warning(
+                    "STREAM-STUCK %s: %d bytes buffered for >60s — resetting", stream_key, len(st.data),
+                )
+                self._reset_stream(st)
         if st is None:
-            # Bound tracked streams: the game uses only a few connections, so a
-            # large count means stale entries from closed connections — clear them.
-            if len(self._streams) >= 64:
-                self._streams.clear()
+            # Bound tracked streams: purge only *stale* streams (idle for a
+            # long time). Clearing everything once the count is high wipes
+            # live game streams mid-snapshot (the game opens many connections,
+            # each direction being its own buffer) and silently kills the
+            # character data reassembly.
+            if len(self._streams) >= 256:
+                now = time.time()
+                stale = [k for k, s in self._streams.items() if now - s.last_seen > 120]
+                for k in stale:
+                    del self._streams[k]
+                if len(self._streams) >= 256 and not stale:
+                    self._streams.clear()
             st = _StreamState()
             self._streams[stream_key] = st
+        st.last_seen = time.time()
 
-        st.data += data
+        # Order by TCP sequence number so out-of-order segments (common on
+        # multi-queue NICs) reassemble correctly instead of corrupting the
+        # length-framed stream.
+        if seq is not None:
+            if st.next_seq is None:
+                st.next_seq = seq + len(data)
+                st.data = data
+            elif seq == st.next_seq:
+                st.data += data
+                st.next_seq += len(data)
+            elif seq > st.next_seq:
+                st.segments[seq] = data
+            else:
+                # Out-of-order / overlapping segment with seq < next_seq.
+                data_start = (st.next_seq - len(st.data)) if st.data else st.next_seq
+                if seq < data_start:
+                    # A segment that belongs BEFORE our buffered data arrived
+                    # late. If it is contiguous with the buffer head, prepend
+                    # it (this can be the missing head of a large packet).
+                    if seq + len(data) == data_start:
+                        st.data = data + st.data
+                        st.expected_length = None
+                        st.expected_proto = None
+                    else:
+                        st.segments[seq] = data
+                elif seq >= data_start and seq < st.next_seq:
+                    # Overlaps buffered data: keep only the part past the gap
+                    # (buffered data is contiguous, so this is a retransmit or
+                    # overlap; nothing to salvage unless it extends the tail,
+                    # which the while-loop below handles by seq matching).
+                    pass
+            while st.next_seq in st.segments:
+                seg = st.segments.pop(st.next_seq)
+                st.data += seg
+                st.next_seq += len(seg)
+        else:
+            st.data += data
 
         # Loop to process all complete game packets in this stream's buffer.
         # A single TCP segment may contain multiple back-to-back game packets.
@@ -690,6 +947,8 @@ class PacketCapture:
         st.data = b""
         st.expected_length = None
         st.expected_proto = None
+        st.segments = {}
+        st.next_seq = None
 
     def _collect_capture_processes(self) -> List[psutil.Process]:
         try:
@@ -779,7 +1038,7 @@ class PacketCapture:
                 # 2. NIC derived from the game's real connections (physical or
                 #    virtual/TUN adapters) with the actual ports in use
                 # 3. configured interface + default port range (fallback)
-                mode, capture_iface, display_filter, proxy_ports = detect_game_capture_point()
+                mode, capture_iface, display_filter, proxy_ports = detect_game_capture_point(default_port_range=self.port_range)
                 if mode == 'accelerator' and proxy_ports:
                     iface = capture_iface or find_loopback_interface(self.tshark_path)
                     # Same-machine ESTABLISHED connections to a local port are
@@ -823,36 +1082,45 @@ class PacketCapture:
                     self.logger.info(f"Display filter: {display_filter}")
 
                 self._current_loop = loop
+                pcap_path = os.path.join(tempfile.gettempdir(), "squire_game_capture.pcap")
                 try:
-                    self._current_capture = pyshark.LiveCapture(
-                        interface=capture_iface,
-                        display_filter=display_filter,
-                        eventloop=loop,
-                        tshark_path=self.tshark_path
-                    )
-
-                    if hasattr(self._current_capture, "keep_packets"):
-                        try:
-                            self._current_capture.keep_packets = False
-                            self.logger.debug("LiveCapture configured with keep_packets=False")
-                        except Exception as keep_err:
-                            self.logger.debug(f"Unable to set keep_packets flag: {keep_err}")
+                    if os.path.exists(pcap_path):
+                        os.remove(pcap_path)
+                except OSError:
+                    pass
+                try:
+                    # Capture with `-w` (raw pcap file, no per-frame dissection):
+                    # live `-T fields` parsing was dropping segments of large
+                    # snapshots under load. We read the pcap back periodically.
+                    cap_cmd = [self.tshark_path, '-i', capture_iface, '-B', '65536', '-w', pcap_path]
+                    bpf_filter = _display_filter_to_bpf(display_filter)
+                    if bpf_filter:
+                        cap_cmd += ['-f', bpf_filter]
+                    cap_kwargs = {'stderr': subprocess.DEVNULL}
+                    if sys.platform == 'win32':
+                        cap_kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                    cap_proc = subprocess.Popen(cap_cmd, **cap_kwargs)
+                    self._current_capture = _RawTsharkCapture(cap_proc)
+                    # Give tshark a moment to start; surface Npcap failures loudly.
+                    time.sleep(0.8)
+                    if cap_proc.poll() is not None:
+                        rc = cap_proc.poll()
+                        self.logger.error(f"tshark exited early with code {rc}")
+                        if rc in (12, 13):
+                            self.logger.error("tshark cannot capture: the Npcap driver is missing or not working. Install Npcap from https://npcap.com/ and retry.")
+                        break
                 except Exception as capture_error:
-                    self.logger.error(f"Failed to create LiveCapture: {capture_error}")
+                    self.logger.error(f"Failed to start capture: {capture_error}")
                     if "tshark" in str(capture_error).lower():
                         self.logger.error("This appears to be a tshark-related issue. Make sure tshark is properly installed and accessible.")
-                    if "exit status 13" in str(capture_error) or "exit status 12" in str(capture_error):
-                        self.logger.error("tshark cannot list capture interfaces: the Npcap driver is missing or not working. Install Npcap from https://npcap.com/ and retry.")
                     break
 
                 try:
-                    for packet in self._current_capture.sniff_continuously():
-                        if self._stop_event.is_set():
-                            break
+                    last_frame = 0
+                    while not self._stop_event.is_set():
                         # On-demand accelerator re-check: only when the current
                         # mode yields no traffic for a while (e.g. accelerator
-                        # was toggled after capture started). Zero overhead
-                        # while packets are flowing.
+                        # was toggled after capture started).
                         if time.time() - self._last_packet_ts > 60 and not self._mode_recheck:
                             self.logger.info("No packets for 60s, re-checking accelerator state")
                             self._mode_recheck = True
@@ -860,43 +1128,105 @@ class PacketCapture:
                         if self._mode_recheck:
                             self.logger.info("Accelerator state changed, restarting capture session")
                             break
-                        self._last_packet_ts = time.time()
-                        if 'TCP' in packet and hasattr(packet.tcp, 'payload'):
-                            # Reassemble each TCP stream independently — the game uses
-                            # several connections and their bytes must not be mixed.
-                            # Since we now capture both directions, upstream and
-                            # downstream segments of the *same* connection are also
-                            # split into separate buffers — interleaving them would
-                            # corrupt reassembly for large packets.
-                            stream_key = getattr(packet.tcp, 'stream', None)
-                            if stream_key is None:
-                                try:
-                                    stream_key = f"{packet.tcp.srcport}-{packet.tcp.dstport}"
-                                except Exception:
-                                    stream_key = "default"
+                        time.sleep(0.4)
+                        try:
+                            size = os.path.getsize(pcap_path)
+                        except OSError:
+                            continue
+                        if size <= 0:
+                            continue
+                        if size > 64 * 1024 * 1024:
+                            self.logger.info("Rotating capture pcap (%.1f MB)", size / 1048576.0)
                             try:
-                                srcport = int(packet.tcp.srcport)
-                            except (ValueError, TypeError):
-                                srcport = None
-                            if self.active_proxy_port is not None:
-                                is_downstream = srcport in self.active_proxy_port
-                            else:
-                                is_downstream = (
-                                    srcport is not None
-                                    and self.port_range[0] <= srcport <= self.port_range[1]
-                                )
-                            stream_key = f"{stream_key}-{'D' if is_downstream else 'U'}"
-                            self.process_packet(packet.tcp.payload.binary_value, stream_key)
-                except RuntimeError as e:
-                    if "Event loop" in str(e) and "stopped" in str(e):
-                        self.logger.info("Event loop stopped during capture, exiting cleanly")
-                        break
-                    else:
-                        self.logger.error(f"Runtime error in capture loop: {e}", exc_info=True)
-                        break
+                                cap_proc.kill()
+                            except Exception:
+                                pass
+                            try:
+                                os.remove(pcap_path)
+                            except OSError:
+                                pass
+                            cap_proc = subprocess.Popen(cap_cmd, **cap_kwargs)
+                            self._current_capture = _RawTsharkCapture(cap_proc)
+                            last_frame = 0
+                            continue
+                        read_cmd = [
+                            self.tshark_path, '-r', pcap_path, '-Y', display_filter,
+                            '-T', 'fields', '-E', 'separator=|',
+                            '-e', 'frame.number', '-e', 'tcp.srcport',
+                            '-e', 'tcp.stream', '-e', 'tcp.seq',
+                            '-e', 'tcp.analysis.keep_alive',
+                            '-e', 'tcp.analysis.keep_alive_ack',
+                            '-e', 'tcp.analysis.retransmission',
+                            '-e', 'tcp.analysis.duplicate_ack',
+                            '-e', 'tcp.payload',
+                        ]
+                        reader = subprocess.Popen(
+                            read_cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                        )
+                        try:
+                            for raw_line in reader.stdout:
+                                if self._stop_event.is_set():
+                                    break
+                                line = raw_line.decode('utf-8', 'replace').rstrip('\n')
+                                if not line:
+                                    continue
+                                parts = line.split('|')
+                                # 0=frame.number 1=tcp.srcport 2=tcp.stream
+                                # 3=tcp.seq 4=keep_alive 5=keep_alive_ack
+                                # 6=retransmission 7=duplicate_ack 8=tcp.payload
+                                if len(parts) < 9:
+                                    continue
+                                try:
+                                    fno = int(parts[0])
+                                except ValueError:
+                                    continue
+                                if fno <= last_frame:
+                                    continue
+                                last_frame = fno
+                                # Keep-alive / dup-ack frames carry no app data.
+                                # Retransmissions are NOT filtered: their seq
+                                # duplicates are dropped by reassembly, but a
+                                # retransmit can be the only copy of a segment
+                                # the capture missed — filtering it stalls the
+                                # whole stream.
+                                if parts[4] or parts[5] or parts[7]:
+                                    continue
+                                payload_hex = parts[8].strip()
+                                if not payload_hex:
+                                    continue
+                                try:
+                                    payload = bytes.fromhex(payload_hex)
+                                except ValueError:
+                                    continue
+                                self._last_packet_ts = time.time()
+                                tcp_stream = parts[2] or f"p{parts[1]}"
+                                try:
+                                    srcport = int(parts[1])
+                                except (ValueError, TypeError):
+                                    srcport = None
+                                try:
+                                    seq = int(parts[3])
+                                except (ValueError, TypeError):
+                                    seq = None
+                                if self.active_proxy_port is not None:
+                                    is_downstream = srcport in self.active_proxy_port
+                                else:
+                                    is_downstream = (
+                                        srcport is not None
+                                        and self.port_range[0] <= srcport <= self.port_range[1]
+                                    )
+                                stream_key = f"{tcp_stream}-{'D' if is_downstream else 'U'}"
+                                self.process_packet(payload, stream_key, seq)
+                        finally:
+                            try:
+                                reader.wait(timeout=5)
+                            except Exception:
+                                try:
+                                    reader.kill()
+                                except Exception:
+                                    pass
                 except Exception as e:
                     self.logger.error(f"Fatal error in capture loop: {e}", exc_info=True)
-                    break
                 finally:
                     # Close only this session's capture (do not tear down the
                     # whole manager state — a new session may follow).
