@@ -2271,6 +2271,7 @@ class StashManager:
                 sims = self._sim_snapshot(storages, tab_order)
                 moves = []
                 overflowed = 0
+                overflow_sid = None
                 for src_sid in tab_order:
                     if cancel_event and cancel_event.is_set():
                         break
@@ -2285,27 +2286,38 @@ class StashManager:
                             continue
                         pos = self._sim_find(sims[dst_sid], item)
                         if pos is None:
-                            # Target stash is full — spill to the other stash
-                            # with the most free space so overflow spreads
-                            # instead of stuffing a single stash.
-                            best_sid = None
-                            best_free = -1
-                            for alt_sid in tab_order:
-                                if alt_sid == src_sid or alt_sid == dst_sid:
-                                    continue
-                                if not self._sim_fits(sims[alt_sid], item):
-                                    continue
-                                free = sum(
-                                    1 for row in sims[alt_sid]["grid"] for c in row if c == 0
-                                )
-                                if free > best_free:
-                                    best_free = free
-                                    best_sid = alt_sid
-                            if best_sid is not None:
-                                pos = self._sim_find(sims[best_sid], item)
+                            # Target stash is full — spill into one sticky
+                            # overflow stash so overflowed items stay
+                            # together; switch only when it cannot fit.
+                            if (
+                                overflow_sid is not None
+                                and overflow_sid not in (src_sid, dst_sid)
+                                and self._sim_fits(sims[overflow_sid], item)
+                            ):
+                                pos = self._sim_find(sims[overflow_sid], item)
                                 if pos is not None:
-                                    dst_sid = best_sid
+                                    dst_sid = overflow_sid
                                     overflowed += 1
+                            if pos is None:
+                                best_sid = None
+                                best_free = -1
+                                for alt_sid in tab_order:
+                                    if alt_sid in (src_sid, dst_sid, overflow_sid):
+                                        continue
+                                    if not self._sim_fits(sims[alt_sid], item):
+                                        continue
+                                    free = sum(
+                                        1 for row in sims[alt_sid]["grid"] for c in row if c == 0
+                                    )
+                                    if free > best_free:
+                                        best_free = free
+                                        best_sid = alt_sid
+                                if best_sid is not None:
+                                    pos = self._sim_find(sims[best_sid], item)
+                                    if pos is not None:
+                                        dst_sid = best_sid
+                                        overflow_sid = best_sid
+                                        overflowed += 1
                         if pos is not None:
                             moves.append((src_sid, item, dst_sid, pos))
                 done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
