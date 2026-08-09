@@ -88,6 +88,11 @@ app.on ('before-quit', () => {
   if (healthTimer) { clearInterval (healthTimer); healthTimer = null; }
   if (ballStatusTimer) { clearInterval (ballStatusTimer); ballStatusTimer = null; }
   if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
+  if (historySaveTimer) {
+    clearTimeout (historySaveTimer);
+    historySaveTimer = null;
+    if (historyDirty) { historyDirty = false; saveHistory (); }
+  }
   stopTracking ();
 });
 
@@ -103,6 +108,8 @@ app.on ('ready', async () => {
 
   tray = new Tray (join (ROOT, 'assets/images/icon.ico'));
   tray.setToolTip ('冒险者侍从 Adventurer’s Squire');
+  // 左键单击托盘图标 = 打开主页（老版本未绑定，单击无反应）
+  tray.on ('click', () => openHomeWindow ());
   refreshTrayMenu ();
   healthTimer = setInterval (() => {
     refreshTrayMenu ();
@@ -284,6 +291,9 @@ app.on ('ready', async () => {
   });
   ipcMain.handle ('history:clear', () => {
     priceHistory = [];
+    historyKeyIndex = new Map ();
+    historyDirty = false;
+    if (historySaveTimer) { clearTimeout (historySaveTimer); historySaveTimer = null; }
     saveHistory ();
     notifyHome ('history:updated', {});
     return { success: true };
@@ -814,10 +824,14 @@ function openSettingsWindow (tab) {
 
 function openHomeWindow () {
   if (homeWindow) {
-    if (homeWindow.isMinimized ()) homeWindow.restore ();
-    homeWindow.show ();
-    homeWindow.focus ();
-    return;
+    // 窗口已销毁但引用未清（closed 事件竞态）→ 重置后重建，避免 isMinimized 抛异常
+    if (homeWindow.isDestroyed ()) { homeWindow = null; }
+    else {
+      if (homeWindow.isMinimized ()) homeWindow.restore ();
+      homeWindow.show ();
+      homeWindow.focus ();
+      return;
+    }
   }
 
   homeWindow = new BrowserWindow ({
@@ -937,7 +951,7 @@ function createBallWindow () {
     ballDrag = null;
   });
 
-  ballStatusTimer = setInterval (pushBallStatus, 2000);
+  ballStatusTimer = setInterval (pushBallStatus, 5000);
 }
 
 function applyBallLock () {
@@ -985,17 +999,19 @@ function popupBallMenu () {
 }
 
 async function gatherBallStatus () {
-  let health = null;
-  try { health = await backend.healthRaw (); } catch (e) {}
-
-  let capture = { running: false };
-  let sorting = { running: false };
-  try { capture = (await backend.captureStatus ()) || capture; } catch (e) {}
-  try { sorting = (await backend.sortStatus ()) || sorting; } catch (e) {}
-
+  // 4 个服务查询并行（旧方案串行等待，服务忙时每轮累计延迟）
+  const [healthR, captureR, sortingR, currentR] = await Promise.allSettled ([
+    backend.healthRaw (),
+    backend.captureStatus (),
+    backend.sortStatus (),
+    backend.getCurrentCharacter (),
+  ]);
+  const health = healthR.status === 'fulfilled' ? healthR.value : null;
+  const capture = captureR.status === 'fulfilled' && captureR.value ? captureR.value : { running: false };
+  const sorting = sortingR.status === 'fulfilled' && sortingR.value ? sortingR.value : { running: false };
   let current = null;
   try {
-    const d = await backend.getCurrentCharacter ();
+    const d = currentR.status === 'fulfilled' ? currentR.value : null;
     current = d?.current || null;
   } catch (e) {}
 
@@ -1095,6 +1111,9 @@ function findZhName (rawId) {
 // ── 查价记录（保存 3 天内查过的物品） ──
 
 let priceHistory = null;
+let historyKeyIndex = null;   // key → 最新记录（findScanCache 用，避免每次扫描全量遍历）
+let historySaveTimer = null;  // 写盘节流：5 秒内合并多次扫描为一次写入
+let historyDirty = false;
 
 function historyTtl () {
   return (settings.general.history_days ?? 3) * 24 * 3600 * 1000;
@@ -1104,21 +1123,30 @@ function scanCacheTtl () {
   return (settings.general.scan_cache_days ?? 1) * 24 * 3600 * 1000;
 }
 
+function rebuildHistoryKeyIndex () {
+  historyKeyIndex = new Map ();
+  for (const r of priceHistory) {
+    if (!r.key) continue;
+    const cur = historyKeyIndex.get (r.key);
+    if (!cur || r.ts > cur.ts) historyKeyIndex.set (r.key, r);
+  }
+}
+
 function pruneHistory () {
   const cutoff = Date.now () - historyTtl ();
+  const before = priceHistory.length;
   priceHistory = priceHistory.filter ((r) => r.ts >= cutoff);
+  if (priceHistory.length !== before) rebuildHistoryKeyIndex ();
 }
 
 function findScanCache (key) {
   if (!key) return null;
   const ttl = scanCacheTtl ();
   if (ttl <= 0) return null;
-  const cutoff = Date.now () - ttl;
-  let best = null;
-  for (const r of loadHistory ()) {
-    if (r.key === key && r.ts >= cutoff && (!best || r.ts > best.ts)) best = r;
-  }
-  return best;
+  if (!historyKeyIndex) loadHistory ();
+  const r = historyKeyIndex.get (key);
+  if (r && r.ts >= Date.now () - ttl) return r;
+  return null;
 }
 
 let itemIconIndex = null;
@@ -1164,6 +1192,7 @@ function loadHistory () {
   } catch (e) {
     priceHistory = [];
   }
+  rebuildHistoryKeyIndex ();
   return priceHistory;
 }
 
@@ -1173,6 +1202,16 @@ function saveHistory () {
   } catch (e) {
     logger.error (`Failed to save price history: ${e.message}`);
   }
+}
+
+// 节流写盘：连续扫描合并为每 5 秒最多一次全量写入（旧方案每次扫描都写）
+function scheduleSaveHistory () {
+  historyDirty = true;
+  if (historySaveTimer) return;
+  historySaveTimer = setTimeout (() => {
+    historySaveTimer = null;
+    if (historyDirty) { historyDirty = false; saveHistory (); }
+  }, 5000);
 }
 
 function upsertHistoryRecord () {
@@ -1198,9 +1237,13 @@ function upsertHistoryRecord () {
   } else {
     priceHistory.push (rec);
   }
+  if (rec.key) {
+    const cur = historyKeyIndex ? historyKeyIndex.get (rec.key) : null;
+    if (!cur || rec.ts > cur.ts) historyKeyIndex.set (rec.key, rec);
+  }
   pruneHistory ();
-  saveHistory ();
   notifyHome ('history:updated', {});
+  scheduleSaveHistory ();
 }
 
 async function pushBallStatus () {

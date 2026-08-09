@@ -552,6 +552,16 @@ def _display_filter_to_bpf(display_filter):
     return None
 
 
+# High-frequency heartbeat packets: logging every occurrence would flood the
+# log (thousands of lines per hour). These carry no useful state, so they are
+# silently skipped.
+_SILENT_PACKET_TYPES = {
+    1,   # C2S_ALIVE_REQ (client heartbeat, every ~5s)
+    2,   # S2C_ALIVE_RES (server heartbeat reply)
+    922, # S2C_FRIEND_SET_FRIEND_INFOS_NOT (friend online-status spam)
+}
+
+
 class _StreamState:
     """Per-TCP-stream reassembly buffer for the game's length-framed protocol.
 
@@ -895,7 +905,8 @@ class PacketCapture:
                         self._reset_stream(st)
                         return False
 
-                    self.logger.info(f"New packet: {packet_type_name} (Type={proto_type}, Length={packet_length}, Padding={random_padding})")
+                    if proto_type not in _SILENT_PACKET_TYPES:
+                        self.logger.info(f"New packet: {packet_type_name} (Type={proto_type}, Length={packet_length}, Padding={random_padding})")
 
                     st.expected_length = packet_length
                     st.expected_proto = proto_type

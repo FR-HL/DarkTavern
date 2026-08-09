@@ -12,6 +12,11 @@ import { ROOT, RESOURCES } from './config.js';
 let servicePort = 19528;
 let OCR_URL = `http://127.0.0.1:${servicePort}`;
 
+// Every HTTP round-trip to the local OCR service gets a hard timeout: without
+// one, a slow/busy service leaves requests hanging forever, and the shell's
+// periodic calls pile up unbounded (the "gets slower after ~30 min" bug).
+const FETCH_TIMEOUT_MS = 5000;
+
 let ocrProcess = null;
 
 // Ask the OS for a currently-free TCP port.
@@ -123,7 +128,7 @@ export async function stopService () {
 
 async function get (path) {
   try {
-    const res = await fetch (OCR_URL + path);
+    const res = await fetch (OCR_URL + path, { signal: AbortSignal.timeout (FETCH_TIMEOUT_MS) });
     if (!res.ok) return null;
     return await res.json ();
   } catch (e) {
@@ -137,6 +142,7 @@ async function post (path, body) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify (body) : undefined,
+      signal: AbortSignal.timeout (FETCH_TIMEOUT_MS),
     });
     if (!res.ok) return null;
     return await res.json ();

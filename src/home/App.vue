@@ -1443,6 +1443,20 @@ onBeforeUnmount (() => {
         <div class="page-sub">查价器与仓库整理的使用方法，按步骤操作即可上手。</div>
 
         <div class="sec">
+          <div class="sec-label">〇、前置准备</div>
+          <div class="card">
+            <div class="steps">
+              <div class="step"><div class="step-n">1</div><div class="step-t">安装 <b>Npcap</b>：前往官网 <span class="kbd">npcap.com/#download</span> 下载（或从交流群文件获取），一路默认安装后<b>重启电脑</b></div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">游戏内设置为<b>窗口化或无边框窗口</b>——全屏模式无法识别查价</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">将解压包<b>解压到非中文路径</b>文件夹下；检查 <span class="kbd">AdventurersSquire-1.2.0-win\resources\wireshark</span> 中是否存在 <b>sharkd.exe</b> 等文件，文件缺失说明被拦截，<b>关闭杀毒软件</b>后重新解压</div></div>
+            </div>
+            <div class="about-thanks">
+              提示：Npcap 是抓包必需驱动，缺它「启动抓包 / 首次校准」会失败；「角色仓库」页有 Npcap 状态检测与一键下载入口。<b>自动模式存在问题，建议暂停使用</b>，查价请用「手动」模式。
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
           <div class="sec-label">一、查价器</div>
           <div class="card">
             <div class="steps">
@@ -1452,7 +1466,22 @@ onBeforeUnmount (() => {
               <div class="step"><div class="step-n">4</div><div class="step-t">价格面板浮现在物品提示框旁：中文物品名 + 属性 + <b>市场价 / 商人价 / 每格价值</b></div></div>
             </div>
             <div class="about-thanks">
-              提示：填入 <b>DarkerDB API Key</b>（F5 → 查价器页）后才有价格数据；未填也能识别物品名与属性。查过的物品自动记入「查价记录」（保留 3 天）。F8 可随时清除悬浮窗。
+              提示：填入 <b>DarkerDB API Key</b>（F5 → 查价器页）后才有价格数据；未填也能识别物品名与属性。查过的物品自动记入「查价记录」（保留 3 天）。F8 可随时清除悬浮窗。OCR 引擎启动失败且重启软件无效时，请联系方源。
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">DarkerDB API Key 获取教程</div>
+          <div class="card">
+            <div class="steps">
+              <div class="step"><div class="step-n">1</div><div class="step-t">前往 <span class="kbd">darkerdb.com</span> 注册并登录账号（支持邮箱注册或 Discord 注册；注册失败多为网络问题，可借助加速网络访问）</div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">登录后点击页面中的 <b>"API key"</b> 进入密钥页面</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">点击 <b>"New API Key"</b>："KEY NAME" 随意填写，"Key type" 选择 <b>Secret</b>，"SCOPES" <b>三个全部勾选</b></div></div>
+              <div class="step"><div class="step-n">4</div><div class="step-t">点击创建，复制生成的 <b>API Key</b>，填入软件「查价器」页并保存</div></div>
+            </div>
+            <div class="about-thanks">
+              提示：API Key 请妥善保存，忘记后无法找回，需删除该 Key 重新获取。
             </div>
           </div>
         </div>
@@ -1471,7 +1500,7 @@ onBeforeUnmount (() => {
               <div class="step"><div class="step-n">5</div><div class="step-t">点击<b>「重新检测」</b>查看链路诊断（游戏进程 / 抓包点 / 加速器状态），确认环境就绪后再继续</div></div>
             </div>
             <div class="about-thanks">
-              提示：未装 Wireshark 也能打开软件，但「启动抓包」会失败；端口范围 20200–20300 为默认值，一般无需修改。
+              提示：未装 Wireshark 也能打开软件，但「启动抓包」会失败；端口范围 20200–20300 为默认值，一般无需修改。整理功能仅适配 <b>1080P / 1440P</b> 分辨率；2560x1600 等窄屏（16:10）分辨率若点击偏移，可在「仓库配置」页开启<b>窄屏适配</b>尝试。整理时<b>尽量使用加速器</b>玩游戏，直连获取数据困难且整理容易出错。
             </div>
           </div>
         </div>
@@ -1490,7 +1519,7 @@ onBeforeUnmount (() => {
               <div class="step"><div class="step-n">8</div><div class="step-t">随时可按 <span class="kbd">{{ cancelHotkey }}</span> 中断；结束后查看整理结果，误放可手动微调</div></div>
             </div>
             <div class="about-thanks">
-              提示：整理速度建议先用「中」，出现漏放 / 串位再降到「慢」；「极速」约 10 倍提速但偶发漏操作。
+              提示：整理速度建议先用「中」，出现漏放 / 串位再降到「慢」；「极速」约 10 倍提速但偶发漏操作。<b>校准多次失败</b>时可先手动在游戏仓库中随意移动一些物品，再点「开始校准」。整理前请在「仓库配置」页阅读快捷键与各项配置，并确认软件选中的<b>角色和仓库与游戏内一致</b>。推荐快捷键：<span class="kbd">{{ stashNextKey }}</span> 仓库轮换、<span class="kbd">{{ sortHotkey }}</span> 单仓库整理、<span class="kbd">{{ crossHotkey }}</span> 跨仓库整理、<span class="kbd">{{ cancelHotkey }}</span> 停止所有操作。<b>整理失败、鼠标无意义拖动、物品叠加</b>通常是仓库数据与游戏内不一致，请检查后重新校准。
             </div>
           </div>
         </div>
@@ -1593,6 +1622,12 @@ onBeforeUnmount (() => {
               <div class="term-head">OCR 状态一直「正在唤醒」</div>
               <div class="term-body">
                 <p>多为代理 / VPN 干扰本地后端通信（127.0.0.1）。关闭 TUN / 全局增强模式后重启一次；或临时关闭代理启动。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">OCR 引擎启动失败</div>
+              <div class="term-body">
+                <p>确认解压路径<b>不含中文</b>、解压文件完整（resources\wireshark 目录存在）；重启软件仍无效时，联系方源并提供日志。</p>
               </div>
             </div>
             <div class="card term-card">
