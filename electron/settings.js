@@ -28,6 +28,7 @@ const defaults = {
     live_price_relax: 'none',
     scan_cache_days: '1',
     history_days: '3',
+    requery_debounce: '600',
     ball_x: null,
     ball_y: null,
     ball_locked: false,
@@ -86,6 +87,7 @@ settings.general.live_price_mode = toEnum (settings.general.live_price_mode, [ '
 settings.general.live_price_relax = toEnum (settings.general.live_price_relax, [ 'none', 'all', 'sa', 'b' ]);
 settings.general.scan_cache_days = toDays (settings.general.scan_cache_days, 1);
 settings.general.history_days = toDays (settings.general.history_days, 3);
+settings.general.requery_debounce = toDebounce (settings.general.requery_debounce);
 settings.general.ball_x = settings.general.ball_x == null ? null : parseInt (settings.general.ball_x) || null;
 settings.general.ball_y = settings.general.ball_y == null ? null : parseInt (settings.general.ball_y) || null;
 settings.general.ball_locked = toBool (settings.general.ball_locked);
@@ -129,6 +131,12 @@ function toDays (s, def) {
   return Math.min (365, n);
 }
 
+function toDebounce (s) {
+  const n = parseInt (s);
+  if (isNaN (n) || n < 0) return 600;
+  return Math.min (5000, n);
+}
+
 function toList (s, values) {
   if (!s) return values;
   if (Array.isArray (s)) return s.filter (v => values.includes (v));
@@ -154,4 +162,4 @@ function saveSettings () {
   }
 }
 
-export { settings, saveSettings, toComponents, toDays };
+export { settings, saveSettings, toComponents, toDays, toDebounce };

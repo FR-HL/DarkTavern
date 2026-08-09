@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 const _require = createRequire (import.meta.url);
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE, dataDir } from './config.js';
-import { settings, saveSettings, toComponents, toDays } from './settings.js';
+import { settings, saveSettings, toComponents, toDays, toDebounce } from './settings.js';
 import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
 import { wire } from './scan.js';
 import * as backend from './backend.js';
@@ -391,6 +391,7 @@ app.on ('ready', async () => {
     live_price_relax: settings.general.live_price_relax || 'none',
     scan_cache_days: settings.general.scan_cache_days ?? 1,
     history_days: settings.general.history_days ?? 3,
+    requery_debounce: settings.general.requery_debounce ?? 600,
     launch_on_startup: !!settings.general.launch_on_startup,
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+R',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+T',
@@ -467,6 +468,7 @@ app.on ('ready', async () => {
     if (data.live_price_relax !== undefined && [ 'none', 'all', 'sa', 'b' ].includes (data.live_price_relax)) settings.general.live_price_relax = data.live_price_relax;
     if (data.scan_cache_days !== undefined) settings.general.scan_cache_days = toDays (data.scan_cache_days, settings.general.scan_cache_days);
     if (data.history_days !== undefined) settings.general.history_days = toDays (data.history_days, settings.general.history_days);
+    if (data.requery_debounce !== undefined) settings.general.requery_debounce = toDebounce (data.requery_debounce);
     if (data.launch_on_startup !== undefined) {
       settings.general.launch_on_startup = !!data.launch_on_startup;
       app.setLoginItemSettings ({

@@ -162,26 +162,34 @@ export function wire (overlay, sendBall = null, hooks = null) {
     }
   });
 
-  ipcMain.on ('market:requery', async (e, payload) => {
+  let requeryTimer = null;
+  ipcMain.on ('market:requery', (e, payload) => {
     const scanId = payload?.scanId || 0;
     const selected = Array.isArray (payload?.selected) ? payload.selected : [];
     if (!lastAnalyze) { send ('hover:live-price', { scanId, price: null, used_affixes: [] }); return; }
 
-    const itemId = toCanonicalItemId (lastAnalyze.item?.id || lastAnalyze.item?.item_id || '');
-    const rarity = lastAnalyze.item?.rarity;
-    const secondary = lastAnalyze.item?.secondary || [];
-    const byValue = (settings.general.live_price_mode || 'presence') === 'value';
-    const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
-    if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+    if (requeryTimer) { clearTimeout (requeryTimer); requeryTimer = null; }
+    const ms = settings.general.requery_debounce ?? 600;
+    const run = async () => {
+      requeryTimer = null;
+      const itemId = toCanonicalItemId (lastAnalyze.item?.id || lastAnalyze.item?.item_id || '');
+      const rarity = lastAnalyze.item?.rarity;
+      const secondary = lastAnalyze.item?.secondary || [];
+      const byValue = (settings.general.live_price_mode || 'presence') === 'value';
+      const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
+      if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
 
-    const attrs = secondary.filter (a => a.display != null && selected.includes (a.display));
-    let price = null;
-    if (itemId && itemId !== 'id.item.') {
-      try { price = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers); }
-      catch (err) { logger.error (`[MarketRequery] ${err.message}`); }
-    }
-    send ('hover:live-price', { scanId, price, used_affixes: attrs.map (a => a.display) });
-    markResult ({ ok: true, live: price ?? null, usedAffixes: attrs.map (a => a.display), newRecord: true });
+      const attrs = secondary.filter (a => a.display != null && selected.includes (a.display));
+      let price = null;
+      if (itemId && itemId !== 'id.item.') {
+        try { price = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers); }
+        catch (err) { logger.error (`[MarketRequery] ${err.message}`); }
+      }
+      send ('hover:live-price', { scanId, price, used_affixes: attrs.map (a => a.display) });
+      markResult ({ ok: true, live: price ?? null, usedAffixes: attrs.map (a => a.display), newRecord: true });
+    };
+    if (ms <= 0) run ();
+    else requeryTimer = setTimeout (run, ms);
   });
 }
 

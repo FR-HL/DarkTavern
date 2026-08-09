@@ -74,6 +74,11 @@ const livePriceMode = ref ('presence');
 const livePriceRelax = ref ('none');
 const scanCacheDays = ref (1);
 const historyDays = ref (3);
+const requeryDebounce = ref (600);
+const REQUERY_OPTS = [
+  { key: 600, label: '防抖 600ms' },
+  { key: 0, label: '每次都查' },
+];
 const LIVE_MODES = [
   { key: 'presence', label: '只看词条有无' },
   { key: 'value', label: '按词条数值' },
@@ -555,6 +560,7 @@ async function loadSettings () {
     livePriceRelax.value = d.live_price_relax || 'none';
     scanCacheDays.value = d.scan_cache_days ?? 1;
     historyDays.value = d.history_days ?? 3;
+    requeryDebounce.value = d.requery_debounce ?? 600;
     launchOnStartup.value = !!d.launch_on_startup;
     autoCheckUpdate.value = d.auto_check_update !== false;
     developerMode.value = !!d.developer_mode;
@@ -730,6 +736,11 @@ async function setLiveRelax (v) {
   livePriceRelax.value = v;
   const r = await invoke ('settings:save', { live_price_relax: v });
   if (r?.success) showToast ('已保存 · 下次查价生效');
+}
+async function setRequeryDebounce (v) {
+  requeryDebounce.value = v;
+  const r = await invoke ('settings:save', { requery_debounce: v });
+  if (r?.success) showToast ('已保存');
 }
 async function setScanCacheDays (v) {
   const n = parseFloat (v);
@@ -1061,6 +1072,19 @@ onBeforeUnmount (() => {
                 </div>
               </div>
             </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">词条改动查价</div>
+                <div class="srow-d">连点词条圆点时合并为一次查价；每次都查则每次点击都请求</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="seg">
+                  <button v-for="o in REQUERY_OPTS" :key="o.key" class="seg-opt" :class="{ on: requeryDebounce === o.key }" @click="setRequeryDebounce(o.key)">
+                    <span class="seg-t">{{ o.label }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1157,7 +1181,7 @@ onBeforeUnmount (() => {
       </div>
 
       <!-- ============ 查价记录 ============ -->
-      <div class="pane" :class="{ active: pane === 'history' }">
+      <div class="pane hist-pane" :class="{ active: pane === 'history' }">
         <div class="page-title">查价记录</div>
         <div class="page-sub">最近 {{ historyDays }} 天内查询过的物品，自动保存；每次查价的价格数据完整记录。</div>
 
@@ -1169,7 +1193,7 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="table-wrap" v-if="historyRecords.length"><div class="table-scroll">
-          <table>
+          <table class="hist-table">
             <thead><tr>
               <th style="width:104px">时间</th>
               <th style="width:34%">物品</th>
@@ -1208,7 +1232,7 @@ onBeforeUnmount (() => {
                           <span v-for="(a, i) in rec.attributes.primary" :key="'p'+i" class="attr-chip">{{ attrZh (rec, a.display) }}：{{ attrVal (a) }}</span>
                         </div>
                       </div>
-                      <div v-if="rec.attributes?.secondary?.length" class="attr-group">
+                      <div v-if="rec.attributes?.secondary?.length" class="attr-group attr-secondary">
                         <div class="attr-group-title">副属性</div>
                         <div class="attr-list">
                           <span v-for="(a, i) in rec.attributes.secondary" :key="'s'+i" class="attr-chip">

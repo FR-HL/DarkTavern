@@ -668,16 +668,21 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
 .comp-body { padding: 0; overflow: hidden; }
 
 /* ===== history pane ===== */
+.pane.hist-pane.active { display: flex; flex-direction: column; height: 100%; }
+.hist-pane .table-wrap { flex: 1; min-height: 240px; display: flex; flex-direction: column; }
+.hist-pane .table-scroll { max-height: none; flex: 1; min-height: 0; }
 .map-toolbar-spacer { flex: 1; }
-.hist-count { font-size: 13px; color: var(--text-2); }
+.hist-table { font-size: 14.5px; }
+.hist-table thead th { font-size: 12.5px; }
+.hist-count { font-size: 14px; color: var(--text-2); }
 .hist-count b { color: var(--accent); font-weight: 650; font-variant-numeric: tabular-nums; }
-.hist-time { color: var(--text-3); font-size: 12px; }
+.hist-time { color: var(--text-3); font-size: 13px; }
 .hist-item { display: flex; flex-direction: column; gap: 1px; }
-.hist-zh { font-size: 13px; font-weight: 600; }
-.hist-en { font-size: 11px; color: var(--text-3); }
-.hist-rarity { font-size: 10px; vertical-align: 1px; }
-.hist-rarity-name { font-size: 12px; color: var(--text-2); }
-.hist-price { color: var(--amber); font-weight: 700; font-variant-numeric: tabular-nums; }
+.hist-zh { font-size: 15px; font-weight: 600; }
+.hist-en { font-size: 12px; color: var(--text-3); }
+.hist-rarity { font-size: 12px; vertical-align: 1px; }
+.hist-rarity-name { font-size: 13px; color: var(--text-2); }
+.hist-price { color: #F4B400; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 15.5px; }
 .hist-row { cursor: pointer; }
 .hist-row:hover td { background: var(--accent-softer); }
 .hist-row.open td { background: var(--accent-softer); }
@@ -689,7 +694,7 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
 }
 .attr-group + .attr-group { margin-top: 10px; }
 .attr-group-title {
-  font-size: 11px; font-weight: 650; letter-spacing: 0.05em;
+  font-size: 12.5px; font-weight: 650; letter-spacing: 0.05em;
   color: var(--text-3);
   margin-bottom: 6px;
 }
@@ -700,16 +705,17 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
   background: var(--field);
   border: 1px solid var(--line-soft);
   border-radius: 7px;
-  font-size: 12px; color: var(--text-2);
+  font-size: 13.5px; color: var(--text-2);
 }
-.attr-grade { font-style: normal; font-weight: 700; font-size: 10.5px; }
+.attr-secondary .attr-chip { color: #00aaee; }
+.attr-grade { font-style: normal; font-weight: 700; font-size: 12px; }
 .attr-grade.gS { color: #d97a00; }
 .attr-grade.gA { color: #a445d6; }
 .attr-grade.gB { color: #0084c8; }
 .attr-grade.gC { color: #4f9a00; }
 .attr-grade.gD { color: #8a8a8e; }
 .attr-grade.gF { color: #d92d20; }
-.attr-empty { font-size: 12.5px; color: var(--text-3); }
+.attr-empty { font-size: 13.5px; color: var(--text-3); }
 .empty-hint { padding: 46px 20px; text-align: center; }
 .empty-hint .empty-t { font-size: 15px; font-weight: 650; color: var(--text-2); }
 .empty-hint .empty-d { margin-top: 7px; font-size: 12.5px; color: var(--text-3); }
