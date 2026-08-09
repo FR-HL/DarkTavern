@@ -17,6 +17,7 @@ const IsWindowVisible = user32.func ('bool IsWindowVisible(void *hWnd)');
 const SetWinEventHook = user32.func ('void *SetWinEventHook(uint eventMin, uint eventMax, void *hmodWinEventProc, WinEventProc *pfnWinEventProc, uint idProcess, uint idThread, uint dwFlags)');
 const UnhookWinEvent = user32.func ('bool UnhookWinEvent(void *hWinEventHook)');
 const GetWindowThreadProcessId = user32.func ('uint GetWindowThreadProcessId(void *hWnd, _Out_ uint *lpdwProcessId)');
+const SetForegroundWindow = user32.func ('bool SetForegroundWindow(void *hWnd)');
 
 const EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
 const EVENT_OBJECT_DESTROY = 0x8001;
@@ -39,6 +40,11 @@ let onStateChange = null;
 
 export function getCanScan () {
   return canScan;
+}
+
+export function activateGameWindow () {
+  if (!trackedHwnd) return;
+  try { SetForegroundWindow (trackedHwnd); } catch (e) {}
 }
 
 export function resendState () {
@@ -180,7 +186,7 @@ function showOverlay () {
   overlay.setIgnoreMouseEvents (true, { forward: true });
   overlay.setAlwaysOnTop (true, 'screen-saver');
   overlay.setVisibleOnAllWorkspaces (true);
-  overlay.show ();
+  overlay.showInactive ();
   overlay.moveTop ();
   shown = true;
   canScan = true;

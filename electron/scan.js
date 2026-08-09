@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { logger } from './logger.js';
 import { settings, saveSettings } from './settings.js';
-import { getCanScan, resendState } from './overlay.js';
+import { getCanScan, resendState, activateGameWindow } from './overlay.js';
 import * as backend from './backend.js';
 
 const DARKERDB_URL = 'https://api.darkerdb.com/v1/internal/grimvault/analyze';
@@ -12,6 +12,7 @@ const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
 let scanning = false;
 let cache = { text: null, result: null, ts: 0 };
 const CACHE_TTL = 10000;
+let lastAnalyze = null;
 
 export function wire (overlay, sendBall = null) {
   const send = (msg, data) => overlay.webContents.send (msg, data);
@@ -77,6 +78,7 @@ export function wire (overlay, sendBall = null) {
     }
 
     if (result.success) {
+      lastAnalyze = result.data;
       send ('hover:item', { scanId, ...tooltip, ...result.data });
       markResult ({
         ok: true,
@@ -118,6 +120,36 @@ export function wire (overlay, sendBall = null) {
 
   ipcMain.handle ('auth:status', () => ({ linked: !!settings.general.api_key }));
   ipcMain.handle ('auth:logout', () => { settings.general.api_key = ''; saveSettings (); return { success: true }; });
+
+  ipcMain.on ('overlay:set-ignore-mouse', (e, ignore) => {
+    if (ignore) {
+      overlay.setIgnoreMouseEvents (true, { forward: true });
+      activateGameWindow ();
+    } else {
+      overlay.setIgnoreMouseEvents (false);
+    }
+  });
+
+  ipcMain.on ('market:requery', async (e, payload) => {
+    const scanId = payload?.scanId || 0;
+    const selected = Array.isArray (payload?.selected) ? payload.selected : [];
+    if (!lastAnalyze) { send ('hover:live-price', { scanId, price: null, used_affixes: [] }); return; }
+
+    const itemId = toCanonicalItemId (lastAnalyze.item?.id || lastAnalyze.item?.item_id || '');
+    const rarity = lastAnalyze.item?.rarity;
+    const secondary = lastAnalyze.item?.secondary || [];
+    const byValue = (settings.general.live_price_mode || 'presence') === 'value';
+    const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
+    if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+
+    const attrs = secondary.filter (a => a.display != null && selected.includes (a.display));
+    let price = null;
+    if (itemId && itemId !== 'id.item.') {
+      try { price = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers); }
+      catch (err) { logger.error (`[MarketRequery] ${err.message}`); }
+    }
+    send ('hover:live-price', { scanId, price, used_affixes: attrs.map (a => a.display) });
+  });
 }
 
 async function queryPrice (tooltipText) {
@@ -157,6 +189,29 @@ function attrToField (displayName) {
   return displayName.toLowerCase ().replace (/ /g, '_');
 }
 
+async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers) {
+  const params = new URLSearchParams ();
+  params.set ('item_id', itemId);
+  if (rarity) params.set ('rarity', rarity.toLowerCase ());
+  params.set ('has_sold', 'false');
+  params.set ('has_expired', 'false');
+  params.set ('has_cancelled', 'false');
+  params.set ('sort', 'price:asc');
+  params.set ('limit', '1');
+
+  for (const attr of attrs) {
+    const field = attrToField (attr.display);
+    params.set (`secondary[${field}]`, byValue ? `>=${attr.value}` : '>=0');
+  }
+
+  const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });
+  if (!res.ok) return null;
+
+  const listings = (await res.json ()).body;
+  if (Array.isArray (listings) && listings.length > 0) return listings[0].price;
+  return null;
+}
+
 async function queryMarketLive (data, scanId, send) {
   let price = null;
   let usedAttrs = [];
@@ -181,27 +236,9 @@ async function queryMarketLive (data, scanId, send) {
       const byValue = (settings.general.live_price_mode || 'presence') === 'value';
 
       for (const attrs of attempts) {
-        const params = new URLSearchParams ();
-        params.set ('item_id', itemId);
-        if (rarity) params.set ('rarity', rarity.toLowerCase ());
-        params.set ('has_sold', 'false');
-        params.set ('has_expired', 'false');
-        params.set ('has_cancelled', 'false');
-        params.set ('sort', 'price:asc');
-        params.set ('limit', '1');
-
-        for (const attr of attrs) {
-          const field = attrToField (attr.display);
-          params.set (`secondary[${field}]`, byValue ? `>=${attr.value}` : '>=0');
-        }
-
-        const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });
-        if (!res.ok) continue;
-
-        const body = await res.json ();
-        const listings = body.body;
-        if (Array.isArray (listings) && listings.length > 0) {
-          price = listings[0].price;
+        const p = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers);
+        if (p !== null) {
+          price = p;
           usedAttrs = attrs;
           logger.info (`[MarketLive] price=${price} (${attrs.length} attrs filtered)`);
           break;

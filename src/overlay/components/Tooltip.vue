@@ -93,10 +93,66 @@ const itemRarity = ref('Common');
 const reverseAttributes = ref({});
 const reverseKeywords = ref({});
 
-// Secondary affixes actually used for the current live market price (display names)
-const usedAffixes = ref([]);
-function isAffixUsed(display) {
-  return usedAffixes.value.includes(display);
+// Currently checked secondary affixes (display names); clicking a dot toggles the check and re-queries the live price
+const selectedAffixes = ref([]);
+function isAffixSelected(display) {
+  return selectedAffixes.value.includes(display);
+}
+
+function toggleAffix(display) {
+  const i = selectedAffixes.value.indexOf(display);
+  if (i >= 0) selectedAffixes.value.splice(i, 1);
+  else selectedAffixes.value.push(display);
+  livePriceLoading.value = true;
+  electron.send("market:requery", { scanId: currentScanId.value, selected: [...selectedAffixes.value] });
+}
+
+// Hovering the tooltip grabs the mouse (clickable); leaving restores click-through to the game
+const TOOLTIP_HIDE_GRACE_MS = 1500;
+const hoveringTooltip = ref(false);
+let leaveHideTimer = null;
+let ignoringMouse = true;
+
+function setIgnoreMouse(ignore) {
+  if (ignoringMouse === ignore) return;
+  ignoringMouse = ignore;
+  electron.send("overlay:set-ignore-mouse", ignore);
+}
+
+function scheduleLeaveHide() {
+  clearTimeout(leaveHideTimer);
+  leaveHideTimer = setTimeout(() => {
+    if (!hoveringTooltip.value) isTooltipActive.value = false;
+  }, TOOLTIP_HIDE_GRACE_MS);
+}
+
+// Hit-test the pointer against the tooltip on every mousemove to toggle click-through
+// (mouseenter/leave are unreliable under the forwarded click-through mode)
+function updateTooltipHover(event) {
+  const node = tooltipNode.value;
+  if (!node) {
+    if (hoveringTooltip.value) {
+      hoveringTooltip.value = false;
+      scheduleLeaveHide();
+    }
+    setIgnoreMouse(true);
+    return;
+  }
+
+  const rect = node.getBoundingClientRect();
+  const over =
+    event.clientX >= rect.left && event.clientX <= rect.right &&
+    event.clientY >= rect.top && event.clientY <= rect.bottom;
+
+  if (over) {
+    hoveringTooltip.value = true;
+    clearTimeout(leaveHideTimer);
+    setIgnoreMouse(false);
+  } else if (hoveringTooltip.value) {
+    hoveringTooltip.value = false;
+    setIgnoreMouse(true);
+    scheduleLeaveHide();
+  }
 }
 
 // Rarity color mapping
@@ -264,8 +320,13 @@ onMouseStill(() => {
   }
 }, MOUSE_STILL_FOR_MS);
 
+// Mouse left the item: give a grace period to travel onto the tooltip, then hide
 onMouseWakeup(() => {
-  isTooltipActive.value = false;
+  if (hoveringTooltip.value) return;
+  clearTimeout(leaveHideTimer);
+  leaveHideTimer = setTimeout(() => {
+    if (!hoveringTooltip.value) isTooltipActive.value = false;
+  }, TOOLTIP_HIDE_GRACE_MS);
 }, MOUSE_WAKEUP_DISTANCE);
 
 electron.on("scan:start", (data) => {
@@ -291,6 +352,9 @@ electron.on("clear", (data) => {
   isTooltipActive.value = false;
   isLoading.value = false;
   errorMessage.value = null;
+  hoveringTooltip.value = false;
+  clearTimeout(leaveHideTimer);
+  electron.send("overlay:set-ignore-mouse", true);
 });
 
 electron.on("scan:finish", () => {
@@ -348,6 +412,7 @@ onMounted(() => {
       x: event.clientX,
       y: event.clientY,
     };
+    updateTooltipHover(event);
   });
 
   // Preview: immediately show Chinese OCR text while API fetches prices
@@ -377,7 +442,7 @@ onMounted(() => {
     item.value.quests = [];
     item.value.attributes.primary = [];
     item.value.attributes.secondary = [];
-    usedAffixes.value = [];
+    selectedAffixes.value = [];
 
     // Position marker at tooltip location
     const mouseDeltaX = currentMousePos.value.x - scanStartMousePos.value.x;
@@ -423,6 +488,7 @@ onMounted(() => {
     item.value.quests = data.quests || [];
     item.value.attributes.primary = data.item?.primary || [];
     item.value.attributes.secondary = data.item?.secondary || [];
+    selectedAffixes.value = (data.item?.secondary || []).map(a => a.display).filter(Boolean);
 
     // Update Chinese data if not already set by preview
     if (data.chinese_item_name) {
@@ -487,7 +553,7 @@ onMounted(() => {
   electron.on("hover:live-price", (data) => {
     if (data.scanId !== currentScanId.value) return;
     item.value.prices.live = data.price ?? null;
-    usedAffixes.value = Array.isArray(data.used_affixes) ? data.used_affixes : [];
+    selectedAffixes.value = data.used_affixes || [];
     livePriceLoading.value = false;
   });
 
@@ -518,30 +584,6 @@ onMounted(() => {
     setMouseSleepPosition();
   });
 
-  // If we are attached make small mouse movements adjust the marker position.
-  if (props.alignment === "attached") {
-    let previousMousePosition = null;
-
-    window.addEventListener("mousemove", (event) => {
-      let currentMousePosition = {
-        x: event.clientX,
-        y: event.clientY,
-      };
-
-      if (previousMousePosition) {
-        markerLeft.value += currentMousePosition.x - previousMousePosition.x;
-        markerTop.value += currentMousePosition.y - previousMousePosition.y;
-
-        // marker.value.left += currentMousePosition.x - previousMousePosition.x;
-        // marker.value.top  += currentMousePosition.y - previousMousePosition.y;
-
-        // tooltipNode.value.style.left = parseFloat (tooltipNode.value.style.left) + (currentMousePosition.x - previousMousePosition.x);
-        // tooltipNode.value.style.top = parseFloat (tooltipNode.value.style.top) + (currentMousePosition.y - previousMousePosition.y);
-      }
-
-      previousMousePosition = currentMousePosition;
-    });
-  }
 });
 
 onBeforeUnmount(() => {
@@ -596,7 +638,7 @@ function getGradeColor(grade) {
         v-if="shouldShowContent"
         ref="tooltipNode"
         class="absolute"
-        :class="{ 'border-2 border-yellow-500': props.debug }"
+        :class="{ 'border-2 border-yellow-500': props.debug, 'tooltip-hovered': hoveringTooltip }"
         :style="{
           left: `${tooltipPosition.left}px`,
           top: `${tooltipPosition.top}px`,
@@ -691,7 +733,7 @@ function getGradeColor(grade) {
                     </span>
                     <span>{{ toChinese(attribute.display) }}</span>
                   </span>
-                  <span class="affix-check" :class="{ on: isAffixUsed(attribute.display) }"></span>
+                  <span class="affix-check" :class="{ on: isAffixSelected(attribute.display) }" @click.stop="toggleAffix(attribute.display)"></span>
                 </div>
 
                 <div class="text-base">

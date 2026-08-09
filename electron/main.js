@@ -122,7 +122,7 @@ app.on ('ready', async () => {
     transparent: true,
     alwaysOnTop: true,
     skipTaskbar: true,
-    focusable: false,
+    focusable: true,
     type: 'toolbar',
     webPreferences: {
       preload: join (SOURCE, 'preload.cjs'),
