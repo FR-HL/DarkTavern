@@ -189,7 +189,7 @@ async function queryMarketLive (data, scanId, send) {
 
         for (const attr of attrs) {
           const field = attrToField (attr.display);
-          params.set (`secondary[${field}]`, `>=${attr.value}`);
+          params.set (`secondary[${field}]`, '>=0');
         }
 
         const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });
