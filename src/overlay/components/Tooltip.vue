@@ -108,7 +108,7 @@ function toggleAffix(display) {
 }
 
 // Hovering the tooltip grabs the mouse (clickable); leaving restores click-through to the game
-const TOOLTIP_HIDE_GRACE_MS = 1500;
+const TOOLTIP_HIDE_GRACE_MS = 600;
 const hoveringTooltip = ref(false);
 let leaveHideTimer = null;
 let ignoringMouse = true;
@@ -488,7 +488,6 @@ onMounted(() => {
     item.value.quests = data.quests || [];
     item.value.attributes.primary = data.item?.primary || [];
     item.value.attributes.secondary = data.item?.secondary || [];
-    selectedAffixes.value = (data.item?.secondary || []).map(a => a.display).filter(Boolean);
 
     // Update Chinese data if not already set by preview
     if (data.chinese_item_name) {
