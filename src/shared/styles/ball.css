@@ -68,18 +68,23 @@ html, body, #app {
   position: relative;
   width: 54px; height: 54px;
   border-radius: 50%;
+  --state: var(--text-3);
+  --state-soft: rgba(255,255,255,0.1);
 }
+.ring.ok { --state: var(--green); --state-soft: var(--green-soft); }
+.ring.warn { --state: var(--amber); --state-soft: var(--amber-soft); }
+.ring.bad { --state: var(--red); --state-soft: var(--red-soft); }
+.ring.busy { --state: var(--accent); --state-soft: var(--accent-soft); }
+.ring.gold { --state: #f2c14e; --state-soft: rgba(242,193,78,0.16); }
 .ring::before {
   content: '';
   position: absolute; inset: -3px;
   border-radius: 50%;
-  border: 2.5px solid var(--text-3);
-  opacity: .3;
+  border: 2.5px solid var(--state);
+  opacity: 1;
+  box-shadow: 0 0 0 3px var(--state-soft);
   transition: border-color .35s var(--ease), box-shadow .35s var(--ease), opacity .35s var(--ease);
 }
-.ring.ok::before { border-color: var(--green); opacity: 1; box-shadow: 0 0 0 3px var(--green-soft); }
-.ring.warn::before { border-color: var(--amber); opacity: 1; box-shadow: 0 0 0 3px var(--amber-soft); }
-.ring.bad::before { border-color: var(--red); opacity: 1; box-shadow: 0 0 0 3px var(--red-soft); }
 
 .ball {
   position: relative;
@@ -111,19 +116,15 @@ html, body, #app {
   max-width: 52px;
   overflow: hidden;
   text-overflow: ellipsis;
+  color: var(--state);
 }
-.ball-text.ok .bt-1 { color: var(--green); }
-.ball-text.warn .bt-1 { color: var(--amber); }
-.ball-text.bad .bt-1 { color: var(--red); }
-.ball-text.busy .bt-1 { color: var(--accent); }
-.ball-text.gold .bt-1 { color: #f2c14e; }
 .ball-text.small .bt-1 { font-size: 13px; }
 
-/* 扫描脉动 */
+/* 状态脉动 */
 .pulse {
   position: absolute; inset: -2px;
   border-radius: 50%;
-  border: 2px solid var(--accent);
+  border: 2px solid var(--state);
   opacity: 0;
   animation: ping 1.1s var(--ease) infinite;
   pointer-events: none;

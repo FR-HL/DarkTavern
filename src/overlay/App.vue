@@ -12,15 +12,16 @@ const isDebugging = ref(false);
 let popupTimeout;
 
 watch (mode, () => {
-  popup.value = true;
+  // 弹窗提示暂时不需要，注释掉（不删除）
+  // popup.value = true;
 
-  if (popupTimeout) {
-    clearTimeout(popupTimeout);
-  }
+  // if (popupTimeout) {
+  //   clearTimeout(popupTimeout);
+  // }
 
-  popupTimeout = setTimeout(() => {
-    popup.value = false;
-  }, 750);
+  // popupTimeout = setTimeout(() => {
+  //   popup.value = false;
+  // }, 750);
 });
 
 electron.on ('settings', (config) => {

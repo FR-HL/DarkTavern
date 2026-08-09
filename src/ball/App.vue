@@ -34,12 +34,6 @@ let dragActive = false;
 let suppressClick = false;
 let transientTimer = null;
 
-const ring = computed (() => {
-  if (!status.ocr) return 'bad';
-  if (!status.game) return 'warn';
-  return 'ok';
-});
-
 const center = computed (() => {
   if (status.scanning) return { t1: '扫描', cls: 'busy' };
   const t = transient.value;
@@ -159,12 +153,12 @@ onBeforeUnmount (() => {
 <template>
   <div class="ball-root">
     <div class="ball-anchor">
-      <div class="ring" :class="ring">
+      <div class="ring" :class="center.cls">
         <div class="ball" :class="{ locked: status.locked }" @mousedown="onBallMouseDown" @mouseup="onBallMouseUp" @click="onBallClick" @contextmenu="onContext">
-          <div class="ball-text" :class="[center.cls, { small: center.small }]">
+          <div class="ball-text" :class="{ small: center.small }">
             <span class="bt-1">{{ center.t1 }}</span>
           </div>
-          <span v-if="status.scanning" class="pulse"></span>
+          <span v-if="status.scanning || status.calibrateRunning || status.sortingRunning" class="pulse"></span>
         </div>
       </div>
     </div>
