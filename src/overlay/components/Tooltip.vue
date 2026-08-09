@@ -99,12 +99,17 @@ function isAffixSelected(display) {
   return selectedAffixes.value.includes(display);
 }
 
+let requerySeq = 0;
+let selectionDirty = false;
+
 function toggleAffix(display) {
   const i = selectedAffixes.value.indexOf(display);
   if (i >= 0) selectedAffixes.value.splice(i, 1);
   else selectedAffixes.value.push(display);
+  selectionDirty = true;
   livePriceLoading.value = true;
-  electron.send("market:requery", { scanId: currentScanId.value, selected: [...selectedAffixes.value] });
+  requerySeq++;
+  electron.send("market:requery", { scanId: currentScanId.value, selected: [...selectedAffixes.value], seq: requerySeq });
 }
 
 // Hovering the tooltip grabs the mouse (clickable); leaving restores click-through to the game
@@ -443,6 +448,7 @@ onMounted(() => {
     item.value.attributes.primary = [];
     item.value.attributes.secondary = [];
     selectedAffixes.value = [];
+    selectionDirty = false;
 
     // Position marker at tooltip location
     const mouseDeltaX = currentMousePos.value.x - scanStartMousePos.value.x;
@@ -488,6 +494,7 @@ onMounted(() => {
     item.value.quests = data.quests || [];
     item.value.attributes.primary = data.item?.primary || [];
     item.value.attributes.secondary = data.item?.secondary || [];
+    selectionDirty = false;
 
     // Update Chinese data if not already set by preview
     if (data.chinese_item_name) {
@@ -551,6 +558,8 @@ onMounted(() => {
 
   electron.on("hover:live-price", (data) => {
     if (data.scanId !== currentScanId.value) return;
+    if (data.source === 'scan' && selectionDirty) return;
+    if (data.seq !== undefined && data.seq !== requerySeq) return;
     item.value.prices.live = data.price ?? null;
     selectedAffixes.value = data.used_affixes || [];
     livePriceLoading.value = false;

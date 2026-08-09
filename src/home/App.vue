@@ -360,12 +360,18 @@ function showPane (name) {
 
 const historyRecords = ref ([]);
 const expandedHistory = ref (null);
+const histPort = ref (19528);
 
 async function loadHistory () {
+  try { histPort.value = await invoke ('dnd:service-port'); } catch (e) { /* ignore */ }
   try {
     const r = await invoke ('history:list');
     historyRecords.value = r?.records || [];
   } catch (e) { /* ignore */ }
+}
+
+function histIconUrl (rec) {
+  return `http://127.0.0.1:${histPort.value}/stash/icon/${rec.icon}`;
 }
 
 async function clearHistory () {
@@ -902,6 +908,11 @@ onBeforeUnmount (() => {
           <span class="foot-k">交流群</span>
           <span class="foot-v">237874334</span>
         </div>
+        <div class="foot-row foot-static">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span class="foot-k">作者</span>
+          <span class="foot-v">方源Official</span>
+        </div>
         <!-- 项目公开前暂隐藏：GitHub 仓库入口
         <a class="foot-row" href="#" @click.prevent="openGithub">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/></svg>
@@ -1208,8 +1219,11 @@ onBeforeUnmount (() => {
                   <td class="hist-time mono dim">{{ fmtHistoryTime (rec.ts) }}</td>
                   <td>
                     <div class="hist-item">
-                      <span class="hist-zh" :style="{ color: rarityColor (rec.rarity) }">{{ rec.zhName || rec.name || '—' }}</span>
-                      <span class="hist-en" v-if="rec.zhName && rec.name && rec.zhName !== rec.name">{{ rec.name }}</span>
+                      <img v-if="rec.icon" class="hist-icon" :src="histIconUrl (rec)" alt="" loading="lazy" @error="(e) => (e.target.style.display = 'none')" />
+                      <div class="hist-item-text">
+                        <span class="hist-zh" :style="{ color: rarityColor (rec.rarity) }">{{ rec.zhName || rec.name || '—' }}</span>
+                        <span class="hist-en" v-if="rec.zhName && rec.name && rec.zhName !== rec.name">{{ rec.name }}</span>
+                      </div>
                     </div>
                   </td>
                   <td><span class="hist-rarity" :style="{ color: rarityColor (rec.rarity) }">●</span> <span class="hist-rarity-name">{{ RARITY_CN[rec.rarity] || rec.rarity }}</span></td>

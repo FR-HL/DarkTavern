@@ -280,7 +280,7 @@ app.on ('ready', async () => {
   ipcMain.handle ('history:list', () => {
     loadHistory ();
     pruneHistory ();
-    return { records: [...priceHistory].reverse () };
+    return { records: [...priceHistory].reverse ().map ((r) => ({ ...r, icon: historyIconPath (r) })) };
   });
   ipcMain.handle ('history:clear', () => {
     priceHistory = [];
@@ -1109,6 +1109,37 @@ function findScanCache (key) {
     if (r.key === key && r.ts >= cutoff && (!best || r.ts > best.ts)) best = r;
   }
   return best;
+}
+
+let itemIconIndex = null;
+
+function buildItemIconIndex () {
+  const idx = { byKey: {}, byNameRarity: {}, byName: {} };
+  try {
+    const d = JSON.parse (readFileSync (join (ROOT, 'assets', 'items.json'), 'utf-8'));
+    for (const [k, v] of Object.entries (d)) {
+      const p = v?.iconPath || null;
+      if (!p) continue;
+      idx.byKey[k.toLowerCase ()] = p;
+      const n = String (v.name || '').toLowerCase ();
+      if (!n) continue;
+      if (!idx.byName[n]) idx.byName[n] = p;
+      if (v.rarity) idx.byNameRarity[`${n}|${String (v.rarity).toLowerCase ()}`] = p;
+    }
+  } catch (e) {
+    logger.error (`Failed to load items.json: ${e.message}`);
+  }
+  return idx;
+}
+
+function historyIconPath (rec) {
+  if (!itemIconIndex) itemIconIndex = buildItemIconIndex ();
+  const id = String (rec.id || '').replace (/^id\.item\./, '').toLowerCase ();
+  if (id && itemIconIndex.byKey[id]) return itemIconIndex.byKey[id];
+  const name = String (rec.name || '').toLowerCase ();
+  if (!name) return null;
+  const rarity = String (rec.rarity || '').toLowerCase ();
+  return itemIconIndex.byNameRarity[`${name}|${rarity}`] || itemIconIndex.byName[name] || null;
 }
 
 function historyPath () {

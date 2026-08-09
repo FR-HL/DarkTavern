@@ -97,7 +97,7 @@ body::before {
 .brand-icon { width: 28px; height: 28px; flex: none; color: #4ade80; }
 .brand-name {
   display: flex; align-items: flex-end; gap: 2px;
-  font-size: 24px; font-weight: 600; color: #333;
+  font-size: 24px; font-weight: 600; color: var(--text);
   line-height: 1;
 }
 .brand-grad {
@@ -172,7 +172,7 @@ body::before {
 .foot-row .foot-v {
   margin-left: auto;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-3);
   font-variant-numeric: tabular-nums;
   transition: color .16s var(--ease);
@@ -181,6 +181,10 @@ body::before {
 .foot-row:hover svg { color: var(--accent); }
 .foot-row:hover .foot-v { color: var(--accent); }
 .foot-row:active { transform: scale(0.98); }
+.foot-row.foot-static { cursor: default; }
+.foot-row.foot-static:hover { background: none; color: var(--text-2); border-color: transparent; }
+.foot-row.foot-static:hover svg { color: var(--text-3); }
+.foot-row.foot-static:hover .foot-v { color: var(--text-3); }
 
 /* ===== content ===== */
 .content {
@@ -677,7 +681,11 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
 .hist-count { font-size: 14px; color: var(--text-2); }
 .hist-count b { color: var(--accent); font-weight: 650; font-variant-numeric: tabular-nums; }
 .hist-time { color: var(--text-3); font-size: 13px; }
-.hist-item { display: flex; flex-direction: column; gap: 1px; }
+.hist-item { display: flex; align-items: center; gap: 8px; }
+.hist-item-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.hist-icon {
+  width: 40px; height: 40px; flex: none; object-fit: contain;
+}
 .hist-zh { font-size: 15px; font-weight: 600; }
 .hist-en { font-size: 12px; color: var(--text-3); }
 .hist-rarity { font-size: 12px; vertical-align: 1px; }

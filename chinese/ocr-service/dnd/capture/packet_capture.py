@@ -626,13 +626,9 @@ class PacketCapture:
         self.was_running_before = self.saved_state.get('running', False)
         
         if self.was_running_before:
-            self.logger.info("Previous session had capture running - restoring state")
-            threading.Timer(0.1, self._delayed_start).start()
+            self.logger.info("Previous session had capture running - not auto-starting")
         else:
             self.logger.info("Previous session had capture stopped")
-
-    def _delayed_start(self):
-        self.start_capture_switch()
 
     def _apply_tshark_environment(self):
         if not self.tshark_path:

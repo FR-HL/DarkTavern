@@ -90,7 +90,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
         demand: null, quality: null, adventure_points: null, quests: [],
       });
       markResult ({ ok: true, noRecord: true, id: cached.id, name: cached.name || '', market: cached.market ?? null, rarity: cached.rarity || '', pricing, attributes, reverseAttributes: cached.reverseAttributes || {}, key });
-      send ('hover:live-price', { scanId, price: cached.price ?? null, used_affixes: cached.usedAffixes || [] });
+      send ('hover:live-price', { scanId, price: cached.price ?? null, used_affixes: cached.usedAffixes || [], source: 'scan' });
       markResult ({ ok: true, noRecord: true, live: cached.price ?? null, usedAffixes: cached.usedAffixes || [] });
 
       send ('scan:finish');
@@ -166,7 +166,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
   ipcMain.on ('market:requery', (e, payload) => {
     const scanId = payload?.scanId || 0;
     const selected = Array.isArray (payload?.selected) ? payload.selected : [];
-    if (!lastAnalyze) { send ('hover:live-price', { scanId, price: null, used_affixes: [] }); return; }
+    if (!lastAnalyze) { send ('hover:live-price', { scanId, price: null, used_affixes: [], source: 'requery', seq: payload?.seq }); return; }
 
     if (requeryTimer) { clearTimeout (requeryTimer); requeryTimer = null; }
     const ms = settings.general.requery_debounce ?? 600;
@@ -185,7 +185,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
         try { price = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers); }
         catch (err) { logger.error (`[MarketRequery] ${err.message}`); }
       }
-      send ('hover:live-price', { scanId, price, used_affixes: attrs.map (a => a.display) });
+      send ('hover:live-price', { scanId, price, used_affixes: attrs.map (a => a.display), source: 'requery', seq: payload?.seq });
       markResult ({ ok: true, live: price ?? null, usedAffixes: attrs.map (a => a.display), newRecord: true });
     };
     if (ms <= 0) run ();
@@ -291,5 +291,5 @@ async function queryMarketLive (data, scanId, send) {
   } catch (e) {
     logger.error (`[MarketLive] ${e.message}`);
   }
-  send ('hover:live-price', { scanId, price, used_affixes: usedAttrs.map (a => a.display) });
+  send ('hover:live-price', { scanId, price, used_affixes: usedAttrs.map (a => a.display), source: 'scan' });
 }
