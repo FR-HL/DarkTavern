@@ -657,6 +657,11 @@ td .empty { text-align: center; color: var(--text-3); padding: 30px; }
 .dev-card-body .table-wrap { border: none; border-radius: 0; box-shadow: none; }
 .dev-card-body .map-toolbar { margin-bottom: 10px; }
 .dev-card-body .add-form { margin-bottom: 10px; }
+.dev-card-head .dev-arrow { transition: transform .2s var(--ease); }
+
+/* ===== 查价器 · 显示内容分组 ===== */
+.comp-groups { display: flex; flex-direction: column; gap: 10px; }
+.comp-body { padding: 0; overflow: hidden; }
 
 /* ===== history pane ===== */
 .map-toolbar-spacer { flex: 1; }

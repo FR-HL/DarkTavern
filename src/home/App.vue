@@ -65,6 +65,9 @@ const scanMode = ref ('manual');
 const alignment = ref ('attached');
 const scale = ref (1.0);
 const launchOnStartup = ref (false);
+const components = ref ([]);
+const compOpen = reactive ({ basic: true, details: false, price: true, quests: false });
+function toggleCompGroup (key) { compOpen [key] = !compOpen [key]; }
 
 const settingsStatus = reactive ({ type: '', text: '' });
 const mappingStatus = reactive ({ type: '', text: '' });
@@ -93,6 +96,28 @@ const ALIGNMENTS = [
   { key: 'top-right', label: '右上角' },
   { key: 'bottom-left', label: '左下角' },
   { key: 'bottom-right', label: '右下角' },
+];
+
+// 查价悬浮窗显示项开关，按悬浮窗区块分组；key 与 electron/settings.js 的 COMPONENT_KEYS 对应
+const COMPONENT_GROUPS = [
+  { key: 'basic', label: '基础信息', desc: '物品标题与属性', icon: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>', items: [
+    { key: 'header', label: '物品标题', desc: '顶部中文名（按稀有度着色）' },
+    { key: 'primary', label: '主属性', desc: '基础属性及其数值范围' },
+    { key: 'secondary', label: '副属性', desc: '随机词条、数值与评级' },
+  ]},
+  { key: 'details', label: '详情数据', desc: '需求与冒险点数', icon: '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', items: [
+    { key: 'demand', label: '需求评分', desc: '市场需求度（0–10）' },
+    { key: 'adventure', label: '冒险点数', desc: '可获得的冒险点数' },
+  ]},
+  { key: 'price', label: '价格', desc: '市场与商人价格', icon: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>', items: [
+    { key: 'market', label: '市场均价', desc: '市场平均成交价' },
+    { key: 'live', label: '市场现价', desc: '当前在售最低价' },
+    { key: 'vendor', label: '商人回收', desc: 'NPC 商人回收价' },
+    { key: 'density', label: '每格价值', desc: '市场价 ÷ 占用格数' },
+  ]},
+  { key: 'quests', label: '任务物品', desc: '任务需求与数量', icon: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>', items: [
+    { key: 'quests', label: '任务物品', desc: '相关任务与需求数量' },
+  ]},
 ];
 
 const allMappings = reactive ({ items: {}, attributes: {}, keywords: {}, custom: {} });
@@ -505,6 +530,7 @@ async function loadSettings () {
     scanMode.value = d.default_mode || 'manual';
     alignment.value = d.alignment || 'attached';
     scale.value = d.scale || 1.0;
+    components.value = Array.isArray (d.components) ? d.components : [];
     launchOnStartup.value = !!d.launch_on_startup;
     autoCheckUpdate.value = d.auto_check_update !== false;
     developerMode.value = !!d.developer_mode;
@@ -661,6 +687,15 @@ function onScaleInput (e) {
   scaleTimer = setTimeout (saveScale, 200);
 }
 async function saveScale () { const r = await invoke ('settings:save', { scale: scale.value }); if (r.success) showToast ('已保存'); }
+
+async function toggleComponent (key) {
+  const prev = components.value;
+  const next = prev.includes (key) ? prev.filter (k => k !== key) : [ ...prev, key ];
+  components.value = next;
+  const r = await invoke ('settings:save', { components: next });
+  if (r?.success) showToast ('已保存 · 下次扫描生效');
+  else components.value = prev;
+}
 
 async function loadMappings () {
   try {
@@ -974,6 +1009,33 @@ onBeforeUnmount (() => {
                 <div class="scale-ctl">
                   <input type="range" min="0.6" max="2" step="0.1" :value="scale" @input="onScaleInput">
                   <span class="range-val">{{ scaleVal }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">显示内容</div>
+          <div class="comp-groups">
+            <div v-for="g in COMPONENT_GROUPS" :key="g.key">
+              <div class="dev-card-head" :class="{ open: compOpen[g.key] }" @click="toggleCompGroup (g.key)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" v-html="g.icon"></svg>
+                <div class="srow-info">
+                  <div class="srow-t">{{ g.label }}</div>
+                  <div class="srow-d">{{ g.desc }}</div>
+                </div>
+                <svg class="dev-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <div v-if="compOpen[g.key]" class="dev-card-body comp-body">
+                <div class="srow" v-for="c in g.items" :key="c.key">
+                  <div class="srow-info">
+                    <div class="srow-t">{{ c.label }}</div>
+                    <div class="srow-d">{{ c.desc }}</div>
+                  </div>
+                  <div class="srow-ctl">
+                    <label class="switch"><input type="checkbox" :checked="components.includes (c.key)" @change="toggleComponent (c.key)"><span class="track"></span></label>
+                  </div>
                 </div>
               </div>
             </div>

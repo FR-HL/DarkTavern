@@ -696,22 +696,19 @@ function getGradeColor(grade) {
             <section
               v-if="
                 !isLoading &&
-                props.components.includes('details') &&
-                (item.quality ||
-                  item.relativeQuality ||
-                  item.demand ||
-                  item.numSimilarSoldRecently)
+                ((props.components.includes('demand') && item.demand) ||
+                  (props.components.includes('adventure') && item.adventurePoints))
               "
             >
               <div class="tooltip-stats">
-                <div v-if="item.demand" class="tooltip-stat">
+                <div v-if="props.components.includes('demand') && item.demand" class="tooltip-stat">
                   <span>需求评分:</span>
                   <span
                     :style="{ color: interpolateColor(item.demand, 10) }"
                     >{{ item.demand }} / 10</span
                   >
                 </div>
-                <div v-if="item.adventurePoints" class="tooltip-stat">
+                <div v-if="props.components.includes('adventure') && item.adventurePoints" class="tooltip-stat">
                   <span>冒险点数:</span>
                   <span>{{ item.adventurePoints }}</span>
                 </div>
@@ -741,30 +738,36 @@ function getGradeColor(grade) {
               <div class="tooltip-separator"></div>
             </section>
 
-            <!-- Pricing section: labels always shown, each price loads individually -->
+            <!-- Pricing section: each row gated by its own component switch -->
             <div
               class="whitespace-nowrap"
-              v-if="props.components.includes('pricing')"
+              v-if="
+                props.components.includes('market') ||
+                props.components.includes('live') ||
+                props.components.includes('vendor') ||
+                props.components.includes('density')
+              "
             >
-              <!-- <div class="flex items-center justify-center">
+              <div class="flex items-center justify-center" v-if="props.components.includes('market')">
                 <span>市场均价:</span>
-                <span class="ml-2" :class="item.prices.market !== null ? 'gold' : 'price-empty'">{{ item.prices.market !== null ? item.prices.market : '暂无' }}</span>
-              </div> -->
-              <div class="flex items-center justify-center">
+                <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
+                <span v-else class="ml-2" :class="item.prices.market !== null ? 'gold' : 'price-empty'">{{ item.prices.market !== null ? item.prices.market : '暂无' }}</span>
+              </div>
+              <div class="flex items-center justify-center" v-if="props.components.includes('live')">
                 <span>市场现价:</span>
                 <img v-if="livePriceLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
                 <span v-else class="ml-2" :class="item.prices.live !== null ? 'gold' : 'price-empty'">{{ item.prices.live !== null ? item.prices.live : '暂无' }}</span>
               </div>
-              <div class="flex items-center justify-center">
+              <div class="flex items-center justify-center" v-if="props.components.includes('vendor')">
                 <span>商人回收:</span>
                 <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
                 <span v-else class="ml-2" :class="item.prices.vendor !== null ? 'gold' : 'price-empty'">{{ item.prices.vendor !== null ? item.prices.vendor : '暂无' }}</span>
               </div>
-              <!-- <div class="flex items-center justify-center">
+              <div class="flex items-center justify-center" v-if="props.components.includes('density')">
                 <span>每格价值:</span>
                 <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
                 <span v-else class="ml-2" :class="item.prices.density !== null ? 'gold' : 'price-empty'">{{ item.prices.density !== null ? item.prices.density : '暂无' }}</span>
-              </div> -->
+              </div>
             </div>
 
             <div class="tooltip-separator"></div>

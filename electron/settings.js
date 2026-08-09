@@ -8,11 +8,18 @@ import { dirname, join } from 'node:path';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dataDir } from './config.js';
 
+// 查价悬浮窗可显示项。demand/adventure 属「详情」，market/live/vendor/density 属「价格」。
+const COMPONENT_KEYS = [ 'header', 'primary', 'secondary', 'demand', 'adventure', 'quests', 'market', 'live', 'vendor', 'density' ];
+// 旧版粗粒度键（details/pricing）。旧格式没有逐项自定义，检测到时整体落到新默认。
+const LEGACY_COMPONENT_KEYS = [ 'details', 'pricing' ];
+// 新默认：市场均价开、任务物品关（density 默认关）。
+const DEFAULT_COMPONENTS = [ 'header', 'primary', 'secondary', 'demand', 'adventure', 'market', 'live', 'vendor' ];
+
 const defaults = {
   general: {
     launch_on_startup: false,
     alignment: 'attached',
-    components: 'header, primary, secondary, details, quests, pricing',
+    components: DEFAULT_COMPONENTS.join (', '),
     scale: '1.0',
     default_mode: 'manual',
     python_path: 'python',
@@ -66,7 +73,7 @@ settings = merge (defaults, settings);
 
 settings.general.launch_on_startup = toBool (settings.general.launch_on_startup);
 settings.general.alignment = toEnum (settings.general.alignment, [ 'attached', 'top-left', 'top-right', 'bottom-left', 'bottom-right' ]);
-settings.general.components = toList (settings.general.components, [ 'header', 'primary', 'secondary', 'details', 'quests', 'pricing' ]);
+settings.general.components = toComponents (settings.general.components);
 settings.general.scale = parseFloat (settings.general.scale || '1.0');
 settings.general.default_mode = settings.general.default_mode || 'manual';
 settings.general.python_path = settings.general.python_path || 'python';
@@ -116,6 +123,14 @@ function toList (s, values) {
   return s;
 }
 
+function toComponents (s) {
+  if (!s) return [ ...DEFAULT_COMPONENTS ];
+  const list = toList (s, COMPONENT_KEYS.concat (LEGACY_COMPONENT_KEYS));
+  if (!list.length) return [ ...DEFAULT_COMPONENTS ];
+  if (list.some (k => LEGACY_COMPONENT_KEYS.includes (k))) return [ ...DEFAULT_COMPONENTS ];
+  return list.filter (k => COMPONENT_KEYS.includes (k));
+}
+
 function saveSettings () {
   try {
     mkdirSync (dirname (settingsPath), { recursive: true });
@@ -125,4 +140,4 @@ function saveSettings () {
   }
 }
 
-export { settings, saveSettings };
+export { settings, saveSettings, toComponents };

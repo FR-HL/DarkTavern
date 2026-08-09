@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 const _require = createRequire (import.meta.url);
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE, dataDir } from './config.js';
-import { settings, saveSettings } from './settings.js';
+import { settings, saveSettings, toComponents } from './settings.js';
 import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
 import { wire } from './scan.js';
 import * as backend from './backend.js';
@@ -381,6 +381,7 @@ app.on ('ready', async () => {
     default_mode: settings.general.default_mode || 'manual',
     alignment: settings.general.alignment || 'attached',
     scale: settings.general.scale || 1.0,
+    components: settings.general.components || [],
     launch_on_startup: !!settings.general.launch_on_startup,
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+R',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+T',
@@ -452,6 +453,7 @@ app.on ('ready', async () => {
     if (data.default_mode !== undefined) { settings.general.default_mode = data.default_mode; needSend = true; }
     if (data.alignment !== undefined) { settings.general.alignment = data.alignment; needSend = true; }
     if (data.scale !== undefined) { settings.general.scale = parseFloat (data.scale); needSend = true; }
+    if (data.components !== undefined) { settings.general.components = toComponents (data.components); needSend = true; }
     if (data.launch_on_startup !== undefined) {
       settings.general.launch_on_startup = !!data.launch_on_startup;
       app.setLoginItemSettings ({
