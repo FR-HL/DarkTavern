@@ -382,6 +382,8 @@ app.on ('ready', async () => {
     alignment: settings.general.alignment || 'attached',
     scale: settings.general.scale || 1.0,
     components: settings.general.components || [],
+    live_price_mode: settings.general.live_price_mode || 'presence',
+    live_price_relax: settings.general.live_price_relax || 'none',
     launch_on_startup: !!settings.general.launch_on_startup,
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+R',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+T',
@@ -454,6 +456,8 @@ app.on ('ready', async () => {
     if (data.alignment !== undefined) { settings.general.alignment = data.alignment; needSend = true; }
     if (data.scale !== undefined) { settings.general.scale = parseFloat (data.scale); needSend = true; }
     if (data.components !== undefined) { settings.general.components = toComponents (data.components); needSend = true; }
+    if (data.live_price_mode !== undefined && [ 'presence', 'value' ].includes (data.live_price_mode)) settings.general.live_price_mode = data.live_price_mode;
+    if (data.live_price_relax !== undefined && [ 'none', 'all', 'sa', 'b' ].includes (data.live_price_relax)) settings.general.live_price_relax = data.live_price_relax;
     if (data.launch_on_startup !== undefined) {
       settings.general.launch_on_startup = !!data.launch_on_startup;
       app.setLoginItemSettings ({

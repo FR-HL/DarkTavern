@@ -69,6 +69,19 @@ const components = ref ([]);
 const compOpen = reactive ({ basic: true, details: false, price: true, quests: false });
 function toggleCompGroup (key) { compOpen [key] = !compOpen [key]; }
 
+const livePriceMode = ref ('presence');
+const livePriceRelax = ref ('none');
+const LIVE_MODES = [
+  { key: 'presence', label: '只看词条有无' },
+  { key: 'value', label: '按词条数值' },
+];
+const LIVE_RELAX = [
+  { key: 'all', label: '全属性' },
+  { key: 'sa', label: 'S·A级' },
+  { key: 'b', label: 'B级' },
+  { key: 'none', label: '无' },
+];
+
 const settingsStatus = reactive ({ type: '', text: '' });
 const mappingStatus = reactive ({ type: '', text: '' });
 const toastMsg = ref ('');
@@ -531,6 +544,8 @@ async function loadSettings () {
     alignment.value = d.alignment || 'attached';
     scale.value = d.scale || 1.0;
     components.value = Array.isArray (d.components) ? d.components : [];
+    livePriceMode.value = d.live_price_mode || 'presence';
+    livePriceRelax.value = d.live_price_relax || 'none';
     launchOnStartup.value = !!d.launch_on_startup;
     autoCheckUpdate.value = d.auto_check_update !== false;
     developerMode.value = !!d.developer_mode;
@@ -695,6 +710,17 @@ async function toggleComponent (key) {
   const r = await invoke ('settings:save', { components: next });
   if (r?.success) showToast ('已保存 · 下次扫描生效');
   else components.value = prev;
+}
+
+async function setLiveMode (m) {
+  livePriceMode.value = m;
+  const r = await invoke ('settings:save', { live_price_mode: m });
+  if (r?.success) showToast ('已保存 · 下次查价生效');
+}
+async function setLiveRelax (v) {
+  livePriceRelax.value = v;
+  const r = await invoke ('settings:save', { live_price_relax: v });
+  if (r?.success) showToast ('已保存 · 下次查价生效');
 }
 
 async function loadMappings () {
@@ -976,6 +1002,38 @@ onBeforeUnmount (() => {
                   </button>
                   <button class="seg-opt" :class="{ on: scanMode === 'automatic' }" @click="setMode('automatic')">
                     <span class="seg-t">自动</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">市场现价</div>
+          <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">匹配方式</div>
+                <div class="srow-d">按词条数值匹配挂单，还是只看有无该词条</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="seg">
+                  <button v-for="m in LIVE_MODES" :key="m.key" class="seg-opt" :class="{ on: livePriceMode === m.key }" @click="setLiveMode(m.key)">
+                    <span class="seg-t">{{ m.label }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">放宽级别</div>
+                <div class="srow-d">无匹配时逐级放宽的最深级别；全属性最严、无最宽</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="seg">
+                  <button v-for="x in LIVE_RELAX" :key="x.key" class="seg-opt" :class="{ on: livePriceRelax === x.key }" @click="setLiveRelax(x.key)">
+                    <span class="seg-t">{{ x.label }}</span>
                   </button>
                 </div>
               </div>

@@ -175,7 +175,9 @@ async function queryMarketLive (data, scanId, send) {
       const gradeA = sorted.filter (a => a.grade === 'S' || a.grade === 'A');
       const gradeB = sorted.filter (a => a.grade === 'B');
 
-      const attempts = [sorted, gradeA, gradeB, []];
+      const relaxDepth = { all: 0, sa: 1, b: 2, none: 3 } [settings.general.live_price_relax || 'none'] ?? 3;
+      const attempts = [sorted, gradeA, gradeB, []].slice (0, relaxDepth + 1);
+      const byValue = (settings.general.live_price_mode || 'presence') === 'value';
 
       for (const attrs of attempts) {
         const params = new URLSearchParams ();
@@ -189,7 +191,7 @@ async function queryMarketLive (data, scanId, send) {
 
         for (const attr of attrs) {
           const field = attrToField (attr.display);
-          params.set (`secondary[${field}]`, '>=0');
+          params.set (`secondary[${field}]`, byValue ? `>=${attr.value}` : '>=0');
         }
 
         const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });

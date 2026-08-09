@@ -24,6 +24,8 @@ const defaults = {
     default_mode: 'manual',
     python_path: 'python',
     api_key: '',
+    live_price_mode: 'presence',
+    live_price_relax: 'none',
     ball_x: null,
     ball_y: null,
     ball_locked: false,
@@ -78,6 +80,8 @@ settings.general.scale = parseFloat (settings.general.scale || '1.0');
 settings.general.default_mode = settings.general.default_mode || 'manual';
 settings.general.python_path = settings.general.python_path || 'python';
 settings.general.api_key = settings.general.api_key || '';
+settings.general.live_price_mode = toEnum (settings.general.live_price_mode, [ 'presence', 'value' ]);
+settings.general.live_price_relax = toEnum (settings.general.live_price_relax, [ 'none', 'all', 'sa', 'b' ]);
 settings.general.ball_x = settings.general.ball_x == null ? null : parseInt (settings.general.ball_x) || null;
 settings.general.ball_y = settings.general.ball_y == null ? null : parseInt (settings.general.ball_y) || null;
 settings.general.ball_locked = toBool (settings.general.ball_locked);
