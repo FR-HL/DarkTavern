@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron';
+import { createHash } from 'node:crypto';
 import { logger } from './logger.js';
 import { settings, saveSettings } from './settings.js';
 import { getCanScan, resendState, activateGameWindow } from './overlay.js';
@@ -14,7 +15,11 @@ let cache = { text: null, result: null, ts: 0 };
 const CACHE_TTL = 10000;
 let lastAnalyze = null;
 
-export function wire (overlay, sendBall = null) {
+function hashText (t) {
+  return createHash ('sha256').update (String (t || '')).digest ('hex').slice (0, 16);
+}
+
+export function wire (overlay, sendBall = null, hooks = null) {
   const send = (msg, data) => overlay.webContents.send (msg, data);
   const markScan = (active) => { if (sendBall) sendBall ({ active }); };
   const markResult = (data) => { if (sendBall) sendBall ({ scanResult: data }); };
@@ -68,6 +73,32 @@ export function wire (overlay, sendBall = null) {
     send ('hover:preview', { scanId, ...tooltip });
     logger.info (`[Scan] ${tooltip.text}`);
 
+    const key = hashText (tooltip.text);
+    const cached = hooks?.findScanCache ? hooks.findScanCache (key) : null;
+    if (cached) {
+      logger.info (`[Scan] cache hit key=${key} id=${cached.id}`);
+      const attributes = cached.attributes || { primary: [], secondary: [] };
+      const pricing = { market: cached.market ?? null, vendor: cached.vendor ?? null, density: cached.density ?? null };
+      lastAnalyze = {
+        item: { id: cached.id, rarity: cached.rarity, primary: attributes.primary || [], secondary: attributes.secondary || [] },
+        reverse_attributes: cached.reverseAttributes || {},
+      };
+      send ('hover:item', {
+        scanId, ...tooltip,
+        item: lastAnalyze.item,
+        pricing,
+        demand: null, quality: null, adventure_points: null, quests: [],
+      });
+      markResult ({ ok: true, noRecord: true, id: cached.id, name: cached.name || '', market: cached.market ?? null, rarity: cached.rarity || '', pricing, attributes, reverseAttributes: cached.reverseAttributes || {}, key });
+      send ('hover:live-price', { scanId, price: cached.price ?? null, used_affixes: cached.usedAffixes || [] });
+      markResult ({ ok: true, noRecord: true, live: cached.price ?? null, usedAffixes: cached.usedAffixes || [] });
+
+      send ('scan:finish');
+      scanning = false;
+      markScan (false);
+      return;
+    }
+
     let result;
     const now = Date.now ();
     if (cache.text === tooltip.text && (now - cache.ts) < CACHE_TTL) {
@@ -92,10 +123,11 @@ export function wire (overlay, sendBall = null) {
           secondary: result.data?.item?.secondary || [],
         },
         reverseAttributes: result.data?.reverse_attributes || {},
+        key,
       });
       queryMarketLive (result.data, scanId, (msg, payload) => {
         send (msg, payload);
-        if (msg === 'hover:live-price') markResult ({ ok: true, live: payload?.price ?? null });
+        if (msg === 'hover:live-price') markResult ({ ok: true, live: payload?.price ?? null, usedAffixes: payload?.used_affixes || [] });
       });
     } else {
       send ('hover:error', {
@@ -149,6 +181,7 @@ export function wire (overlay, sendBall = null) {
       catch (err) { logger.error (`[MarketRequery] ${err.message}`); }
     }
     send ('hover:live-price', { scanId, price, used_affixes: attrs.map (a => a.display) });
+    markResult ({ ok: true, live: price ?? null, usedAffixes: attrs.map (a => a.display), newRecord: true });
   });
 }
 

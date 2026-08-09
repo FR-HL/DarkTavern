@@ -7,7 +7,7 @@ import { createRequire } from 'node:module';
 const _require = createRequire (import.meta.url);
 import { logger, logPath } from './logger.js';
 import { ROOT, SOURCE, dataDir } from './config.js';
-import { settings, saveSettings, toComponents } from './settings.js';
+import { settings, saveSettings, toComponents, toDays } from './settings.js';
 import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
 import { wire } from './scan.js';
 import * as backend from './backend.js';
@@ -151,17 +151,21 @@ app.on ('ready', async () => {
       if (r.pricing !== undefined) lastScan.pricing = r.pricing;
       if (r.attributes !== undefined) lastScan.attributes = r.attributes;
       if (r.reverseAttributes !== undefined) lastScan.reverseAttributes = r.reverseAttributes;
+      if (r.usedAffixes !== undefined) lastScan.usedAffixes = r.usedAffixes;
+      if (r.key !== undefined) lastScan.key = r.key;
       if (r.message !== undefined) lastScan.message = r.message;
       if (isNewScan) {
         lastScan.id = r.id;
         lastScan.ts = Date.now ();
         sessionScanCount++;
+      } else if (r.newRecord) {
+        lastScan.ts = Date.now ();
       }
       lastScan.zhName = findZhName (lastScan.id);
-      if (lastScan.ok && lastScan.id) upsertHistoryRecord ();
+      if (lastScan.ok && lastScan.id && !r.noRecord) upsertHistoryRecord ();
       sendBallScanResult ();
     }
-  });
+  }, { findScanCache });
 
   globalShortcut.register ('F5', () => openSettingsWindow ('settings'));
   globalShortcut.register ('F6', () => openSettingsWindow ('mapping'));
@@ -275,6 +279,7 @@ app.on ('ready', async () => {
 
   ipcMain.handle ('history:list', () => {
     loadHistory ();
+    pruneHistory ();
     return { records: [...priceHistory].reverse () };
   });
   ipcMain.handle ('history:clear', () => {
@@ -384,6 +389,8 @@ app.on ('ready', async () => {
     components: settings.general.components || [],
     live_price_mode: settings.general.live_price_mode || 'presence',
     live_price_relax: settings.general.live_price_relax || 'none',
+    scan_cache_days: settings.general.scan_cache_days ?? 1,
+    history_days: settings.general.history_days ?? 3,
     launch_on_startup: !!settings.general.launch_on_startup,
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+R',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+T',
@@ -458,6 +465,8 @@ app.on ('ready', async () => {
     if (data.components !== undefined) { settings.general.components = toComponents (data.components); needSend = true; }
     if (data.live_price_mode !== undefined && [ 'presence', 'value' ].includes (data.live_price_mode)) settings.general.live_price_mode = data.live_price_mode;
     if (data.live_price_relax !== undefined && [ 'none', 'all', 'sa', 'b' ].includes (data.live_price_relax)) settings.general.live_price_relax = data.live_price_relax;
+    if (data.scan_cache_days !== undefined) settings.general.scan_cache_days = toDays (data.scan_cache_days, settings.general.scan_cache_days);
+    if (data.history_days !== undefined) settings.general.history_days = toDays (data.history_days, settings.general.history_days);
     if (data.launch_on_startup !== undefined) {
       settings.general.launch_on_startup = !!data.launch_on_startup;
       app.setLoginItemSettings ({
@@ -1073,9 +1082,32 @@ function findZhName (rawId) {
 
 // ── 查价记录（保存 3 天内查过的物品） ──
 
-const HISTORY_TTL = 3 * 24 * 3600 * 1000;
-const HISTORY_MAX = 1000;
 let priceHistory = null;
+
+function historyTtl () {
+  return (settings.general.history_days ?? 3) * 24 * 3600 * 1000;
+}
+
+function scanCacheTtl () {
+  return (settings.general.scan_cache_days ?? 1) * 24 * 3600 * 1000;
+}
+
+function pruneHistory () {
+  const cutoff = Date.now () - historyTtl ();
+  priceHistory = priceHistory.filter ((r) => r.ts >= cutoff);
+}
+
+function findScanCache (key) {
+  if (!key) return null;
+  const ttl = scanCacheTtl ();
+  if (ttl <= 0) return null;
+  const cutoff = Date.now () - ttl;
+  let best = null;
+  for (const r of loadHistory ()) {
+    if (r.key === key && r.ts >= cutoff && (!best || r.ts > best.ts)) best = r;
+  }
+  return best;
+}
 
 function historyPath () {
   return join (dataDir (app), 'price_history.json');
@@ -1114,6 +1146,8 @@ function upsertHistoryRecord () {
     density: lastScan.pricing?.density ?? null,
     attributes: lastScan.attributes,
     reverseAttributes: lastScan.reverseAttributes,
+    usedAffixes: lastScan.usedAffixes || [],
+    key: lastScan.key || '',
   };
   const last = priceHistory[priceHistory.length - 1];
   if (last && last.id === rec.id && last.ts === rec.ts) {
@@ -1121,9 +1155,7 @@ function upsertHistoryRecord () {
   } else {
     priceHistory.push (rec);
   }
-  const cutoff = Date.now () - HISTORY_TTL;
-  priceHistory = priceHistory.filter ((r) => r.ts >= cutoff);
-  if (priceHistory.length > HISTORY_MAX) priceHistory = priceHistory.slice (-HISTORY_MAX);
+  pruneHistory ();
   saveHistory ();
   notifyHome ('history:updated', {});
 }

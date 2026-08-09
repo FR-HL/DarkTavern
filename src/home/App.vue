@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { RARITY_CN, rarityColor } from '@/shared/lib/rarity.js';
+import { ATTR_ZH, attrField } from '@/shared/lib/stats-zh.js';
 
 import donorKk from '@assets/images/sponsors/donor_kk.webp';
 import donorYueliang from '@assets/images/sponsors/yueliang.webp';
@@ -71,6 +72,8 @@ function toggleCompGroup (key) { compOpen [key] = !compOpen [key]; }
 
 const livePriceMode = ref ('presence');
 const livePriceRelax = ref ('none');
+const scanCacheDays = ref (1);
+const historyDays = ref (3);
 const LIVE_MODES = [
   { key: 'presence', label: '只看词条有无' },
   { key: 'value', label: '按词条数值' },
@@ -388,12 +391,16 @@ function toggleHistoryRow (idx) {
 
 function attrZh (rec, display) {
   const zh = rec.reverseAttributes?.[display];
-  return zh || display;
+  return zh || ATTR_ZH[attrField (display)] || display;
 }
 
-function attrVal (a) {
-  if (a.min != null) return `${a.min} - ${a.max}`;
-  if (a.value != null) return a.value;
+function attrVal (a, signed = false) {
+  if (a.value != null) {
+    const sign = signed && a.value > 0 ? '+' : '';
+    return sign + a.value + (a.is_percentage ? '%' : '');
+  }
+  if (a.min != null && a.min !== a.max) return `${a.min} - ${a.max}`;
+  if (a.min != null) return String (a.min);
   return '';
 }
 
@@ -546,6 +553,8 @@ async function loadSettings () {
     components.value = Array.isArray (d.components) ? d.components : [];
     livePriceMode.value = d.live_price_mode || 'presence';
     livePriceRelax.value = d.live_price_relax || 'none';
+    scanCacheDays.value = d.scan_cache_days ?? 1;
+    historyDays.value = d.history_days ?? 3;
     launchOnStartup.value = !!d.launch_on_startup;
     autoCheckUpdate.value = d.auto_check_update !== false;
     developerMode.value = !!d.developer_mode;
@@ -721,6 +730,20 @@ async function setLiveRelax (v) {
   livePriceRelax.value = v;
   const r = await invoke ('settings:save', { live_price_relax: v });
   if (r?.success) showToast ('已保存 · 下次查价生效');
+}
+async function setScanCacheDays (v) {
+  const n = parseFloat (v);
+  if (isNaN (n) || n < 0 || n > 365) { showToast ('请输入 0-365 的天数'); return; }
+  scanCacheDays.value = n;
+  const r = await invoke ('settings:save', { scan_cache_days: n });
+  if (r?.success) showToast ('已保存 · 下次扫描生效');
+}
+async function setHistoryDays (v) {
+  const n = parseFloat (v);
+  if (isNaN (n) || n < 0 || n > 365) { showToast ('请输入 0-365 的天数'); return; }
+  historyDays.value = n;
+  const r = await invoke ('settings:save', { history_days: n });
+  if (r?.success) { showToast ('已保存'); loadHistory (); }
 }
 
 async function loadMappings () {
@@ -1042,6 +1065,36 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="sec">
+          <div class="sec-label">查价记录</div>
+          <div class="card">
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">直显缓存</div>
+                <div class="srow-d">期限内重扫同一物品直接显示保存的词条与价格，不再请求接口；0 为关闭</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="days-ctl">
+                  <input type="text" inputmode="decimal" :value="scanCacheDays" @change="setScanCacheDays ($event.target.value)">
+                  <span class="range-val">天</span>
+                </div>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">记录保留</div>
+                <div class="srow-d">查价记录保留天数，超期自动清理</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="days-ctl">
+                  <input type="text" inputmode="decimal" :value="historyDays" @change="setHistoryDays ($event.target.value)">
+                  <span class="range-val">天</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
           <div class="sec-label">悬浮窗</div>
           <div class="card">
             <div class="srow">
@@ -1106,7 +1159,7 @@ onBeforeUnmount (() => {
       <!-- ============ 查价记录 ============ -->
       <div class="pane" :class="{ active: pane === 'history' }">
         <div class="page-title">查价记录</div>
-        <div class="page-sub">最近 3 天内查询过的物品，自动保存；每次查价的价格数据完整记录。</div>
+        <div class="page-sub">最近 {{ historyDays }} 天内查询过的物品，自动保存；每次查价的价格数据完整记录。</div>
 
         <div class="map-toolbar">
           <div class="hist-count" v-if="historyRecords.length">共 <b>{{ historyRecords.length }}</b> 条记录</div>
@@ -1143,6 +1196,12 @@ onBeforeUnmount (() => {
                 <tr v-if="expandedHistory === rec.ts" class="hist-detail-row">
                   <td colspan="6">
                     <div class="hist-detail">
+                      <div v-if="rec.usedAffixes?.length" class="attr-group">
+                        <div class="attr-group-title">查价词条</div>
+                        <div class="attr-list">
+                          <span v-for="(d, i) in rec.usedAffixes" :key="'u'+i" class="attr-chip">{{ attrZh (rec, d) }}</span>
+                        </div>
+                      </div>
                       <div v-if="rec.attributes?.primary?.length" class="attr-group">
                         <div class="attr-group-title">主属性</div>
                         <div class="attr-list">
@@ -1153,7 +1212,7 @@ onBeforeUnmount (() => {
                         <div class="attr-group-title">副属性</div>
                         <div class="attr-list">
                           <span v-for="(a, i) in rec.attributes.secondary" :key="'s'+i" class="attr-chip">
-                            {{ attrZh (rec, a.display) }}：{{ attrVal (a) }}<em v-if="a.grade" class="attr-grade" :class="gradeCls (a.grade)">{{ a.grade }}</em>
+                            {{ attrZh (rec, a.display) }}：{{ attrVal (a, true) }}<em v-if="a.grade" class="attr-grade" :class="gradeCls (a.grade)">{{ a.grade }}</em>
                           </span>
                         </div>
                       </div>

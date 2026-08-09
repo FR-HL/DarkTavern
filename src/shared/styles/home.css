@@ -403,6 +403,10 @@ input:focus, select:focus {
 .align-dot[data-pos="bottom-left"] { bottom: 3px; left: 3px; }
 .align-dot[data-pos="bottom-right"] { bottom: 3px; right: 3px; }
 
+/* ===== days input ===== */
+.days-ctl { display: flex; align-items: center; gap: 8px; }
+.days-ctl input { width: 64px; text-align: center; }
+
 /* ===== slider (Fluent style) ===== */
 .scale-ctl { display: flex; align-items: center; gap: 13px; width: 290px; }
 .scale-ctl input[type="range"] { flex: 1; }

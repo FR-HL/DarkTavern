@@ -26,6 +26,8 @@ const defaults = {
     api_key: '',
     live_price_mode: 'presence',
     live_price_relax: 'none',
+    scan_cache_days: '1',
+    history_days: '3',
     ball_x: null,
     ball_y: null,
     ball_locked: false,
@@ -82,6 +84,8 @@ settings.general.python_path = settings.general.python_path || 'python';
 settings.general.api_key = settings.general.api_key || '';
 settings.general.live_price_mode = toEnum (settings.general.live_price_mode, [ 'presence', 'value' ]);
 settings.general.live_price_relax = toEnum (settings.general.live_price_relax, [ 'none', 'all', 'sa', 'b' ]);
+settings.general.scan_cache_days = toDays (settings.general.scan_cache_days, 1);
+settings.general.history_days = toDays (settings.general.history_days, 3);
 settings.general.ball_x = settings.general.ball_x == null ? null : parseInt (settings.general.ball_x) || null;
 settings.general.ball_y = settings.general.ball_y == null ? null : parseInt (settings.general.ball_y) || null;
 settings.general.ball_locked = toBool (settings.general.ball_locked);
@@ -119,6 +123,12 @@ function toEnum (s, values) {
   return s;
 }
 
+function toDays (s, def) {
+  const n = parseFloat (s);
+  if (isNaN (n) || n < 0) return def;
+  return Math.min (365, n);
+}
+
 function toList (s, values) {
   if (!s) return values;
   if (Array.isArray (s)) return s.filter (v => values.includes (v));
@@ -144,4 +154,4 @@ function saveSettings () {
   }
 }
 
-export { settings, saveSettings, toComponents };
+export { settings, saveSettings, toComponents, toDays };
