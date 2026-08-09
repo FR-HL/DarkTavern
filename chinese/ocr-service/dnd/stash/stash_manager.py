@@ -84,6 +84,29 @@ def _resolve_category_target(item_data, slot_map, category_map, misc_map):
     return None
 
 
+def _resolve_precise_target(item, item_data, precise_rules):
+    """Return the stash id of the first precise rule whose keyword occurs in
+    the item name (English) or localised name (name_zh), case-insensitive
+    substring match; None when no rule matches.
+    """
+    if not precise_rules:
+        return None
+    name = str(getattr(item, "name", "") or "").lower()
+    name_zh = str((item_data or {}).get("name_zh") or "").lower()
+    if not name and not name_zh:
+        return None
+    for rule in precise_rules:
+        key = str(rule.get("name") or "").strip().lower()
+        if not key:
+            continue
+        if (name and key in name) or (name_zh and key in name_zh):
+            try:
+                return int(rule.get("stash"))
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
 # Category ordering used by auto-categorize (matches the frontend labels).
 _AUTO_CATEGORY_ORDER = ["Weapon", "Armor", "Utility", "Accessory", "Misc", "other"]
 
@@ -2091,31 +2114,18 @@ class StashManager:
                     return True
         return False
 
-    def _pick_repack_target(self, sims, tab_order, item, mode="front"):
+    def _pick_repack_target(self, sims, tab_order, item):
         """Choose the destination stash for one item during repack.
 
-        - "front": first stash (in tab order) that fits — items pile up in
-          the front stashes.
-        - "balanced": the stash with the lowest current fill ratio that
-          still fits the item — keeps every stash evenly occupied.
+        The first stash (in tab order) that fits — items pile up in the
+        front stashes.
         Returns (stash_id, Point) or (None, None).
         """
-        best = None
-        best_fill = None
         for sid in tab_order:
             if not self._sim_can_fit(sims[sid], item):
                 continue
-            if mode == "front":
-                return sid, self._sim_find(sims[sid], item)
-            grid = sims[sid]["grid"]
-            occupied = sum(1 for row in grid for c in row if c != 0 and c is not None)
-            fill = occupied / max(1, sims[sid]["width"] * sims[sid]["height"])
-            if best is None or fill < best_fill:
-                best = sid
-                best_fill = fill
-        if best is None:
-            return None, None
-        return best, self._sim_find(sims[best], item)
+            return sid, self._sim_find(sims[sid], item)
+        return None, None
 
     def cross_sort(self, character_id, config, cancel_event=None, overlay_session=None, progress_cb=None):
         """Configurable cross-stash organisation.
@@ -2262,10 +2272,17 @@ class StashManager:
                 category_map = _build_auto_category_map(tab_order)
                 slot_map = {}
                 misc_map = {}
+                precise_rules = []
             else:
                 category_map = config.get("category_map") or {}
                 slot_map = config.get("slot_type_map") or {}
                 misc_map = config.get("misc_map") or {}
+                precise_rules = [
+                    r for r in (config.get("precise_rules") or [])
+                    if isinstance(r, dict)
+                    and str(r.get("name") or "").strip()
+                    and str(r.get("stash") or "").strip()
+                ]
             def _categorize_step():
                 from dnd.items.game_data import item_data_manager
                 sims = self._sim_snapshot(storages, tab_order)
@@ -2279,9 +2296,11 @@ class StashManager:
                         if cancel_event and cancel_event.is_set():
                             break
                         item_data = item_data_manager.get_item_data(getattr(item, "item_id", "")) or {}
-                        dst_sid = _resolve_category_target(
-                            item_data, slot_map, category_map, misc_map
-                        )
+                        dst_sid = _resolve_precise_target(item, item_data, precise_rules)
+                        if dst_sid is None:
+                            dst_sid = _resolve_category_target(
+                                item_data, slot_map, category_map, misc_map
+                            )
                         if dst_sid is None or dst_sid == src_sid or dst_sid not in storages:
                             continue
                         pos = self._sim_find(sims[dst_sid], item)
@@ -2328,7 +2347,6 @@ class StashManager:
             run_step("归类整理", _categorize_step)
 
         if config.get("repack"):
-            repack_mode = config.get("repack_mode", "front")
             def _repack_step():
                 from dnd.items.item import Item
                 for sid in tab_order:
@@ -2337,20 +2355,7 @@ class StashManager:
                 for sid in tab_order:
                     for it in storages[sid].pq:
                         items.append((sid, it))
-                if repack_mode == "balanced":
-                    # High-fill stashes first so their items grab the empty
-                    # space before smaller items fragment it.
-                    fills = {}
-                    for sid in tab_order:
-                        st = storages[sid]
-                        seen = set()
-                        for row in st.grid:
-                            for c in row:
-                                if c != 0 and c is not None:
-                                    seen.add(id(c))
-                        fills[sid] = len(seen) / max(1, st.width * st.height)
-                    items.sort(key=lambda e: -fills[e[0]])
-                elif Item.sort_order:
+                if Item.sort_order:
                     try:
                         comparator = Item.build_sort_comparator(Item.sort_order)
                         items.sort(key=lambda e: e[1], cmp=comparator)
@@ -2361,9 +2366,7 @@ class StashManager:
                 for src_sid, item in items:
                     if cancel_event and cancel_event.is_set():
                         break
-                    dst_sid, pos = self._pick_repack_target(
-                        sims, tab_order, item, repack_mode
-                    )
+                    dst_sid, pos = self._pick_repack_target(sims, tab_order, item)
                     if dst_sid is None:
                         continue
                     if dst_sid != src_sid:
@@ -2379,8 +2382,7 @@ class StashManager:
                                 if g[x][y] == item:
                                     g[x][y] = 0
                 done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
-                label = "均衡" if repack_mode == "balanced" else "前移"
-                return f"{label} {done}/{len(moves)} 件"
+                return f"前移 {done}/{len(moves)} 件"
             run_step("全局重排", _repack_step)
 
         if config.get("arrange"):
@@ -2396,6 +2398,125 @@ class StashManager:
         if cancel_event and cancel_event.is_set():
             return False, "跨仓整理已取消", results
         return True, "跨仓整理完成", results
+
+    def precise_sort(self, character_id, rules, arrange=True, cancel_event=None, overlay_session=None, progress_cb=None):
+        """Move items matching the given precise rules to their target
+        stashes, then optionally arrange each stash internally.
+
+        ``rules``: list of dicts with ``name`` (substring keyword) and
+        ``stash`` (target stash id).
+
+        Returns ``(success, message, results)``.
+        """
+        from dnd.sort import macros
+        from dnd.stash.storage import StashType, Storage
+
+        session = overlay_session or NullOverlaySession()
+
+        from dnd.settings import settings_manager as _sm_refresh
+        if _sm_refresh.get('autoRefreshBeforeSort', True):
+            refreshed, note, received = self.refresh_character_data(
+                character_id=character_id,
+                cancel_event=cancel_event,
+            )
+            if refreshed:
+                session.add_log("Inventory data refreshed.")
+            elif note == "cancelled":
+                return False, "精准整理已取消", []
+            elif note == "mismatch":
+                session.add_log(
+                    f"Warning: in-game character is {received}, not the selected character."
+                )
+            else:
+                session.add_log(f"Auto data refresh skipped ({note}) — using existing data.")
+
+        char = self.characters_cache.get(str(character_id))
+        if not char:
+            return False, "Character not found", []
+
+        rules = [
+            r for r in (rules or [])
+            if isinstance(r, dict)
+            and str(r.get("name") or "").strip()
+            and str(r.get("stash") or "").strip()
+        ]
+        if not rules:
+            return False, "No precise rules", []
+
+        file_path = os.path.join(self.data_dir, f"{character_id}.json")
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                raw = json.load(f)
+            stashes = parse_stashes(raw)
+        except Exception as e:
+            logger.error(f"Error loading character data for precise sort: {e}")
+            return False, "Unable to read character data", []
+
+        inv_items = stashes.get(StashType.BAG.value, [])
+        owned_ids = [
+            int(s) for s in stashes.keys()
+            if int(s) not in (StashType.BAG.value, StashType.EQUIPMENT.value)
+        ]
+        macros.build_dynamic_tab_mapping([str(s) for s in owned_ids])
+        tab_order = [int(s) for s in macros.TAB_TYPE_ORDER if s in owned_ids]
+        from dnd.settings import settings_manager as _sm
+        _locked = set(int(x) for x in (_sm.get("lockedStashes", []) or []))
+        if _locked:
+            tab_order = [s for s in tab_order if s not in _locked]
+        storages = {sid: Storage(sid, stashes.get(sid, [])) for sid in tab_order}
+        inventory = Storage(StashType.BAG.value, inv_items)
+
+        if not macros.force_activate_game_window():
+            return False, "Game window not found", []
+
+        from dnd.items.game_data import item_data_manager
+        sims = self._sim_snapshot(storages, tab_order)
+        moves = []
+        skipped = 0
+        for src_sid in tab_order:
+            if cancel_event and cancel_event.is_set():
+                break
+            for item in list(storages[src_sid].pq):
+                if cancel_event and cancel_event.is_set():
+                    break
+                item_data = item_data_manager.get_item_data(getattr(item, "item_id", "")) or {}
+                dst_sid = _resolve_precise_target(item, item_data, rules)
+                if dst_sid is None or dst_sid == src_sid or dst_sid not in storages:
+                    continue
+                pos = self._sim_find(sims[dst_sid], item)
+                if pos is None:
+                    skipped += 1
+                    continue
+                moves.append((src_sid, item, dst_sid, pos))
+
+        if cancel_event and cancel_event.is_set():
+            return False, "精准整理已取消", []
+
+        done = self._execute_moves_batched(storages, inventory, moves, cancel_event)
+        detail = f"移动 {done}/{len(moves)} 件"
+        if skipped:
+            detail += f"（{skipped} 件目标仓库已满）"
+        results = [{"step": "精准移动", "ok": True, "detail": detail}]
+        if arrange:
+            target_ids = set()
+            for r in rules:
+                try:
+                    target_ids.add(int(r.get("stash")))
+                except (TypeError, ValueError):
+                    continue
+            valid = target_ids & set(tab_order)
+            total = 0
+            for sid in tab_order:
+                if sid not in valid:
+                    continue
+                if cancel_event and cancel_event.is_set():
+                    break
+                total += self._arrange_stash(storages, inventory, sid, cancel_event)
+            if valid:
+                results.append({"step": "仓内整理", "ok": True, "detail": f"整理 {total} 件"})
+        if cancel_event and cancel_event.is_set():
+            return False, "精准整理已取消", results
+        return True, "精准整理完成", results
 
     def _sim_snapshot(self, storages, tab_order):
         """Lightweight grid copies used for placement planning (target stash

@@ -312,6 +312,10 @@ export async function crossSortStart (params) {
   return await post ('/sort/cross', params) || { error: 'Service unavailable' };
 }
 
+export async function preciseSortStart (params) {
+  return await post ('/sort/precise', params) || { error: 'Service unavailable' };
+}
+
 export async function sortCancel () {
   return await post ('/sort/cancel') || { error: 'Service unavailable' };
 }

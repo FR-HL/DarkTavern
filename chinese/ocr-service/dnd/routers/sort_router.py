@@ -27,6 +27,12 @@ class CrossSortRequest(BaseModel):
     config: dict = {}
 
 
+class PreciseSortRequest(BaseModel):
+    character_id: str
+    rules: List[dict] = []
+    arrange: Optional[bool] = True
+
+
 class SortGroupModeUpdate(BaseModel):
     mode: str = "none"
 
@@ -189,6 +195,26 @@ def cross_sort_start(body: CrossSortRequest):
             "uipi": status,
         }
     return start_cross_sort(character_id=body.character_id, config=body.config or {})
+
+
+@router.post("/precise")
+def precise_sort_start(body: PreciseSortRequest):
+    from dnd import uipi
+    from dnd.service import start_precise_sort
+
+    status = uipi.check_uipi_status()
+    if status["blocked"]:
+        return {
+            "success": False,
+            "error": (
+                "检测到游戏以管理员权限运行，而 冒险者侍从 不是管理员。"
+                "Windows 会拦截鼠标模拟输入，整理将无效。"
+                "请以管理员身份运行 冒险者侍从（右键→以管理员身份运行），"
+                "或取消游戏的管理员权限后重试。"
+            ),
+            "uipi": status,
+        }
+    return start_precise_sort(character_id=body.character_id, rules=body.rules or [], arrange=body.arrange)
 
 
 @router.post("/cancel")

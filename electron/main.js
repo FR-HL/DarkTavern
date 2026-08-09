@@ -343,6 +343,16 @@ app.on ('ready', async () => {
       return { success: false, error: 'handler_error: ' + (err?.message || String (err)) };
     }
   });
+  ipcMain.handle ('dnd:precise-sort-start', async (e, params) => {
+    try {
+      const r = await backend.preciseSortStart (params);
+      if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
+      return r;
+    } catch (err) {
+      logger.error (`precise-sort-start handler error: ${err?.message}`, err);
+      return { success: false, error: 'handler_error: ' + (err?.message || String (err)) };
+    }
+  });
   ipcMain.handle ('dnd:sort-cancel', () => backend.sortCancel ());
   ipcMain.handle ('dnd:sort-status', () => backend.sortStatus ());
   ipcMain.handle ('dnd:sort-uipi', () => backend.getSortUipiStatus ());

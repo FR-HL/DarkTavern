@@ -295,7 +295,8 @@ const MISC_LABELS = {
 };
 const CATEGORY_EXAMPLES = { Weapon: '长剑', Armor: '皮革手套', Utility: '火把', Accessory: '勇气之戒', Misc: '鹅卵石', other: '未识别物品兜底' };
 const MISC_EXAMPLES = { gem: '钻石（普通）', ore: '铁矿', material: '巨型蝙蝠翅膀', consumable: '麦酒', junk: '发霉的面包' };
-const crossCfg = ref ({ categorize: true, categorize_mode: 'auto', category_map: {}, misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
+const TAB_TYPE_ORDER = ['4', '5', '6', '7', '8', '9', '20', '21', '30'];
+const crossCfg = ref ({ categorize: true, categorize_mode: 'auto', category_map: {}, misc_map: {}, precise_rules: [], repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true });
 const crossNote = ref ('');
 const crossSteps = ref ([]);
 const crossStepIndex = ref (0);
@@ -306,14 +307,45 @@ const stashOptions = ref ([]);
 const crossPosition = computed ({
   get: () => crossCfg.value.categorize
     ? (crossCfg.value.categorize_mode === 'manual' ? 'category' : 'auto')
-    : crossCfg.value.repack ? (crossCfg.value.repack_mode === 'balanced' ? 'balanced' : 'front') : 'auto',
+    : crossCfg.value.repack ? 'front' : 'auto',
   set: v => {
     crossCfg.value.categorize = v === 'category' || v === 'auto';
     crossCfg.value.categorize_mode = v === 'category' ? 'manual' : 'auto';
-    crossCfg.value.repack = v === 'front' || v === 'balanced';
+    crossCfg.value.repack = v === 'front';
     if (crossCfg.value.repack) crossCfg.value.repack_mode = v;
   },
 });
+
+function addPreciseRule () {
+  crossCfg.value.precise_rules.push ({ name: '', stash: String (stashOptions.value[0]?.id ?? '') });
+}
+
+async function startPreciseSort () {
+  if (!props.charId) { crossNote.value = '请先在角色仓库页选择角色'; return; }
+  const rules = crossCfg.value.precise_rules.filter (r => (r.name || '').trim () && r.stash);
+  if (!rules.length) { crossNote.value = '请先添加精准移动规则'; return; }
+  if (!(await confirmCharacter ())) return;
+  error.value = '';
+  result.value = null;
+  crossNote.value = '';
+  sorting.value = true;
+  kind.value = 'precise';
+  crossResults.value = [];
+  try {
+    const r = await invoke ('dnd:precise-sort-start', {
+      character_id: props.charId,
+      rules: JSON.parse (JSON.stringify (rules)),
+      arrange: crossCfg.value.arrange,
+    });
+    if (!r?.success) {
+      error.value = r?.error || ('启动失败：' + JSON.stringify (r));
+      sorting.value = false;
+    }
+  } catch (e) {
+    error.value = '启动失败：' + String (e);
+    sorting.value = false;
+  }
+}
 
 async function loadStashOptions () {
   if (!props.charId) { stashOptions.value = []; return; }
@@ -325,18 +357,29 @@ async function loadStashOptions () {
       .map (id => ({ id, label: stashes[id].label || `仓库${id}` }));
     const cfg = crossCfg.value;
     if (stashOptions.value.length) {
-      const s = stashOptions.value;
-      const defaults = {
-        Weapon: String (s[0]?.id ?? ''), Armor: String (s[0]?.id ?? ''),
-        Utility: String (s[1]?.id ?? s[0]?.id ?? ''), Accessory: String (s[1]?.id ?? s[0]?.id ?? ''),
-        Misc: String (s[2]?.id ?? s[0]?.id ?? ''), other: String (s[2]?.id ?? s[0]?.id ?? ''),
-      };
+      let locked = new Set ();
+      try {
+        const r = await invoke ('dnd:stash-locks-get');
+        locked = new Set ((r?.locked || []).map (String));
+      } catch (e) {}
+      const pool = stashOptions.value.filter (o => TAB_TYPE_ORDER.includes (o.id) && !locked.has (o.id));
+      const s = pool.length ? pool : stashOptions.value;
+      const defaults = {};
+      Object.keys (CATEGORY_LABELS).forEach ((t, i) => {
+        defaults[t] = String (s[i % s.length]?.id ?? '');
+      });
       const valid = new Set (stashOptions.value.map (o => o.id));
-      for (const t of Object.keys (CATEGORY_LABELS)) {
-        if (!cfg.category_map[t] || !valid.has (cfg.category_map[t])) cfg.category_map[t] = defaults[t];
-      }
-      for (const t of Object.keys (MISC_LABELS)) {
-        if (!cfg.misc_map[t] || !valid.has (cfg.misc_map[t])) cfg.misc_map[t] = cfg.category_map.Misc;
+      if (!cfg.auto_seeded) {
+        for (const t of Object.keys (CATEGORY_LABELS)) cfg.category_map[t] = defaults[t];
+        for (const t of Object.keys (MISC_LABELS)) cfg.misc_map[t] = '';
+        cfg.auto_seeded = true;
+      } else {
+        for (const t of Object.keys (CATEGORY_LABELS)) {
+          if (!cfg.category_map[t] || !valid.has (cfg.category_map[t])) cfg.category_map[t] = defaults[t];
+        }
+        for (const t of Object.keys (MISC_LABELS)) {
+          if (!cfg.misc_map[t] || !valid.has (cfg.misc_map[t])) cfg.misc_map[t] = '';
+        }
       }
     }
   } catch (e) {}
@@ -348,11 +391,12 @@ async function loadCrossConfig () {
     if (d && d.cross_config) {
       const merged = {
         categorize: true, categorize_mode: 'auto', category_map: {},
-        misc_map: {}, repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true,
+        misc_map: {}, precise_rules: [], repack: false, repack_mode: 'front', evacuate: false, evacuate_stashes: [], arrange: true, auto_seeded: false,
         ...d.cross_config,
       };
       delete merged.merge;
       delete merged.clear_bag;
+      if (merged.repack && merged.repack_mode === 'balanced') merged.repack_mode = 'front';
       if (!merged.categorize && !merged.repack) {
         merged.categorize = true;
         merged.categorize_mode = 'auto';
@@ -715,7 +759,6 @@ watch (() => props.charId, () => loadStashOptions ());
               <button class="seg-opt" :class="{ on: crossPosition === 'auto' }" @click="crossPosition = 'auto'"><span class="seg-t">自动归类</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'category' }" @click="crossPosition = 'category'"><span class="seg-t">手动定义</span></button>
               <button class="seg-opt" :class="{ on: crossPosition === 'front' }" @click="crossPosition = 'front'"><span class="seg-t">密集整理</span></button>
-              <button class="seg-opt" :class="{ on: crossPosition === 'balanced' }" @click="crossPosition = 'balanced'"><span class="seg-t">均衡分散</span></button>
             </div>
           </div>
         </div>
@@ -730,6 +773,7 @@ watch (() => props.charId, () => loadStashOptions ());
             <label v-for="(label, type) in MISC_LABELS" :key="'m' + type" class="cat-cell">
               <span class="cat-name">{{ label }}<span class="cat-eg">{{ MISC_EXAMPLES[type] }}</span></span>
               <select class="cross-select" v-model="crossCfg.misc_map[type]">
+                <option value="">默认</option>
                 <option v-for="s in stashOptions" :key="s.id" :value="String(s.id)">{{ s.label }}</option>
               </select>
             </label>
@@ -770,7 +814,63 @@ watch (() => props.charId, () => loadStashOptions ());
         </div>
         <div v-if="kind === 'cross' && error" class="status error">{{ error }}</div>
         <div v-if="kind === 'cross' && result" class="status" :class="result.success ? 'success' : 'error'">{{ result.message }}</div>
-        <div v-if="crossResults.length" class="sort-all-results">
+        <div v-if="kind === 'cross' && crossResults.length" class="sort-all-results">
+          <div v-for="(r, i) in crossResults" :key="i" class="sar-row" :class="r.ok ? 'ok' : 'bad'">
+            <span class="sar-name">{{ r.step }}</span>
+            <span class="sar-msg">{{ r.ok ? '✓' : '✗' }} {{ r.detail }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">精准整理</div>
+      <div class="card">
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">开始精准整理</div>
+            <div class="srow-d">只按下方规则移动匹配物品，不做其他整理</div>
+          </div>
+          <div class="srow-ctl">
+            <button v-if="!(sorting && kind === 'precise')" class="btn primary" :disabled="!props.charId || sorting" @click="startPreciseSort">开始精准整理</button>
+            <button v-else class="btn danger" @click="cancelSort">取消整理</button>
+            <span v-if="crossNote" class="cal-note">{{ crossNote }}</span>
+          </div>
+        </div>
+          <div class="srow">
+            <div class="srow-info">
+              <div class="srow-t">仓内整理</div>
+              <div class="srow-d">移动后做各仓库内部摆放优化</div>
+            </div>
+            <div class="srow-ctl">
+              <label class="switch"><input type="checkbox" v-model="crossCfg.arrange"><span class="track"></span></label>
+            </div>
+          </div>
+          <div class="precise">
+            <div class="precise-head">
+              <span class="precise-t">精准移动规则</span>
+            <span class="precise-d">物品名包含关键词的物品移到指定仓库（子串匹配，规则从上到下优先；跨仓整理手动定义时也自动应用）</span>
+          </div>
+          <div class="precise-list">
+            <div v-for="(rule, i) in crossCfg.precise_rules" :key="i" class="precise-row">
+              <input class="precise-name" v-model="rule.name" placeholder="物品名称关键词">
+              <select class="cross-select precise-stash" v-model="rule.stash">
+                <option v-for="s in stashOptions" :key="s.id" :value="String(s.id)">{{ s.label }}</option>
+              </select>
+              <button class="precise-del" @click="crossCfg.precise_rules.splice(i, 1)">删除</button>
+            </div>
+          </div>
+          <div class="precise-foot">
+            <button class="precise-add" @click="addPreciseRule">添加规则</button>
+          </div>
+        </div>
+        <div v-if="kind === 'precise' && sorting" class="run-progress">
+          <span class="spin"></span>
+          <span>精准整理中…</span>
+        </div>
+        <div v-if="kind === 'precise' && error" class="status error">{{ error }}</div>
+        <div v-if="kind === 'precise' && result" class="status" :class="result.success ? 'success' : 'error'">{{ result.message }}</div>
+        <div v-if="kind === 'precise' && crossResults.length" class="sort-all-results">
           <div v-for="(r, i) in crossResults" :key="i" class="sar-row" :class="r.ok ? 'ok' : 'bad'">
             <span class="sar-name">{{ r.step }}</span>
             <span class="sar-msg">{{ r.ok ? '✓' : '✗' }} {{ r.detail }}</span>
@@ -825,6 +925,53 @@ watch (() => props.charId, () => loadStashOptions ());
   cursor: pointer; outline: none;
 }
 .cross-select:hover { border-color: var(--accent-soft); }
+.precise {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 18px 14px;
+  background: var(--card-2);
+  border-top: 1px solid var(--line-soft);
+}
+.precise-head { display: flex; align-items: baseline; gap: 8px; }
+.precise-t { font-size: 12px; font-weight: 650; color: var(--text-2); }
+.precise-d { font-size: 10.5px; font-weight: 450; color: var(--text-3); }
+.precise-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+}
+.precise-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.precise-name {
+  flex: 1; min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--card); color: var(--text-2);
+  font-size: 12px; font-family: var(--font);
+  outline: none;
+}
+.precise-name:focus { border-color: var(--accent-soft); }
+.precise-stash { width: 160px; flex: none; }
+.precise-del {
+  flex: none; padding: 4px 10px;
+  border: 1px solid var(--line); border-radius: 7px;
+  background: var(--card); color: var(--text-3);
+  font-size: 12px; font-family: var(--font);
+  cursor: pointer;
+}
+.precise-del:hover { border-color: var(--red); color: var(--red); }
+.precise-add {
+  align-self: flex-start;
+  padding: 4px 12px;
+  border: 1px dashed var(--line); border-radius: 7px;
+  background: none; color: var(--text-3);
+  font-size: 12px; font-family: var(--font);
+  cursor: pointer;
+}
+.precise-add:hover { border-color: var(--accent-soft); color: var(--accent); }
+.precise-foot {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 2px;
+}
+.precise-foot .btn { padding: 5px 14px; font-size: 12.5px; }
 
 .uipi-warn {
   display: flex; flex-direction: column; gap: 6px;

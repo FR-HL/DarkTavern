@@ -607,6 +607,57 @@ def start_merge_stacks(character_id: str):
     return {"success": True}
 
 
+def start_precise_sort(character_id: str, rules: list, arrange: bool = True):
+    """Move items matching the precise rules to their target stashes only."""
+    with _sort_lock:
+        if _sort_state["running"]:
+            return {"success": False, "error": "Sort already in progress"}
+        cancel_event = threading.Event()
+        _sort_state.update({
+            "running": True,
+            "kind": "precise",
+            "character_id": character_id,
+            "stash_id": None,
+            "cancel_event": cancel_event,
+            "thread": None,
+            "result": None,
+            "error": None,
+            "sort_all_total": 0,
+            "sort_all_current": 0,
+            "sort_all_label": "",
+            "sort_all_results": [],
+            "cross_steps": ["精准移动"],
+            "cross_step_index": 0,
+            "cross_step_label": "",
+            "cross_results": [],
+        })
+
+    def _run():
+        try:
+            mgr = get_stash_manager()
+            ok, msg, results = mgr.precise_sort(
+                character_id=str(character_id),
+                rules=rules or [],
+                arrange=arrange,
+                cancel_event=cancel_event,
+            )
+            with _sort_lock:
+                _sort_state["cross_results"] = results or []
+                _sort_state["result"] = {"success": bool(ok), "message": msg}
+                _sort_state["running"] = False
+        except Exception as exc:
+            logger.error(f"Precise sort failed: {exc}", exc_info=True)
+            with _sort_lock:
+                _sort_state["error"] = str(exc)
+                _sort_state["running"] = False
+
+    t = threading.Thread(target=_run, daemon=True, name="PreciseSortWorker")
+    with _sort_lock:
+        _sort_state["thread"] = t
+    t.start()
+    return {"success": True}
+
+
 def _cross_step_labels(config: dict) -> list:
     labels = []
     if config.get("merge"):
