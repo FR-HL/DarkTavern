@@ -148,9 +148,10 @@ body {
   cursor: pointer;
 }
 .affix-check.on {
-  border-color: var(--dnd-gold);
-  background: radial-gradient(circle at 35% 30%, #fff6c0 0%, var(--dnd-gold) 55%);
-  box-shadow: 0 0 0.4em rgba(255, 212, 0, 0.55);
+  background: var(--dnd-green);
+  border-color: #14121a;
+  border-width: 4px;
+  outline: 3px solid var(--dnd-dust);
 }
 
 .tooltip-separator {

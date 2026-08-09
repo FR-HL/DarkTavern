@@ -834,7 +834,7 @@ function getGradeColor(grade) {
             <div class="tooltip-separator"></div>
 
             <div class="text-xs" style="color: var(--dnd-oak)">
-              by 7. & 方源Official | 群: 376490002
+              by 7. & 方源Official | 官网: dnd.wiki
             </div>
           </div>
         </div>
