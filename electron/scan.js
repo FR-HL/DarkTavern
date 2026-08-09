@@ -159,6 +159,7 @@ function attrToField (displayName) {
 
 async function queryMarketLive (data, scanId, send) {
   let price = null;
+  let usedAttrs = [];
   try {
     const itemId = toCanonicalItemId (data.item?.id || data.item?.item_id || '');
     const rarity = data.item?.rarity;
@@ -201,6 +202,7 @@ async function queryMarketLive (data, scanId, send) {
         const listings = body.body;
         if (Array.isArray (listings) && listings.length > 0) {
           price = listings[0].price;
+          usedAttrs = attrs;
           logger.info (`[MarketLive] price=${price} (${attrs.length} attrs filtered)`);
           break;
         }
@@ -211,5 +213,5 @@ async function queryMarketLive (data, scanId, send) {
   } catch (e) {
     logger.error (`[MarketLive] ${e.message}`);
   }
-  send ('hover:live-price', { scanId, price });
+  send ('hover:live-price', { scanId, price, used_affixes: usedAttrs.map (a => a.display) });
 }

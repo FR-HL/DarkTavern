@@ -93,6 +93,12 @@ const itemRarity = ref('Common');
 const reverseAttributes = ref({});
 const reverseKeywords = ref({});
 
+// Secondary affixes actually used for the current live market price (display names)
+const usedAffixes = ref([]);
+function isAffixUsed(display) {
+  return usedAffixes.value.includes(display);
+}
+
 // Rarity color mapping
 const rarityColors = {
   'Poor': '#808080',       // 灰色 - 粗糙
@@ -371,6 +377,7 @@ onMounted(() => {
     item.value.quests = [];
     item.value.attributes.primary = [];
     item.value.attributes.secondary = [];
+    usedAffixes.value = [];
 
     // Position marker at tooltip location
     const mouseDeltaX = currentMousePos.value.x - scanStartMousePos.value.x;
@@ -480,6 +487,7 @@ onMounted(() => {
   electron.on("hover:live-price", (data) => {
     if (data.scanId !== currentScanId.value) return;
     item.value.prices.live = data.price ?? null;
+    usedAffixes.value = Array.isArray(data.used_affixes) ? data.used_affixes : [];
     livePriceLoading.value = false;
   });
 
@@ -668,20 +676,23 @@ function getGradeColor(grade) {
                 v-for="attribute in item.attributes.secondary"
                 class="[&:not(:last-child)]:pb-2"
               >
-                <span class="tooltip-attribute text-nowrap">
-                  <span
-                    >{{
-                      (attribute.value > 0
-                        ? "+"
-                        : attribute.value < 0
-                          ? "-"
-                          : "") +
-                      attribute.value +
-                      (attribute.is_percentage ? "%" : "")
-                    }}
+                <div class="affix-line1">
+                  <span class="tooltip-attribute text-nowrap">
+                    <span
+                      >{{
+                        (attribute.value > 0
+                          ? "+"
+                          : attribute.value < 0
+                            ? "-"
+                            : "") +
+                        attribute.value +
+                        (attribute.is_percentage ? "%" : "")
+                      }}
+                    </span>
+                    <span>{{ toChinese(attribute.display) }}</span>
                   </span>
-                  <span>{{ toChinese(attribute.display) }}</span>
-                </span>
+                  <span class="affix-check" :class="{ on: isAffixUsed(attribute.display) }"></span>
+                </div>
 
                 <div class="text-base">
                   ({{ attribute.min }} - {{ attribute.max }}) (<span
@@ -748,15 +759,15 @@ function getGradeColor(grade) {
                 props.components.includes('density')
               "
             >
-              <div class="flex items-center justify-center" v-if="props.components.includes('market')">
-                <span>市场均价:</span>
-                <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
-                <span v-else class="ml-2" :class="item.prices.market !== null ? 'gold' : 'price-empty'">{{ item.prices.market !== null ? item.prices.market : '暂无' }}</span>
-              </div>
               <div class="flex items-center justify-center" v-if="props.components.includes('live')">
                 <span>市场现价:</span>
                 <img v-if="livePriceLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
                 <span v-else class="ml-2" :class="item.prices.live !== null ? 'gold' : 'price-empty'">{{ item.prices.live !== null ? item.prices.live : '暂无' }}</span>
+              </div>
+              <div class="flex items-center justify-center" v-if="props.components.includes('market')">
+                <span>市场均价:</span>
+                <img v-if="isLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
+                <span v-else class="ml-2" :class="item.prices.market !== null ? 'gold' : 'price-empty'">{{ item.prices.market !== null ? item.prices.market : '暂无' }}</span>
               </div>
               <div class="flex items-center justify-center" v-if="props.components.includes('vendor')">
                 <span>商人回收:</span>

@@ -66,7 +66,7 @@ const alignment = ref ('attached');
 const scale = ref (1.0);
 const launchOnStartup = ref (false);
 const components = ref ([]);
-const compOpen = reactive ({ basic: true, details: false, price: true, quests: false });
+const compOpen = reactive ({ basic: false, details: false, price: false, quests: false });
 function toggleCompGroup (key) { compOpen [key] = !compOpen [key]; }
 
 const livePriceMode = ref ('presence');

@@ -127,6 +127,30 @@ body {
   color: var(--dnd-blue);
 }
 
+.affix-line1 {
+  display: grid;
+  grid-template-columns: 1.05em minmax(0, 1fr) 1.05em;
+  column-gap: 0.5em;
+  align-items: center;
+}
+.affix-line1 .tooltip-attribute {
+  grid-column: 2;
+}
+.affix-check {
+  grid-column: 3;
+  justify-self: center;
+  width: 1.05em;
+  height: 1.05em;
+  border-radius: 50%;
+  border: 0.12em solid var(--dnd-dust);
+  box-sizing: border-box;
+}
+.affix-check.on {
+  border-color: var(--dnd-gold);
+  background: radial-gradient(circle at 35% 30%, #fff6c0 0%, var(--dnd-gold) 55%);
+  box-shadow: 0 0 0.4em rgba(255, 212, 0, 0.55);
+}
+
 .tooltip-separator {
   @apply block w-full h-1 my-2;
 
