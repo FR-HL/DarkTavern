@@ -1474,7 +1474,7 @@ onBeforeUnmount (() => {
 
       <!-- ============ 自动上架 ============ -->
       <div class="pane" :class="{ active: pane === 'sell' }" v-show="pane === 'sell'">
-        <SellPane :char-id="sortCharId" />
+        <SellPane />
       </div>
 
       <!-- ============ 使用教程 ============ -->
