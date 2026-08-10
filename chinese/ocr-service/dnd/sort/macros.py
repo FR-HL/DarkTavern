@@ -907,6 +907,46 @@ def click_stash_tab(stash_type_value: int) -> bool:
     return True
 
 
+def get_market_tab_positions():
+    """Return the stash tab selector positions on the market page.
+
+    The market page's stash panel leads with an extra bag tab at index 0
+    (the stash page has no bag tab), followed by the same dynamic stash-tab
+    order as the stash page — so every stash type sits one slot below its
+    stash-page index. The click origin/spacing match the stash page.
+    """
+    positions = get_screen_positions()
+    origin = positions['stash_tab_origin']
+    spacing = float(positions['stash_tab_spacing'])
+    # BAG = 2 (no stash-page tab; the market page leads with it)
+    order = [2] + list(STASH_TYPE_TO_TAB_INDEX.keys())
+    return {
+        stash_type: Point(int(round(origin.x)), int(round(origin.y + i * spacing)))
+        for i, stash_type in enumerate(order)
+    }
+
+
+def click_market_stash_tab(stash_type_value: int) -> bool:
+    """Click the stash tab selector for ``stash_type_value`` on the market
+    page (bag-first order). Returns False when the type has no market tab."""
+    tab_positions = get_market_tab_positions()
+    pos = tab_positions.get(stash_type_value)
+    if pos is None:
+        logger.debug("No market tab mapping for stash type %s", stash_type_value)
+        return False
+
+    _ensure_not_cancelled()
+    move_mouse(pos.x, pos.y)
+    _sleep_with_cancel(0.05)
+    mouse_down()
+    _sleep_with_cancel(0.03)
+    mouse_up()
+    _sleep_with_cancel(0.15)
+    logger.info("Clicked market stash tab %d at (%d, %d)",
+                stash_type_value, pos.x, pos.y)
+    return True
+
+
 def click_topbar_tab(name: str) -> bool:
     """Click a lobby top-bar page tab: 'stash' or 'merchant'.
 

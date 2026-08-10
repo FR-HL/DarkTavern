@@ -107,7 +107,9 @@ def sell_items(items, cancel_event=None, progress=None):
             stash_id = str(item.get('stash_id', ''))
             if stash_id and stash_id != current_stash:
                 try:
-                    macros.click_stash_tab(int(stash_id))
+                    # Market page stash tabs are bag-first: reuse the shared
+                    # origin/spacing but click via the market mapping.
+                    macros.click_market_stash_tab(int(stash_id))
                 except (TypeError, ValueError):
                     logger.warning("sell_items: bad stash_id %r", stash_id)
                 current_stash = stash_id
