@@ -33,23 +33,28 @@ def _enter_market(anchors):
     macros.click_at(anchors['topbar_trade'].x, anchors['topbar_trade'].y, settle=0.3)
     logger.debug("sell: clicked topbar_trade at (%d, %d)",
                  anchors['topbar_trade'].x, anchors['topbar_trade'].y)
+    macros._sleep_with_cancel(1.0)  # let the trade-hall page render
     macros.click_at(anchors['market_btn'].x, anchors['market_btn'].y, settle=0.35)
     logger.debug("sell: clicked market_btn at (%d, %d)",
                  anchors['market_btn'].x, anchors['market_btn'].y)
+    macros._sleep_with_cancel(1.2)  # let the market channel load
     macros.click_at(anchors['mylist_tab'].x, anchors['mylist_tab'].y, settle=0.3)
     logger.debug("sell: clicked mylist_tab at (%d, %d)",
                  anchors['mylist_tab'].x, anchors['mylist_tab'].y)
+    macros._sleep_with_cancel(1.0)  # let the my-list panel render
 
 
 def _click_item(cx, cy):
     """Step 4: click the item cell inside the market-page stash grid."""
     macros.click_at(cx, cy, settle=0.25)
     logger.debug("sell: clicked item at (%.1f, %.1f)", cx, cy)
+    macros._sleep_with_cancel(0.8)  # let the item get selected
 
 
 def _enter_price(anchors, price):
     """Step 5: click the price input, clear it, type the price."""
     macros.click_at(anchors['price_input'].x, anchors['price_input'].y, settle=0.15)
+    macros._sleep_with_cancel(0.5)  # let the input field focus
     macros.press_backspace(PRICE_CLEAR_BACKSPACES)
     macros.type_text(str(int(price)))
     logger.debug("sell: entered price %d at (%d, %d)",
@@ -61,9 +66,11 @@ def _confirm_sell(anchors):
     macros.click_at(anchors['sell_list_btn'].x, anchors['sell_list_btn'].y, settle=0.3)
     logger.debug("sell: clicked sell_list_btn at (%d, %d)",
                  anchors['sell_list_btn'].x, anchors['sell_list_btn'].y)
+    macros._sleep_with_cancel(1.0)  # let the confirmation popup appear
     macros.click_at(anchors['confirm_btn'].x, anchors['confirm_btn'].y, settle=0.35)
     logger.debug("sell: clicked confirm_btn at (%d, %d)",
                  anchors['confirm_btn'].x, anchors['confirm_btn'].y)
+    macros._sleep_with_cancel(1.0)  # let the listing complete
 
 
 def sell_items(items, cancel_event=None, progress=None):
@@ -113,6 +120,7 @@ def sell_items(items, cancel_event=None, progress=None):
                 except (TypeError, ValueError):
                     logger.warning("sell_items: bad stash_id %r", stash_id)
                 current_stash = stash_id
+                macros._sleep_with_cancel(1.0)  # let the stash panel render
 
             cx = stash_base.x + jump * int(item['x']) + jump * int(item.get('w', 1)) / 2
             cy = stash_base.y + jump * int(item['y']) + jump * int(item.get('h', 1)) / 2
