@@ -1,12 +1,15 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, computed, watch } from 'vue';
+import { onMounted, ref, computed, watch } from 'vue';
 import { RARITY_CN, rarityColor } from '@/shared/lib/rarity.js';
+import { useSell } from '../composables/sell.js';
 
 const invoke = (channel, data) => window.electron.invoke (channel, data);
 
 const props = defineProps ({
   charId: { type: String, default: '' },
 });
+
+const { pricing, selling, status, note, fetchPrices, startSell, stopSell } = useSell ();
 
 // ── 市场上架坐标校准 ──
 
@@ -60,11 +63,6 @@ async function resetCalibration () {
 
 const charName = ref ('');
 const sellItems = ref ([]);
-const pricing = ref (false);
-const selling = ref (false);
-const status = ref (null);
-const statusTimer = ref (null);
-const note = ref ('');
 
 const allChecked = computed ({
   get () {
@@ -119,87 +117,26 @@ async function loadItems () {
   }
 }
 
-async function fetchPrices () {
+async function doFetchPrices () {
   const targets = sellItems.value.filter (i => i.checked);
   if (!targets.length) return;
-  pricing.value = true;
-  note.value = `正在查询 ${targets.length} 件物品的市场价…`;
-  try {
-    const payload = targets.map ((it, idx) => ({
-      index: idx,
-      item_id: it.item_id,
-      rarity: it.rarity,
-      sp: JSON.parse (JSON.stringify (it.sp || [])),
-    }));
-    const r = await invoke ('market:price', payload);
-    const map = new Map ((r?.results || []).map (x => [x.index, x.price]));
-    targets.forEach ((it, idx) => { it.price = map.has (idx) ? map.get (idx) : null; });
-    const withPrice = targets.filter (t => t.price != null).length;
-    note.value = `查价完成：${withPrice}/${targets.length} 件有市场价（无价的已跳过）`;
-  } catch (e) {
-    note.value = '查价失败：' + (e?.message || '未知错误');
-  }
-  pricing.value = false;
+  await fetchPrices (targets);
 }
 
-async function startSell () {
+async function doStartSell () {
   const targets = sellItems.value.filter (i => i.checked && i.price != null);
   if (!targets.length) {
     note.value = '请先查价，且至少一件物品有市场价';
     return;
   }
-  selling.value = true;
-  note.value = `开始上架 ${targets.length} 件物品，请勿操作游戏…`;
-  const payload = targets.map (i => ({
+  await startSell (targets.map (i => ({
     stash_id: i.stash_id,
     x: i.x,
     y: i.y,
     w: i.w,
     h: i.h,
     price: i.price,
-  }));
-  try {
-    const r = await invoke ('market:sell', payload);
-    if (!r?.success) {
-      note.value = '启动失败：' + (r?.error || '未知错误');
-      selling.value = false;
-      return;
-    }
-  } catch (e) {
-    note.value = '启动失败：' + (e?.message || '未知错误');
-    selling.value = false;
-    return;
-  }
-  pollStatus ();
-}
-
-async function stopSell () {
-  await invoke ('market:cancel');
-  note.value = '已请求停止，等待当前步骤结束…';
-}
-
-async function pollStatus () {
-  try {
-    const r = await invoke ('market:status');
-    status.value = r;
-    if (r?.running) {
-      note.value = `上架中 ${r.current}/${r.total}`;
-      if (!statusTimer.value) {
-        statusTimer.value = setInterval (pollStatus, 2000);
-      }
-      return;
-    }
-    if (statusTimer.value) { clearInterval (statusTimer.value); statusTimer.value = null; }
-    selling.value = false;
-    if (r?.error) note.value = '上架失败：' + r.error;
-    else if (r?.result?.success === false) note.value = '上架中断：' + (r.result.error || '未知');
-    else if (r?.result?.success) note.value = `上架完成：${r.result.total} 件`;
-    else note.value = '';
-  } catch (e) {
-    if (statusTimer.value) { clearInterval (statusTimer.value); statusTimer.value = null; }
-    selling.value = false;
-    note.value = '获取上架状态失败';
-  }
+  })));
 }
 
 function rarityCn (r) { return RARITY_CN[r] || r; }
@@ -209,10 +146,6 @@ onMounted (async () => {
   await loadCalibration ();
   if (props.charId) await loadItems ();
   else note.value = '请先在「角色仓库」页选择角色';
-});
-
-onBeforeUnmount (() => {
-  if (statusTimer.value) { clearInterval (statusTimer.value); statusTimer.value = null; }
 });
 </script>
 
@@ -276,7 +209,7 @@ onBeforeUnmount (() => {
           <input type="checkbox" v-model="allChecked" />
           <span>全选（{{ checkedCount }} 件）</span>
         </label>
-        <button class="btn sm" :disabled="pricing || checkedCount === 0" @click="fetchPrices">
+        <button class="btn sm" :disabled="pricing || checkedCount === 0" @click="doFetchPrices">
           {{ pricing ? '查价中…' : '查询市场价' }}
         </button>
       </div>
@@ -312,7 +245,7 @@ onBeforeUnmount (() => {
         <button
           class="btn primary"
           :disabled="selling || pricedCount === 0"
-          @click="startSell"
+          @click="doStartSell"
         >
           {{ selling ? `上架中 ${status?.current || 0}/${status?.total || 0}` : `开始上架（${pricedCount} 件）` }}
         </button>

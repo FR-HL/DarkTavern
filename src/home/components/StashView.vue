@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import StashPane from './StashPane.vue';
 import { refreshCapture } from '../composables/capture.js';
+import { useSell } from '../composables/sell.js';
 
 const props = defineProps ({
   charId: { type: String, default: '' },
@@ -13,6 +14,73 @@ const props = defineProps ({
 const emit = defineEmits ([ 'update:charId', 'update:stashId', 'update:equipment', 'update:active' ]);
 
 const invoke = (ch, ...args) => window.electron.invoke (ch, ...args);
+
+// ── 市场上架（网格点选） ──
+const { pricing, selling, status, note, fetchPrices, startSell, stopSell } = useSell ();
+
+// 选中的待上架物品：uid(`${stashId}:${slotId}`) -> 物品数据副本（含 stash_id）
+const sellSelected = ref (new Map ());
+
+const sellSelectedList = computed (() =>
+  [...sellSelected.value.values ()].sort (
+    (a, b) => parseInt (a.stash_id) - parseInt (b.stash_id) || a.y - b.y || a.x - b.x
+  )
+);
+
+const pricedSellCount = computed (() =>
+  [...sellSelected.value.values ()].filter (i => i.price != null).length
+);
+
+function sellKey (sid, slotId) { return `${sid}:${slotId}`; }
+
+function isSellPicked (it) {
+  return sellSelected.value.has (sellKey (props.stashId, it.slot_id));
+}
+
+function sellPriceOf (it) {
+  return sellSelected.value.get (sellKey (props.stashId, it.slot_id))?.price ?? null;
+}
+
+function toggleSellPick (it) {
+  const key = sellKey (props.stashId, it.slot_id);
+  const m = new Map (sellSelected.value);
+  if (m.has (key)) m.delete (key);
+  else m.set (key, { ...it, stash_id: props.stashId, uid: key });
+  sellSelected.value = m;
+}
+
+function clearSellPick () {
+  sellSelected.value = new Map ();
+}
+
+function fmtSellG (it, v) {
+  if (v == null) return '—';
+  const compact = (it.width === 1 && it.height === 1) || (it.width === 1 && it.height === 2);
+  return Number (v).toLocaleString () + (compact ? '' : ' G');
+}
+
+async function doFetchSellPrices () {
+  const targets = [...sellSelected.value.values ()];
+  if (!targets.length) return;
+  await fetchPrices (targets);
+}
+
+async function doStartSell () {
+  const targets = sellSelectedList.value.filter (i => i.price != null);
+  if (!targets.length) {
+    note.value = '请先查价，且至少一件物品有市场价';
+    return;
+  }
+  const ok = await startSell (targets.map (i => ({
+    stash_id: i.stash_id,
+    x: i.x,
+    y: i.y,
+    w: i.width,
+    h: i.height,
+    price: i.price,
+  })));
+  if (ok !== false) clearSellPick ();
+}
 
 // ── 仓库状态上报（悬浮球同步） ──
 function reportStashState () {
@@ -572,6 +640,7 @@ async function loadStashes () {
 }
 
 watch (() => props.charId, (v) => {
+  clearSellPick ();
   if (v) {
     selected.value = v;
     loadCharData (v, true);
@@ -833,6 +902,25 @@ watch (() => props.stashId, () => reportStashState ());
               </svg>
             </span>
           </button>
+
+          <!-- 上架面板（与仓库选择同列） -->
+          <div v-if="sellSelected.size" class="sell-panel">
+            <div class="sell-panel-head">
+              <span class="sell-panel-t">上架（{{ sellSelected.size }} 件）</span>
+              <button class="btn subtle sm" @click="clearSellPick">清空</button>
+            </div>
+            <div class="sell-panel-hint">价格显示在物品图标下方；点击物品可增减选择</div>
+            <div class="sell-panel-actions">
+              <button class="btn primary" :disabled="pricing || selling" @click="doFetchSellPrices">
+                {{ pricing ? '查价中…' : '查询市场价' }}
+              </button>
+              <button class="btn primary" :disabled="selling || pricedSellCount === 0" @click="doStartSell">
+                {{ selling ? `上架中 ${status?.current || 0}/${status?.total || 0}` : `开始上架（${pricedSellCount} 件）` }}
+              </button>
+              <button class="btn danger" v-if="selling" @click="stopSell">停止</button>
+              <span v-if="note" class="sell-note" :class="{ warn: note.indexOf ('失败') >= 0 }">{{ note }}</span>
+            </div>
+          </div>
         </div>
 
         <div class="stash-body card">
@@ -874,10 +962,12 @@ watch (() => props.stashId, () => reportStashState ());
                     :style="slotStyle (s)" :title="s.name"></span>
             </div>
             <div v-for="(it, i) in currentStash.items" :key="i" class="cell-item"
-                 :class="{ hidden: debugPreview }"
+                 :class="{ hidden: debugPreview, 'sell-picked': isSellPicked(it) }"
                  :style="itemStyle (it)"
-                 :title="`${it.name} · ${it.rarity} · ${it.width}×${it.height}`">
+                 :title="`${it.name} · ${it.rarity} · ${it.width}×${it.height}`"
+                 @click="!isEquipment && toggleSellPick(it)">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
+              <span v-if="isSellPicked(it) && sellPriceOf(it) != null" class="cell-price">{{ fmtSellG (it, sellPriceOf (it)) }}</span>
             </div>
             <template v-if="debugPreview && previewItems.length">
               <div v-for="(pi, i) in previewItems" :key="'p'+i" class="preview-item"
@@ -1105,6 +1195,34 @@ watch (() => props.stashId, () => reportStashState ());
 }
 .cell-item.hidden { display: none; }
 .cell-item:hover { transform: scale(1.05); box-shadow: 0 3px 10px rgba(0,0,0,0.2); z-index: 5; }
+
+/* 上架点选：稀有度色细描边，轻发光 */
+.cell-item.sell-picked {
+  outline: 1px solid var(--rc);
+  outline-offset: -1px;
+  box-shadow: 0 0 4px var(--rc), inset 0 0 0 40px var(--rbg);
+  z-index: 6;
+}
+.cell-price {
+  position: absolute; left: 0; right: 0; bottom: 2px;
+  text-align: center;
+  font-size: 12px; line-height: 1.2;
+  color: #F4B400; font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.9), 0 0 3px rgba(0,0,0,0.7);
+  pointer-events: none;
+}
+.sell-panel {
+  padding: 10px;
+  background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px;
+}
+.sell-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sell-panel-t { font-size: 13.5px; font-weight: 650; color: var(--text); }
+.sell-panel-hint { margin-top: 3px; font-size: 11px; color: var(--text-3); line-height: 1.4; }
+.sell-panel-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 9px; }
+.sell-panel-actions .btn { width: 100%; }
+.sell-note { font-size: 11.5px; color: var(--green); line-height: 1.4; }
+.sell-note.warn { color: var(--red); }
 
 html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 
