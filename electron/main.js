@@ -12,7 +12,7 @@ const logger = rootLogger.child ({ module: 'main' });
 import { ROOT, SOURCE, dataDir } from './config.js';
 import { settings, saveSettings, toComponents, toDays, toDebounce } from './settings.js';
 import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
-import { wire } from './scan.js';
+import { wire, fetchMarketPrice, toCanonicalItemId } from './scan.js';
 import * as backend from './backend.js';
 
 const { app, BrowserWindow, ipcMain, dialog } = electron;
@@ -365,6 +365,48 @@ app.on ('ready', async () => {
   safeHandle ('stash:calibration-record', (e, index) => backend.calibrationRecord (Number (index)));
   safeHandle ('stash:calibration-save', (e, resolution = '') => backend.calibrationSave (resolution));
   safeHandle ('stash:calibration-reset', () => backend.calibrationReset ());
+
+  // ── Market (自动上架) IPC ──
+
+  safeHandle ('market:calibration-status', () => backend.marketCalibrationStatus ());
+  safeHandle ('market:calibration-arm', (e, key) => backend.marketCalibrationRecord (String (key)));
+  safeHandle ('market:calibration-save', () => backend.marketCalibrationSave ());
+  safeHandle ('market:calibration-reset', () => backend.marketCalibrationReset ());
+  safeHandle ('market:sell', (e, items) => backend.marketSell (Array.isArray (items) ? items : []));
+  safeHandle ('market:status', () => backend.marketStatus ());
+  safeHandle ('market:cancel', () => backend.marketCancel ());
+  safeHandle ('market:price', async (e, items = []) => {
+    logger.info ('market:price called', { count: Array.isArray (items) ? items.length : -1 });
+    const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
+    if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+    const byValue = (settings.general.live_price_mode || 'presence') === 'value';
+    const results = [];
+    for (const it of items) {
+      let price = null;
+      try {
+        const itemId = toCanonicalItemId (String (it?.item_id || ''));
+        if (itemId && itemId !== 'id.item.') {
+          const sp = Array.isArray (it?.sp) ? it.sp : [];
+          const attrs = sp
+            .map (([name, value]) => ({
+              display: String (name).replace (/([a-z0-9])([A-Z])/g, '$1 $2'),
+              value,
+            }))
+            .filter (a => a.display);
+          for (const a of [attrs, []]) {
+            const p = await fetchMarketPrice (itemId, it?.rarity, a, byValue, headers);
+            if (p !== null) { price = p; break; }
+          }
+        }
+      } catch (err) {
+        logger.warn ('market:price item failed', { error: err?.message || String (err) });
+      }
+      results.push ({ index: it?.index, price });
+    }
+    const withPrice = results.filter (r => r.price != null).length;
+    logger.info ('market:price done', { total: results.length, withPrice });
+    return { results };
+  });
 
   registerStashHotkeys ();
   registerCrossHotkeys ();

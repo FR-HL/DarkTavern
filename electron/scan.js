@@ -240,7 +240,7 @@ async function queryPrice (tooltipText) {
   }
 }
 
-function toCanonicalItemId (rawId) {
+export function toCanonicalItemId (rawId) {
   if (rawId.startsWith ('id.item.')) return rawId;
   const snake = rawId.replace (/([a-z])([A-Z])/g, '$1_$2').toLowerCase ();
   return `id.item.${snake}`;
@@ -250,7 +250,7 @@ function attrToField (displayName) {
   return displayName.toLowerCase ().replace (/ /g, '_');
 }
 
-async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers) {
+export async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers) {
   const params = new URLSearchParams ();
   params.set ('item_id', itemId);
   if (rarity) params.set ('rarity', rarity.toLowerCase ());

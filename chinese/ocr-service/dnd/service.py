@@ -120,9 +120,49 @@ def _on_mouse_click(x, y, button, pressed):
             return
         if not _game_is_foreground():
             return
+        if _consume_pending_capture(x, y):
+            return
         _handle_stash_tab_click(x, y)
     except Exception:
         logger.debug("mouse hook: click handler error", exc_info=True)
+
+
+# ── One-shot coordinate capture (used by market calibration) ──
+# The user arms a capture, moves the mouse to the in-game target, and clicks;
+# the next foreground left-click is recorded as the target's position.
+_pending_capture = None
+
+
+def capture_next_click(timeout: float = 60.0):
+    """Arm a one-shot click capture and block until the next in-game click.
+
+    Returns ``(x, y)`` of the click, or ``None`` on timeout.
+    """
+    global _pending_capture
+    event = threading.Event()
+    result = {"pos": None}
+    _pending_capture = (event, result)
+    try:
+        if not event.wait(timeout):
+            return None
+        return result["pos"]
+    finally:
+        if _pending_capture is not None and _pending_capture[0] is event:
+            _pending_capture = None
+
+
+def _consume_pending_capture(x, y):
+    """Deliver a foreground left-click to a pending capture; True if consumed."""
+    global _pending_capture
+    pending = _pending_capture
+    if pending is None:
+        return False
+    event, result = pending
+    _pending_capture = None
+    result["pos"] = (x, y)
+    event.set()
+    logger.info("Captured calibration click at (%d, %d)", x, y)
+    return True
 
 
 def _handle_stash_tab_click(x, y):

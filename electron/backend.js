@@ -483,6 +483,36 @@ export async function calibrationReset () {
   return await postOrError ('/stash/calibration/reset');
 }
 
+// ── DnD Tools: Market (自动上架) ──
+
+export async function marketCalibrationStatus () {
+  return await getOrError ('/market/calibration');
+}
+
+export async function marketCalibrationRecord (key) {
+  return await postOrError ('/market/calibration/arm', { key });
+}
+
+export async function marketCalibrationSave () {
+  return await postOrError ('/market/calibration/save');
+}
+
+export async function marketCalibrationReset () {
+  return await postOrError ('/market/calibration/reset');
+}
+
+export async function marketSell (items) {
+  return await postOrError ('/market/sell', { items });
+}
+
+export async function marketStatus () {
+  return await getOrError ('/market/status');
+}
+
+export async function marketCancel () {
+  return await postOrError ('/market/cancel');
+}
+
 // ── DnD Tools: Sort ──
 
 export async function sortStart (params) {

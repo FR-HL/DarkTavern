@@ -13,6 +13,7 @@ import adminAvatar from '@assets/images/admin.avif';
 
 import StashView from './components/StashView.vue';
 import SortControl from './components/SortControl.vue';
+import SellPane from './components/SellPane.vue';
 import PacketPane from './components/PacketPane.vue';
 import DisclaimerBody from './components/DisclaimerBody.vue';
 import LogPane from './components/LogPane.vue';
@@ -886,6 +887,10 @@ onBeforeUnmount (() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 9 6"/><polyline points="3 12 15 12"/><polyline points="3 18 21 18"/></svg>
           仓库配置
         </div>
+        <div class="nav-item" :class="{ active: pane === 'sell' }" @click="showPane('sell')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 1 1 16.1-3.8z"/><path d="M9 10.5h.01M15 10.5h.01"/></svg>
+          自动上架
+        </div>
         <div class="nav-cap">更多</div>
         <div class="nav-item" :class="{ active: pane === 'config' }" @click="showPane('config')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -1465,6 +1470,11 @@ onBeforeUnmount (() => {
           @update:include-inv="v => sortIncludeInv = v"
           @update:keep-in-place="v => sortKeepInPlace = v"
         />
+      </div>
+
+      <!-- ============ 自动上架 ============ -->
+      <div class="pane" :class="{ active: pane === 'sell' }" v-show="pane === 'sell'">
+        <SellPane :char-id="sortCharId" />
       </div>
 
       <!-- ============ 使用教程 ============ -->

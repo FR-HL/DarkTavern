@@ -162,11 +162,13 @@ try:
     from dnd.routers.stash_router import router as stash_router
     from dnd.routers.sort_router import router as sort_router
     from dnd.routers.packet_router import router as packet_router
+    from dnd.routers.market_router import router as market_router
 
     app.include_router(capture_router, prefix="/capture", tags=["capture"])
     app.include_router(stash_router, prefix="/stash", tags=["stash"])
     app.include_router(sort_router, prefix="/sort", tags=["sort"])
     app.include_router(packet_router, prefix="/packets", tags=["packets"])
+    app.include_router(market_router, prefix="/market", tags=["market"])
     logger.info("DnD Tools routers mounted")
 except Exception as _dnd_err:
     logger.warning(f"DnD Tools routers unavailable: {_dnd_err}")

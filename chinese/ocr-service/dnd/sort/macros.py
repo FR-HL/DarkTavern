@@ -88,10 +88,25 @@ BASE_LAYOUT = {
     'stash_tab_origin': Point(1328, 211),   # centre of the first stash tab selector
     'stash_tab_spacing': 45,                # vertical px between consecutive tab centres
     # Lobby top-bar page tabs (12 tabs spread across the full width, ~160px
-    # each at 1080p). Tab 6 = stash page, tab 7 = merchant & workshop page.
+    # each at 1080p). Tab 6 = stash page, tab 7 = merchant & workshop page,
+    # tab 8 = trade hall page.
     'topbar_stash': Point(880, 30),
     'topbar_merchant': Point(1040, 30),
+    # Trade-hall / market page anchors. Base coordinates provided by the
+    # owner (calibrated in-game); the market calibration session can
+    # override each of them individually.
+    'topbar_trade': Point(1514, 189),
+    'market_btn': Point(1507, 399),
+    'mylist_tab': Point(1352, 273),
+    'price_input': Point(1277, 773),
+    'sell_list_btn': Point(1277, 1112),
+    'confirm_btn': Point(1177, 769),
 }
+
+# Market anchors that have no layout default and can only be provided by a
+# calibration session. Kept separate so get_market_positions() can tell
+# calibrated-only anchors from layout-backed ones.
+MARKET_ANCHOR_KEYS = ('topbar_trade', 'market_btn', 'mylist_tab', 'price_input', 'sell_list_btn', 'confirm_btn')
 
 # Number of stash tab selectors in the game UI (Storage, Purchased 0-4,
 # Shared Stash, Shared Stash Seasonal). Purchased slots only appear in the
@@ -265,6 +280,24 @@ def _scaled_layout(resolution):
             'topbar_merchant': Point(
                 int(round(BASE_LAYOUT['topbar_merchant'].x * scale + pillarbox)),
                 int(round(BASE_LAYOUT['topbar_merchant'].y * scale))),
+            'topbar_trade': Point(
+                int(round(BASE_LAYOUT['topbar_trade'].x * scale + pillarbox)),
+                int(round(BASE_LAYOUT['topbar_trade'].y * scale))),
+            'market_btn': Point(
+                int(round(BASE_LAYOUT['market_btn'].x * scale + pillarbox)),
+                int(round(BASE_LAYOUT['market_btn'].y * scale))),
+            'mylist_tab': Point(
+                int(round(BASE_LAYOUT['mylist_tab'].x * scale + pillarbox)),
+                int(round(BASE_LAYOUT['mylist_tab'].y * scale))),
+            'price_input': Point(
+                int(round(BASE_LAYOUT['price_input'].x * scale + pillarbox)),
+                int(round(BASE_LAYOUT['price_input'].y * scale))),
+            'sell_list_btn': Point(
+                int(round(BASE_LAYOUT['sell_list_btn'].x * scale + pillarbox)),
+                int(round(BASE_LAYOUT['sell_list_btn'].y * scale))),
+            'confirm_btn': Point(
+                int(round(BASE_LAYOUT['confirm_btn'].x * scale + pillarbox)),
+                int(round(BASE_LAYOUT['confirm_btn'].y * scale))),
         }
 
     if _is_narrow(resolution):
@@ -287,6 +320,18 @@ def _scaled_layout(resolution):
                                   int(round(BASE_LAYOUT['topbar_stash'].y * scale + oy))),
             'topbar_merchant': Point(int(round(BASE_LAYOUT['topbar_merchant'].x * scale)),
                                      int(round(BASE_LAYOUT['topbar_merchant'].y * scale + oy))),
+            'topbar_trade': Point(int(round(BASE_LAYOUT['topbar_trade'].x * scale)),
+                                  int(round(BASE_LAYOUT['topbar_trade'].y * scale + oy))),
+            'market_btn': Point(int(round(BASE_LAYOUT['market_btn'].x * scale)),
+                                int(round(BASE_LAYOUT['market_btn'].y * scale + oy))),
+            'mylist_tab': Point(int(round(BASE_LAYOUT['mylist_tab'].x * scale)),
+                                int(round(BASE_LAYOUT['mylist_tab'].y * scale + oy))),
+            'price_input': Point(int(round(BASE_LAYOUT['price_input'].x * scale)),
+                                 int(round(BASE_LAYOUT['price_input'].y * scale + oy))),
+            'sell_list_btn': Point(int(round(BASE_LAYOUT['sell_list_btn'].x * scale)),
+                                   int(round(BASE_LAYOUT['sell_list_btn'].y * scale + oy))),
+            'confirm_btn': Point(int(round(BASE_LAYOUT['confirm_btn'].x * scale)),
+                                 int(round(BASE_LAYOUT['confirm_btn'].y * scale + oy))),
         }
 
     # Standard (16:9) aspect ratio – independent axis scaling
@@ -308,6 +353,18 @@ def _scaled_layout(resolution):
                               int(round(BASE_LAYOUT['topbar_stash'].y * scale_y))),
         'topbar_merchant': Point(int(round(BASE_LAYOUT['topbar_merchant'].x * scale_x)),
                                  int(round(BASE_LAYOUT['topbar_merchant'].y * scale_y))),
+        'topbar_trade': Point(int(round(BASE_LAYOUT['topbar_trade'].x * scale_x)),
+                              int(round(BASE_LAYOUT['topbar_trade'].y * scale_y))),
+        'market_btn': Point(int(round(BASE_LAYOUT['market_btn'].x * scale_x)),
+                            int(round(BASE_LAYOUT['market_btn'].y * scale_y))),
+        'mylist_tab': Point(int(round(BASE_LAYOUT['mylist_tab'].x * scale_x)),
+                            int(round(BASE_LAYOUT['mylist_tab'].y * scale_y))),
+        'price_input': Point(int(round(BASE_LAYOUT['price_input'].x * scale_x)),
+                             int(round(BASE_LAYOUT['price_input'].y * scale_y))),
+        'sell_list_btn': Point(int(round(BASE_LAYOUT['sell_list_btn'].x * scale_x)),
+                               int(round(BASE_LAYOUT['sell_list_btn'].y * scale_y))),
+        'confirm_btn': Point(int(round(BASE_LAYOUT['confirm_btn'].x * scale_x)),
+                             int(round(BASE_LAYOUT['confirm_btn'].y * scale_y))),
     }
 
 
@@ -683,6 +740,18 @@ def _windowed_screen_positions(window_area):
                               layout['topbar_stash'].y + window_top),
         'topbar_merchant': Point(layout['topbar_merchant'].x + window_left,
                                  layout['topbar_merchant'].y + window_top),
+        'topbar_trade': Point(layout['topbar_trade'].x + window_left,
+                              layout['topbar_trade'].y + window_top),
+        'market_btn': Point(layout['market_btn'].x + window_left,
+                            layout['market_btn'].y + window_top),
+        'mylist_tab': Point(layout['mylist_tab'].x + window_left,
+                            layout['mylist_tab'].y + window_top),
+        'price_input': Point(layout['price_input'].x + window_left,
+                             layout['price_input'].y + window_top),
+        'sell_list_btn': Point(layout['sell_list_btn'].x + window_left,
+                               layout['sell_list_btn'].y + window_top),
+        'confirm_btn': Point(layout['confirm_btn'].x + window_left,
+                             layout['confirm_btn'].y + window_top),
     }
 
 
@@ -861,6 +930,104 @@ def click_topbar_tab(name: str) -> bool:
     _sleep_with_cancel(0.08)
     logger.info("Clicked topbar tab '%s' at (%d, %d)", name, pos.x, pos.y)
     return True
+
+
+def click_at(x, y, hold=0.03, settle=0.15):
+    """Generic single left-click at an absolute screen coordinate."""
+    _ensure_not_cancelled()
+    move_mouse(x, y)
+    _sleep_with_cancel(0.03)
+    mouse_down()
+    _sleep_with_cancel(hold)
+    mouse_up()
+    _sleep_with_cancel(settle)
+
+
+def type_text(text):
+    """Type a string via SendInput Unicode events (digits/latin, no layout)."""
+    _ensure_not_cancelled()
+    for ch in str(text):
+        if ch == '\n':
+            continue
+        _ensure_not_cancelled()
+        code = ord(ch)
+        key_input = INPUT(type=INPUT_KEYBOARD)
+        key_input.union.ki = KEYBDINPUT(
+            wVk=0,
+            wScan=code,
+            dwFlags=KEYEVENTF_UNICODE,
+            time=0,
+            dwExtraInfo=None
+        )
+        SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+        key_input.union.ki = KEYBDINPUT(
+            wVk=0,
+            wScan=code,
+            dwFlags=KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
+            time=0,
+            dwExtraInfo=None
+        )
+        SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+        _sleep_with_cancel(0.02)
+
+
+VK_BACK = 0x08
+
+
+def press_backspace(times):
+    """Press Backspace ``times`` times (used to clear the price input)."""
+    for _ in range(max(0, int(times))):
+        _ensure_not_cancelled()
+        key_input = INPUT(type=INPUT_KEYBOARD)
+        key_input.union.ki = KEYBDINPUT(
+            wVk=VK_BACK,
+            wScan=0,
+            dwFlags=0,
+            time=0,
+            dwExtraInfo=None
+        )
+        SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+        key_input.union.ki = KEYBDINPUT(
+            wVk=VK_BACK,
+            wScan=0,
+            dwFlags=KEYEVENTF_KEYUP,
+            time=0,
+            dwExtraInfo=None
+        )
+        SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+        _sleep_with_cancel(0.015)
+
+
+def get_market_positions():
+    """Return the market-flow anchor points as a dict of Points.
+
+    Layout-backed anchors (topbar_trade, mylist_tab, price_input,
+    sell_list_btn) come from the scaled layout; calibrated-only anchors
+    (market_btn, confirm_btn) exist only after a calibration session.
+    Saved ``calibrationOverride.marketPositions`` entries override every
+    anchor, calibrated or not.
+    """
+    positions = get_screen_positions()
+    result = {}
+    for key in MARKET_ANCHOR_KEYS:
+        p = positions.get(key)
+        if p is None:
+            # Layouts that predate the market anchors (e.g. MANUAL_OVERRIDES)
+            # lack them — fall back to a plain scaled base layout.
+            layout = _scaled_layout(get_current_resolution())
+            p = layout.get(key)
+        if p is not None:
+            result[key] = Point(int(round(p.x)), int(round(p.y)))
+
+    try:
+        cal = settings_manager.get('calibrationOverride') or {}
+        mcal = cal.get('marketPositions') or {}
+        for key, v in mcal.items():
+            if key in MARKET_ANCHOR_KEYS and isinstance(v, dict):
+                result[key] = Point(int(round(v.get('x', 0))), int(round(v.get('y', 0))))
+    except Exception:
+        pass
+    return result
 
 
 def _tab_samples():

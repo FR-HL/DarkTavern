@@ -650,6 +650,7 @@ def get_character(character_id: str):
                 "slot_id": slot_id,
                 "quantity": item.get("itemCount", 1),
                 "vendor_price": item.get("vendor_price", 0),
+                "sp": item.get("sp", []),
             })
         stash_entry = {
             "label": _stash_label(stash_id),
