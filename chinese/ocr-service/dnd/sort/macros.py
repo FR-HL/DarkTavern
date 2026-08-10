@@ -944,9 +944,9 @@ def click_market_stash_tab(stash_type_value: int) -> bool:
         float(pt.y),
         pos.x,
         pos.y,
-        steps=16,
-        min_delay=0.0006,
-        max_delay=0.0015,
+        steps=25,
+        min_delay=0.004,
+        max_delay=0.008,
         no_delay=False,
         jitter_px=3.0,
     )
@@ -989,7 +989,8 @@ def click_at(x, y, hold=0.03, settle=0.15):
     """Generic single left-click at an absolute screen coordinate.
 
     Uses the same smooth cursor path as the sorter (move_mouse_smooth) so
-    in-game movement stays consistent with stash sorting.
+    in-game movement stays consistent with stash sorting — never a
+    teleport-style jump.
     """
     _ensure_not_cancelled()
     pt = POINT()
@@ -999,9 +1000,9 @@ def click_at(x, y, hold=0.03, settle=0.15):
         float(pt.y),
         x,
         y,
-        steps=16,
-        min_delay=0.0006,
-        max_delay=0.0015,
+        steps=25,
+        min_delay=0.004,
+        max_delay=0.008,
         no_delay=False,
         jitter_px=3.0,
     )
