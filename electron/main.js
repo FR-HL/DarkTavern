@@ -1,11 +1,14 @@
 import './migrate.js';
 import electron, { globalShortcut, Menu, screen, shell, Tray } from 'electron';
 import { basename, join } from 'node:path';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { randomUUID } from 'node:crypto';
 
 const _require = createRequire (import.meta.url);
-import { logger, logPath } from './logger.js';
+import { logger as rootLogger, logPath, setLogLevel, dumpCrash, onLog, getRing } from './logger.js';
+
+const logger = rootLogger.child ({ module: 'main' });
 import { ROOT, SOURCE, dataDir } from './config.js';
 import { settings, saveSettings, toComponents, toDays, toDebounce } from './settings.js';
 import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
@@ -46,18 +49,40 @@ let calibrateOk = false;
 let lastScan = { ok: null, name: '', price: null, market: null, rarity: '', id: '', zhName: '', pricing: null, attributes: { primary: [], secondary: [] }, reverseAttributes: {}, message: '', ts: 0 };
 const BALL_SIZE = { w: 82, h: 82 };
 
-process.on ('uncaughtException', (e) => logger.error ('Uncaught Exception:', e));
-process.on ('unhandledRejection', (r) => logger.error (`Unhandled Rejection: ${r}`));
+process.on ('uncaughtException', (e) => {
+  logger.error ('未捕获异常', { error: e?.message, stack: e?.stack });
+  dumpCrash ('uncaughtException', e);
+});
+process.on ('unhandledRejection', (r) => {
+  logger.error ('未处理的 Promise 拒绝', { error: r instanceof Error ? r.message : String (r) });
+  dumpCrash ('unhandledRejection', r instanceof Error ? r : new Error (String (r)));
+});
 process.on ('SIGTERM', () => process.exit (0));
 process.on ('SIGINT', () => process.exit (0));
 
 // ── Exit / crash diagnostics: record WHY the app goes down, so a future
 //    "flash quit" can be diagnosed from the log instead of guessed. ──
-app.on ('quit', (e, exitCode) => logger.info (`[App] quit (exitCode=${exitCode})`));
-app.on ('render-process-gone', (e, wc, details) =>
-  logger.error (`[App] render-process-gone: reason=${details?.reason} exitCode=${details?.exitCode}`));
-app.on ('child-process-gone', (e, details) =>
-  logger.error (`[App] child-process-gone: type=${details?.type} reason=${details?.reason}`));
+app.on ('quit', (e, exitCode) => logger.info ('应用退出', { exitCode }));
+app.on ('render-process-gone', (e, wc, details) => {
+  logger.error ('渲染进程崩溃', { reason: details?.reason, exitCode: details?.exitCode });
+  dumpCrash ('render-process-gone', { reason: details?.reason, exitCode: details?.exitCode });
+});
+app.on ('child-process-gone', (e, details) => {
+  logger.error ('子进程崩溃', { type: details?.type, reason: details?.reason, exitCode: details?.exitCode });
+  dumpCrash ('child-process-gone', { type: details?.type, reason: details?.reason, exitCode: details?.exitCode });
+});
+
+// 清理超过 2 天的崩溃现场文件
+function cleanupOldCrashDumps () {
+  try {
+    const cutoff = Date.now () - 2 * 24 * 3600 * 1000;
+    for (const f of readdirSync (logPath)) {
+      if (!/^crash-.*\.log$/.test (f)) continue;
+      const p = join (logPath, f);
+      try { if (statSync (p).mtimeMs < cutoff) { unlinkSync (p); logger.info ('已清理过期崩溃现场', { file: f }); } } catch (e) {}
+    }
+  } catch (e) {}
+}
 
 app.commandLine.appendSwitch ('high-dpi-support', 1);
 app.commandLine.appendSwitch ('force-device-scale-factor', 1);
@@ -80,6 +105,24 @@ app.on ('second-instance', () => {
   // silently quitting the new instance (which looked like a "flash quit").
   openHomeWindow ();
 });
+
+// IPC handler 统一包装：异常必记 error（channel+堆栈），失败结果记 warn，
+// 关键路径留痕——任何 handler 出问题都能从日志定位。
+function safeHandle (channel, fn) {
+  ipcMain.handle (channel, async (e, ...args) => {
+    const start = Date.now ();
+    try {
+      const r = await fn (e, ...args);
+      if (r && typeof r === 'object' && r.success === false && (r.error || r.message)) {
+        logger.warn ('IPC 操作失败', { channel, ms: Date.now () - start, error: r.error || r.message });
+      }
+      return r;
+    } catch (err) {
+      logger.error ('IPC 处理异常', { channel, ms: Date.now () - start, error: err?.message, stack: err?.stack });
+      throw err;
+    }
+  });
+}
 
 let quitCleanupDone = false;
 
@@ -104,16 +147,52 @@ app.on ('will-quit', (e) => {
 });
 
 app.on ('ready', async () => {
+  // 日志级别：普通用户精简（info 关键流程），开发者模式完整（debug）
+  setLogLevel (settings.general.developer_mode ? 'debug' : 'info');
+  cleanupOldCrashDumps ();
+
+  // 会话启动日志（文件头定位会话）
+  const sessionId = crypto.randomUUID ().slice (0, 8);
+  logger.info ('===== 启动 =====', {
+    sessionId,
+    version: app.getVersion (),
+    os: `${process.platform} ${process.arch} ${process.getSystemVersion?.() || ''}`,
+    developerMode: !!settings.general.developer_mode,
+  });
+  const bootStart = Date.now ();
+
+  // 日志实时推送：主进程每条日志 → 前端日志面板（home 窗口在线时）
+  onLog ((entry) => {
+    if (homeWindow && !homeWindow.isDestroyed ()) {
+      try { homeWindow.webContents.send ('logs:append', entry); } catch (e) {}
+    }
+  });
+  safeHandle ('logs:list', () => getRing ());
+  safeHandle ('logs:open-folder', () => { try { shell.openPath (logPath); } catch (e) { logger.warn ('打开日志文件夹失败', { error: e.message }); } return { success: true }; });
+
   backend.startService (settings.general.python_path);
+
+  // 查价服务进程中途退出/崩溃 → 立即刷新托盘与悬浮球状态
+  // （旧版只记日志，托盘一直显示"已就绪"）
+  backend.onServiceExit ((code, signal) => {
+    logger.warn ('查价服务进程退出，状态已刷新', { code, signal });
+    ocrStatus = false;
+    refreshTrayMenu ();
+    pushBallStatus ();
+    notifyHome ('ocr:status', { ok: false });
+  });
 
   tray = new Tray (join (ROOT, 'assets/images/icon.ico'));
   tray.setToolTip ('冒险者侍从 Adventurer’s Squire');
   // 左键单击托盘图标 = 打开主页（老版本未绑定，单击无反应）
   tray.on ('click', () => openHomeWindow ());
   refreshTrayMenu ();
-  healthTimer = setInterval (() => {
-    refreshTrayMenu ();
-    if (ocrStatus && healthTimer) { clearInterval (healthTimer); healthTimer = null; }
+  healthTimer = setInterval (async () => {
+    await refreshTrayMenu ();
+    if (ocrStatus && healthTimer) {
+      clearInterval (healthTimer); healthTimer = null;
+      logger.info ('查价服务就绪', { bootMs: Date.now () - bootStart });
+    }
   }, 3000);
 
   setOnStateChange ((gameOk) => {
@@ -188,12 +267,12 @@ app.on ('ready', async () => {
 
   // ── 悬浮球 IPC ──
 
-  ipcMain.handle ('ball:get-status', () => gatherBallStatus ());
-  ipcMain.handle ('ball:menu', () => popupBallMenu ());
-  ipcMain.handle ('ball:open-home', () => openHomeWindow ());
-  ipcMain.handle ('ball:open-settings', () => openSettingsWindow ('settings'));
+  safeHandle ('ball:get-status', () => gatherBallStatus ());
+  safeHandle ('ball:menu', () => popupBallMenu ());
+  safeHandle ('ball:open-home', () => openHomeWindow ());
+  safeHandle ('ball:open-settings', () => openSettingsWindow ('settings'));
 
-  ipcMain.handle ('ball:drag-start', () => {
+  safeHandle ('ball:drag-start', () => {
     if (!ballWindow || ballWindow.isDestroyed ()) return;
     const cursor = initBallCursor ();
     const startPos = cursor ? cursor.pos () : null;
@@ -221,7 +300,7 @@ app.on ('ready', async () => {
       }
     }, 16);
   });
-  ipcMain.handle ('ball:drag-end', () => {
+  safeHandle ('ball:drag-end', () => {
     const moved = ballDrag?.moved || false;
     if (ballDragTimer) { clearInterval (ballDragTimer); ballDragTimer = null; }
     ballDrag = null;
@@ -238,7 +317,7 @@ app.on ('ready', async () => {
 
   // ── 前端仓库页状态与切换 ──
 
-  ipcMain.handle ('stash:set-current', (e, data = {}) => {
+  safeHandle ('stash:set-current', (e, data = {}) => {
     if (data.list && Array.isArray (data.list)) frontStashList = data.list;
     if (data.id != null) {
       const label = data.label || '';
@@ -251,45 +330,47 @@ app.on ('ready', async () => {
     }
     return { success: true };
   });
-  ipcMain.handle ('stash:get-state', () => ({ current: frontStash, list: frontStashList }));
-  ipcMain.handle ('stash:switch-in-game', async (e, data = {}) => {
+  safeHandle ('stash:get-state', () => ({ current: frontStash, list: frontStashList }));
+  safeHandle ('stash:switch-in-game', async (e, data = {}) => {
     if (data.stash_id == null) return { success: false, switched: false, reason: 'invalid_stash_id' };
     return await switchInGameStash (String (data.stash_id), data.character_id ? String (data.character_id) : '');
   });
-  ipcMain.handle ('stash:tab-test', (e, characterId = '') => backend.tabTest (characterId));
-  ipcMain.handle ('stash:tab-scan', () => backend.tabScan ());
-  ipcMain.handle ('stash:first-calibrate', async () => {
+  safeHandle ('stash:tab-test', (e, characterId = '') => backend.tabTest (characterId));
+  safeHandle ('stash:tab-scan', () => backend.tabScan ());
+  safeHandle ('stash:first-calibrate', async () => {
     calibrateRunning = true;
     pushBallStatus ();
+    const t0 = Date.now ();
     let r = null;
     try { r = await backend.firstCalibrate (); } catch (e) { r = { error: e?.message || '' }; }
     calibrateRunning = false;
     calibrateJustFinished = true;
     calibrateOk = !!r?.success;
+    logger.info ('首次校准完成', { ok: calibrateOk, ms: Date.now () - t0, note: r?.note, error: r?.error || '' });
     pushBallStatus ();
     return r;
   });
-  ipcMain.handle ('stash:follow-calibrate-status', () => backend.followCalibrateStatus ());
-  ipcMain.handle ('stash:follow-calibrate-record', (e, index) => backend.followCalibrateRecord (Number (index)));
-  ipcMain.handle ('stash:follow-calibrate-auto', () => backend.followCalibrateAuto ());
-  ipcMain.handle ('stash:follow-calibrate-save', () => backend.followCalibrateSave ());
-  ipcMain.handle ('stash:follow-calibrate-reset', () => backend.followCalibrateReset ());
-  ipcMain.handle ('stash:calibration-status', () => backend.calibrationStatus ());
-  ipcMain.handle ('stash:calibration-record', (e, index) => backend.calibrationRecord (Number (index)));
-  ipcMain.handle ('stash:calibration-save', (e, resolution = '') => backend.calibrationSave (resolution));
-  ipcMain.handle ('stash:calibration-reset', () => backend.calibrationReset ());
+  safeHandle ('stash:follow-calibrate-status', () => backend.followCalibrateStatus ());
+  safeHandle ('stash:follow-calibrate-record', (e, index) => backend.followCalibrateRecord (Number (index)));
+  safeHandle ('stash:follow-calibrate-auto', () => backend.followCalibrateAuto ());
+  safeHandle ('stash:follow-calibrate-save', () => backend.followCalibrateSave ());
+  safeHandle ('stash:follow-calibrate-reset', () => backend.followCalibrateReset ());
+  safeHandle ('stash:calibration-status', () => backend.calibrationStatus ());
+  safeHandle ('stash:calibration-record', (e, index) => backend.calibrationRecord (Number (index)));
+  safeHandle ('stash:calibration-save', (e, resolution = '') => backend.calibrationSave (resolution));
+  safeHandle ('stash:calibration-reset', () => backend.calibrationReset ());
 
   registerStashHotkeys ();
   registerCrossHotkeys ();
 
   // ── 查价记录 IPC ──
 
-  ipcMain.handle ('history:list', () => {
+  safeHandle ('history:list', () => {
     loadHistory ();
     pruneHistory ();
     return { records: [...priceHistory].reverse ().map ((r) => ({ ...r, icon: historyIconPath (r) })) };
   });
-  ipcMain.handle ('history:clear', () => {
+  safeHandle ('history:clear', () => {
     priceHistory = [];
     historyKeyIndex = new Map ();
     historyDirty = false;
@@ -301,15 +382,15 @@ app.on ('ready', async () => {
 
   // ── DnD Tools IPC handlers ──
 
-  ipcMain.handle ('dnd:capture-start', () => backend.captureStart ());
-  ipcMain.handle ('dnd:capture-stop', () => backend.captureStop ());
-  ipcMain.handle ('dnd:capture-restart', () => backend.captureRestart ());
-  ipcMain.handle ('dnd:capture-status', () => backend.captureStatus ());
-  ipcMain.handle ('dnd:capture-interfaces', () => backend.captureInterfaces ());
-  ipcMain.handle ('dnd:capture-diagnose', () => backend.captureDiagnose ());
-  ipcMain.handle ('dnd:npcap-status', (e, force) => backend.npcapStatus (force));
-  ipcMain.handle ('dnd:capture-settings', (e, data) => backend.captureUpdateSettings (data));
-  ipcMain.handle ('dnd:pick-tshark', async () => {
+  safeHandle ('dnd:capture-start', () => backend.captureStart ());
+  safeHandle ('dnd:capture-stop', () => backend.captureStop ());
+  safeHandle ('dnd:capture-restart', () => backend.captureRestart ());
+  safeHandle ('dnd:capture-status', () => backend.captureStatus ());
+  safeHandle ('dnd:capture-interfaces', () => backend.captureInterfaces ());
+  safeHandle ('dnd:capture-diagnose', () => backend.captureDiagnose ());
+  safeHandle ('dnd:npcap-status', (e, force) => backend.npcapStatus (force));
+  safeHandle ('dnd:capture-settings', (e, data) => backend.captureUpdateSettings (data));
+  safeHandle ('dnd:pick-tshark', async () => {
     const res = await dialog.showOpenDialog ({
       title: '选择 tshark.exe（或 Wireshark.exe / Wireshark 安装目录）',
       buttonLabel: '选择',
@@ -320,71 +401,71 @@ app.on ('ready', async () => {
     return { canceled: false, path: res.filePaths[0] };
   });
 
-  ipcMain.handle ('dnd:characters', () => backend.getCharacters ());
-  ipcMain.handle ('dnd:character', (e, id) => backend.getCharacter (id));
-  ipcMain.handle ('dnd:service-port', () => backend.getServicePort ());
-  ipcMain.handle ('dnd:clear-characters', () => backend.clearCharacters ());
-  ipcMain.handle ('dnd:stash-locks-get', () => backend.getStashLocks ());
-  ipcMain.handle ('dnd:stash-locks-set', (e, stashId, locked) => backend.setStashLock (stashId, locked));
+  safeHandle ('dnd:characters', () => backend.getCharacters ());
+  safeHandle ('dnd:character', (e, id) => backend.getCharacter (id));
+  safeHandle ('dnd:service-port', () => backend.getServicePort ());
+  safeHandle ('dnd:clear-characters', () => backend.clearCharacters ());
+  safeHandle ('dnd:stash-locks-get', () => backend.getStashLocks ());
+  safeHandle ('dnd:stash-locks-set', (e, stashId, locked) => backend.setStashLock (stashId, locked));
 
-  ipcMain.handle ('dnd:sort-start', async (e, params) => {
+  safeHandle ('dnd:sort-start', async (e, params) => {
     const r = await backend.sortStart (params);
     // Minimize the app so it can't cover the game during sorting.
     if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
     return r;
   });
-  ipcMain.handle ('dnd:sort-all-start', async (e, params) => {
+  safeHandle ('dnd:sort-all-start', async (e, params) => {
     const r = await backend.sortAllStart (params);
     if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
     return r;
   });
-  ipcMain.handle ('dnd:merge-stacks-start', async (e, params) => {
+  safeHandle ('dnd:merge-stacks-start', async (e, params) => {
     const r = await backend.mergeStacksStart (params);
     if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
     return r;
   });
-  ipcMain.handle ('dnd:cross-sort-start', async (e, params) => {
+  safeHandle ('dnd:cross-sort-start', async (e, params) => {
     try {
       const r = await backend.crossSortStart (params);
       if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
       return r;
     } catch (err) {
-      logger.error (`cross-sort-start handler error: ${err?.message}`, err);
+      logger.error ('跨仓整理启动异常', { error: err?.message, stack: err?.stack });
       return { success: false, error: 'handler_error: ' + (err?.message || String (err)) };
     }
   });
-  ipcMain.handle ('dnd:precise-sort-start', async (e, params) => {
+  safeHandle ('dnd:precise-sort-start', async (e, params) => {
     try {
       const r = await backend.preciseSortStart (params);
       if (r?.success && homeWindow && !homeWindow.isDestroyed ()) homeWindow.minimize ();
       return r;
     } catch (err) {
-      logger.error (`precise-sort-start handler error: ${err?.message}`, err);
+      logger.error ('精准整理启动异常', { error: err?.message, stack: err?.stack });
       return { success: false, error: 'handler_error: ' + (err?.message || String (err)) };
     }
   });
-  ipcMain.handle ('dnd:sort-cancel', () => backend.sortCancel ());
-  ipcMain.handle ('dnd:sort-status', () => backend.sortStatus ());
-  ipcMain.handle ('dnd:sort-uipi', () => backend.getSortUipiStatus ());
-  ipcMain.handle ('dnd:sort-speed-get', () => backend.getSortSpeed ());
-  ipcMain.handle ('dnd:sort-speed-set', (e, value) => backend.setSortSpeed (value));
-  ipcMain.handle ('dnd:sort-order-get', () => backend.getSortOrder ());
-  ipcMain.handle ('dnd:sort-order-set', (e, order) => backend.updateSortOrder (order));
-  ipcMain.handle ('dnd:sort-group-get', () => backend.getSortGroupMode ());
-  ipcMain.handle ('dnd:sort-group-set', (e, mode) => backend.setSortGroupMode (mode));
-  ipcMain.handle ('dnd:quickplace-get', () => backend.getQuickPlace ());
-  ipcMain.handle ('dnd:quickplace-set', (e, enabled) => backend.setQuickPlace (enabled));
-  ipcMain.handle ('dnd:narrow-anchor-get', () => backend.getNarrowAnchor ());
-  ipcMain.handle ('dnd:narrow-anchor-set', (e, anchor) => backend.setNarrowAnchor (anchor));
-  ipcMain.handle ('dnd:sort-preview', (e, params) => backend.sortPreview (params));
-  ipcMain.handle ('dnd:sort-config-get', () => ({
+  safeHandle ('dnd:sort-cancel', () => backend.sortCancel ());
+  safeHandle ('dnd:sort-status', () => backend.sortStatus ());
+  safeHandle ('dnd:sort-uipi', () => backend.getSortUipiStatus ());
+  safeHandle ('dnd:sort-speed-get', () => backend.getSortSpeed ());
+  safeHandle ('dnd:sort-speed-set', (e, value) => backend.setSortSpeed (value));
+  safeHandle ('dnd:sort-order-get', () => backend.getSortOrder ());
+  safeHandle ('dnd:sort-order-set', (e, order) => backend.updateSortOrder (order));
+  safeHandle ('dnd:sort-group-get', () => backend.getSortGroupMode ());
+  safeHandle ('dnd:sort-group-set', (e, mode) => backend.setSortGroupMode (mode));
+  safeHandle ('dnd:quickplace-get', () => backend.getQuickPlace ());
+  safeHandle ('dnd:quickplace-set', (e, enabled) => backend.setQuickPlace (enabled));
+  safeHandle ('dnd:narrow-anchor-get', () => backend.getNarrowAnchor ());
+  safeHandle ('dnd:narrow-anchor-set', (e, anchor) => backend.setNarrowAnchor (anchor));
+  safeHandle ('dnd:sort-preview', (e, params) => backend.sortPreview (params));
+  safeHandle ('dnd:sort-config-get', () => ({
     character_id: settings.dnd?.sort_char_id || '',
     stash_id: settings.dnd?.sort_stash_id || '',
     stack_mode: !!settings.dnd?.stack_mode,
     include_inventory: !!settings.dnd?.sort_include_inv,
     keep_in_place: settings.dnd?.keep_in_place !== false,
   }));
-  ipcMain.handle ('dnd:sort-config-save', (e, data = {}) => {
+  safeHandle ('dnd:sort-config-save', (e, data = {}) => {
     const dnd = settings.dnd || {};
     if (data.character_id !== undefined) dnd.sort_char_id = String (data.character_id || '');
     if (data.stash_id !== undefined) dnd.sort_stash_id = String (data.stash_id || '');
@@ -396,11 +477,11 @@ app.on ('ready', async () => {
     return { success: true };
   });
 
-  ipcMain.handle ('dnd:packets', (e, page, pageSize) => backend.getPackets (page, pageSize));
-  ipcMain.handle ('dnd:packet-detail', (e, id) => backend.getPacketDetail (id));
-  ipcMain.handle ('dnd:packets-clear', () => backend.clearPackets ());
+  safeHandle ('dnd:packets', (e, page, pageSize) => backend.getPackets (page, pageSize));
+  safeHandle ('dnd:packet-detail', (e, id) => backend.getPacketDetail (id));
+  safeHandle ('dnd:packets-clear', () => backend.clearPackets ());
 
-  ipcMain.handle ('settings:get', () => ({
+  safeHandle ('settings:get', () => ({
     api_key: settings.general.api_key || '',
     scan_key: settings.hotkeys.run_price_check || 'XButton1',
     default_mode: settings.general.default_mode || 'manual',
@@ -428,7 +509,7 @@ app.on ('ready', async () => {
     auto_check_update: settings.general.auto_check_update !== false,
   }));
 
-  ipcMain.handle ('settings:save', (e, data) => {
+  safeHandle ('settings:save', (e, data) => {
     let needReregister = false;
     let needSend = false;
     let needSortReregister = false;
@@ -464,6 +545,8 @@ app.on ('ready', async () => {
     }
     if (data.developer_mode !== undefined) {
       settings.general.developer_mode = !!data.developer_mode;
+      setLogLevel (settings.general.developer_mode ? 'debug' : 'info');
+      logger.info ('开发者模式', { enabled: settings.general.developer_mode, logLevel: settings.general.developer_mode ? 'debug' : 'info' });
     }
     if (data.theme !== undefined && (data.theme === 'dark' || data.theme === 'light')) {
       settings.general.theme = data.theme;
@@ -508,12 +591,12 @@ app.on ('ready', async () => {
     return { success: true };
   });
 
-  ipcMain.handle ('app:quit', () => {
+  safeHandle ('app:quit', () => {
     app.quit ();
     return { success: true };
   });
 
-  ipcMain.handle ('update:check', () => checkForUpdate ());
+  safeHandle ('update:check', () => checkForUpdate ());
 
   openHomeWindow ();
   createBallWindow ();
@@ -591,7 +674,7 @@ async function registerScanHotkey (overlay) {
   let isMouse = accelerator.startsWith ('mousebutton');
 
   if (previousScanAccelerator && !previousScanAccelerator.startsWith ('mousebutton') && !RESERVED_KEYS.includes (previousScanAccelerator)) {
-    try { globalShortcut.unregister (previousScanAccelerator); } catch (e) {}
+    try { globalShortcut.unregister (previousScanAccelerator); } catch (e) { logger.debug ('注销扫描快捷键失败', { accelerator: previousScanAccelerator, error: e.message }); }
   }
   if (global._mousePollInterval) { clearInterval (global._mousePollInterval); global._mousePollInterval = null; }
 
@@ -687,7 +770,7 @@ function registerStashHotkeys () {
 
   if (registeredStashKeys) {
     for (const k of registeredStashKeys) {
-      try { globalShortcut.unregister (k); } catch (e) {}
+      try { globalShortcut.unregister (k); } catch (e) { logger.debug ('注销快捷键失败', { key: k, error: e.message }); }
     }
     registeredStashKeys = null;
   }
@@ -719,7 +802,7 @@ function registerCrossHotkeys () {
 
   if (registeredCrossKeys) {
     for (const k of registeredCrossKeys) {
-      try { globalShortcut.unregister (k); } catch (e) {}
+      try { globalShortcut.unregister (k); } catch (e) { logger.debug ('注销快捷键失败', { key: k, error: e.message }); }
     }
     registeredCrossKeys = null;
   }
@@ -734,7 +817,7 @@ function registerCrossHotkeys () {
         return;
       }
       let config = {};
-      try { config = JSON.parse (settings.dnd?.cross_config || '{}') || {}; } catch (e) {}
+      try { config = JSON.parse (settings.dnd?.cross_config || '{}') || {}; } catch (e) { logger.warn ('跨仓配置解析失败', { error: e.message, raw: settings.dnd?.cross_config }); }
       config.merge = !!settings.dnd?.stack_mode;
       config.clear_bag = !!settings.dnd?.sort_include_inv;
       const r = await backend.crossSortStart ({ character_id: charId, config });
@@ -757,7 +840,7 @@ function registerSortHotkeys () {
 
   if (registeredSortKeys) {
     for (const k of registeredSortKeys) {
-      try { globalShortcut.unregister (k); } catch (e) {}
+      try { globalShortcut.unregister (k); } catch (e) { logger.debug ('注销快捷键失败', { key: k, error: e.message }); }
     }
     registeredSortKeys = null;
   }

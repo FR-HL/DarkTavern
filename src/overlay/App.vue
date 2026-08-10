@@ -25,7 +25,11 @@ watch (mode, () => {
 });
 
 electron.on ('settings', (config) => {
-  logger.debug (`Client received settings: ${JSON.stringify(config, null, 4)}`);
+  // 注意：绝不打印 settings 全文——含 api_key 等敏感字段
+  logger.debug ('Client received settings', {
+    mode: config.general?.default_mode,
+    scale: config.general?.scale,
+  });
   settings.value = config;
   mode.value = modes [config.general.default_mode];
   document.documentElement.style.setProperty('--scale', config.general.scale);

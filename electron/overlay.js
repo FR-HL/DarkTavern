@@ -1,6 +1,8 @@
 import { screen } from 'electron';
-import { logger } from './logger.js';
+import { logger as rootLogger } from './logger.js';
 import { createRequire } from 'node:module';
+
+const logger = rootLogger.child ({ module: 'overlay' });
 
 const _require = createRequire (import.meta.url);
 const koffi = _require ('koffi');
@@ -125,6 +127,7 @@ function onWindowLost () {
   removeHooks ();
   trackedHwnd = null;
   prevBounds = null;
+  logger.info ('游戏窗口消失，悬浮层隐藏');
 
   if (shown && overlay) {
     overlay.hide ();
@@ -193,5 +196,5 @@ function showOverlay () {
 
   overlay.webContents.send ('game:state', { canScan: true, visible: true, focused: true });
   if (onStateChange) onStateChange (true);
-  logger.info ('Game window found - overlay shown');
+  logger.info ('检测到游戏窗口，悬浮层已显示');
 }

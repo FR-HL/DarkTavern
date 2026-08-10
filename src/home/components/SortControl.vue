@@ -521,6 +521,15 @@ onMounted (async () => {
   unsubs = [
     window.electron.on ('dnd:sort-started', onSortStarted),
     window.electron.on ('dnd:sort-cancelled', onSortCancelled),
+    // 服务就绪补拉：启动时服务未就绪导致加载失败的配置，就绪后自动刷新
+    window.electron.on ('ocr:status', (d) => {
+      if (d?.ok) {
+        loadQuickPlace ();
+        loadSortSpeed ();
+        loadNarrowAnchor ();
+        loadCrossConfig ();
+      }
+    }),
   ];
   poll = setInterval (pollStatus, 1000);
 });

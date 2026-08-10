@@ -1,9 +1,11 @@
 import { ipcMain } from 'electron';
 import { createHash } from 'node:crypto';
-import { logger } from './logger.js';
+import { logger as rootLogger } from './logger.js';
 import { settings, saveSettings } from './settings.js';
 import { getCanScan, resendState, activateGameWindow } from './overlay.js';
 import * as backend from './backend.js';
+
+const logger = rootLogger.child ({ module: 'scan' });
 
 const DARKERDB_URL = 'https://api.darkerdb.com/v1/internal/grimvault/analyze';
 const MARKET_URL = 'https://api.darkerdb.com/v2/market';
@@ -25,13 +27,13 @@ export function wire (overlay, sendBall = null, hooks = null) {
   const markResult = (data) => { if (sendBall) sendBall ({ scanResult: data }); };
 
   ipcMain.on ('ready', () => {
-    logger.info ('Frontend ready');
+    logger.info ('前端就绪');
     send ('settings', settings);
     resendState ();
   });
 
   ipcMain.on ('log', (e, data) => {
-    logger.log (data.level, `[Frontend] ${data.message}`, data.meta || {});
+    logger.log (data.level, data.message, { module: 'frontend', ...(data.meta || {}) });
   });
 
   ipcMain.on ('scan', async (e, data) => {
@@ -40,6 +42,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
     if (scanning) return;
     scanning = true;
     markScan (true);
+    const t0 = Date.now ();
 
     if (source === 'manual') {
       overlay.setAlwaysOnTop (true, 'screen-saver');
@@ -59,10 +62,11 @@ export function wire (overlay, sendBall = null, hooks = null) {
     try {
       tooltip = await backend.scan ();
     } catch (err) {
-      logger.error (`Scan error: ${err}`);
+      logger.error ('查价扫描异常', { scanId, error: err?.message });
     }
 
     if (!tooltip) {
+      logger.debug ('扫描无结果（未检测到提示框）', { scanId, ms: Date.now () - t0 });
       if (source === 'manual') send ('clear', { scanId });
       send ('scan:finish');
       scanning = false;
@@ -70,13 +74,14 @@ export function wire (overlay, sendBall = null, hooks = null) {
       return;
     }
 
+    const tooltipMs = Date.now () - t0;
     send ('hover:preview', { scanId, ...tooltip });
-    logger.info (`[Scan] ${tooltip.text}`);
+    logger.debug ('提示框识别完成', { scanId, ms: tooltipMs, text: tooltip.text });
 
     const key = hashText (tooltip.text);
     const cached = hooks?.findScanCache ? hooks.findScanCache (key) : null;
     if (cached) {
-      logger.info (`[Scan] cache hit key=${key} id=${cached.id}`);
+      logger.info ('查价命中缓存', { scanId, key, id: cached.id, totalMs: Date.now () - t0 });
       const attributes = cached.attributes || { primary: [], secondary: [] };
       const pricing = { market: cached.market ?? null, vendor: cached.vendor ?? null, density: cached.density ?? null };
       lastAnalyze = {
@@ -101,14 +106,19 @@ export function wire (overlay, sendBall = null, hooks = null) {
 
     let result;
     const now = Date.now ();
+    let apiMs = 0;
     if (cache.text === tooltip.text && (now - cache.ts) < CACHE_TTL) {
       result = cache.result;
+      logger.debug ('命中 10 秒短缓存', { scanId });
     } else {
+      const apiStart = Date.now ();
       result = await queryPrice (tooltip.text);
+      apiMs = Date.now () - apiStart;
       cache = { text: tooltip.text, result, ts: now };
     }
 
     if (result.success) {
+      logger.info ('查价完成', { scanId, name: result.data?.item?.name || '', apiMs, totalMs: Date.now () - t0 });
       lastAnalyze = result.data;
       send ('hover:item', { scanId, ...tooltip, ...result.data });
       markResult ({
@@ -130,6 +140,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
         if (msg === 'hover:live-price') markResult ({ ok: true, live: payload?.price ?? null, usedAffixes: payload?.used_affixes || [] });
       });
     } else {
+      logger.warn ('查价失败', { scanId, error: result.error, apiMs, totalMs: Date.now () - t0 });
       send ('hover:error', {
         scanId, message: result.error,
         x: tooltip.x || 0, y: tooltip.y || 0,
@@ -246,7 +257,10 @@ async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers) {
   }
 
   const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });
-  if (!res.ok) return null;
+  if (!res.ok) {
+    logger.warn ('市场现价查询失败', { itemId, rarity, status: res.status });
+    return null;
+  }
 
   const listings = (await res.json ()).body;
   if (Array.isArray (listings) && listings.length > 0) return listings[0].price;

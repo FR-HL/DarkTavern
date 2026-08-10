@@ -42,6 +42,13 @@ import sys
 import time
 from contextlib import asynccontextmanager
 
+# 强制 stdout/stderr 以 UTF-8 输出（Windows 默认 GBK 管道会让 Electron 端中文乱码）
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 import cv2
 
 from fastapi import FastAPI
@@ -100,7 +107,7 @@ PORT = int(os.environ.get("SQUIRE_OCR_PORT", os.environ.get("DARKTAVERN_OCR_PORT
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
 )
 logger = logging.getLogger("squire-ocr")
 

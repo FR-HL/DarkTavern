@@ -15,6 +15,7 @@ import StashView from './components/StashView.vue';
 import SortControl from './components/SortControl.vue';
 import PacketPane from './components/PacketPane.vue';
 import DisclaimerBody from './components/DisclaimerBody.vue';
+import LogPane from './components/LogPane.vue';
 
 const invoke = (channel, data) => window.electron.invoke (channel, data);
 
@@ -1309,7 +1310,7 @@ onBeforeUnmount (() => {
             <div class="srow">
               <div class="srow-info">
                 <div class="srow-t">开发者工具</div>
-                <div class="srow-d">显示数据汉化、数据包等开发者功能卡片</div>
+                <div class="srow-d">显示数据汉化、数据包、日志等开发者功能卡片（开启即完整日志模式）</div>
               </div>
               <div class="srow-ctl">
                 <label class="switch"><input type="checkbox" :checked="developerMode" @change="toggleDeveloperMode"><span class="track"></span></label>
@@ -1401,6 +1402,20 @@ onBeforeUnmount (() => {
             </div>
             <div v-if="devCard === 'packets'" class="dev-card-body">
               <PacketPane bare />
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="dev-card-head" :class="{ open: devCard === 'logs' }" @click="toggleDevCard('logs')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <div class="srow-info">
+                <div class="srow-t">日志</div>
+                <div class="srow-d">实时查看主进程 / 前端 / 查价服务进程的全部日志（此面板开启即完整日志模式）</div>
+              </div>
+              <svg class="dev-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+            <div v-if="devCard === 'logs'" class="dev-card-body">
+              <LogPane />
             </div>
           </div>
         </template>

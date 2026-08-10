@@ -325,7 +325,14 @@ function tabIconType (label) {
   return '';
 }
 
+let lastCharLoad = { id: null, ts: 0 };
+
 async function loadCharData (id, silent = false) {
+  // 去重：同一角色 2 秒内已加载则跳过——启动时 mounted + watch + WebSocket
+  // onopen 都会触发（旧版同一角色重复请求 3 次）
+  const now = Date.now ();
+  if (id === lastCharLoad.id && now - lastCharLoad.ts < 2000) return;
+  lastCharLoad = { id, ts: now };
   if (!silent) { loading.value = true; error.value = ''; charData.value = null; }
   try {
     const d = await invoke ('dnd:character', id);
@@ -544,6 +551,10 @@ async function loadCharacters () {
 
 async function loadStashes () {
   if (!props.charId) { emit ('update:stashId', ''); return; }
+  // 与 loadCharData 共用去重（loadStashes 内部也请求同一角色数据）
+  const now = Date.now ();
+  if (props.charId === lastCharLoad.id && now - lastCharLoad.ts < 2000) return;
+  lastCharLoad = { id: props.charId, ts: now };
   try {
     const d = await invoke ('dnd:character', props.charId);
     if (d && d.stashes) {
@@ -640,9 +651,16 @@ onMounted (async () => {
   applyFollowMode ();
 
   // 组件常驻（v-show）后不再随切换重建：启动时后端可能尚未就绪，
-  // 后端就绪或角色列表为空时补刷新，避免"角色空但仓库在"的错位。
-  window.electron.on ('ocr:status', (d) => {
-    if (d?.ok && !characters.value.length) loadCharacters ();
+  // 就绪后统一补拉启动失败的数据（角色/锁/校准/排序配置/仓库）。
+  let unsubOcr = null;
+  unsubOcr = window.electron.on ('ocr:status', (d) => {
+    if (!d?.ok) return;
+    if (!characters.value.length) loadCharacters ();
+    loadLocks ();
+    loadCalibration ();
+    loadFollowCal ();
+    loadSortOrder ();
+    loadStashes ();
   });
   retryTimer = setInterval (() => {
     if (!characters.value.length) loadCharacters ();
@@ -653,6 +671,7 @@ onMounted (async () => {
 onBeforeUnmount (() => {
   if (followTimer) { clearInterval (followTimer); followTimer = null; }
   if (retryTimer) { clearInterval (retryTimer); retryTimer = null; }
+  if (unsubOcr) unsubOcr ();
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
