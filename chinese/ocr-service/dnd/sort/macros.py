@@ -985,31 +985,53 @@ def click_at(x, y, hold=0.03, settle=0.15):
 
 
 def type_text(text):
-    """Type a string via SendInput Unicode events (digits/latin, no layout)."""
+    """Type a string via SendInput. Digits use VK codes (most reliable for
+    in-game text fields); other characters use Unicode events."""
     _ensure_not_cancelled()
     for ch in str(text):
         if ch == '\n':
             continue
         _ensure_not_cancelled()
-        code = ord(ch)
-        key_input = INPUT(type=INPUT_KEYBOARD)
-        key_input.union.ki = KEYBDINPUT(
-            wVk=0,
-            wScan=code,
-            dwFlags=KEYEVENTF_UNICODE,
-            time=0,
-            dwExtraInfo=None
-        )
-        SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
-        key_input.union.ki = KEYBDINPUT(
-            wVk=0,
-            wScan=code,
-            dwFlags=KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
-            time=0,
-            dwExtraInfo=None
-        )
-        SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
-        _sleep_with_cancel(0.02)
+        if '0' <= ch <= '9':
+            # Main-keyboard digit VK codes 0x30-0x39
+            vk = 0x30 + ord(ch) - ord('0')
+            key_input = INPUT(type=INPUT_KEYBOARD)
+            key_input.union.ki = KEYBDINPUT(
+                wVk=vk,
+                wScan=0,
+                dwFlags=0,
+                time=0,
+                dwExtraInfo=None
+            )
+            SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+            key_input.union.ki = KEYBDINPUT(
+                wVk=vk,
+                wScan=0,
+                dwFlags=KEYEVENTF_KEYUP,
+                time=0,
+                dwExtraInfo=None
+            )
+            SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+        else:
+            code = ord(ch)
+            key_input = INPUT(type=INPUT_KEYBOARD)
+            key_input.union.ki = KEYBDINPUT(
+                wVk=0,
+                wScan=code,
+                dwFlags=KEYEVENTF_UNICODE,
+                time=0,
+                dwExtraInfo=None
+            )
+            SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+            key_input.union.ki = KEYBDINPUT(
+                wVk=0,
+                wScan=code,
+                dwFlags=KEYEVENTF_UNICODE | KEYEVENTF_KEYUP,
+                time=0,
+                dwExtraInfo=None
+            )
+            SendInput(1, ctypes.byref(key_input), ctypes.sizeof(key_input))
+        _sleep_with_cancel(0.03)
 
 
 VK_BACK = 0x08
