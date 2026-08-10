@@ -937,8 +937,20 @@ def click_market_stash_tab(stash_type_value: int) -> bool:
         return False
 
     _ensure_not_cancelled()
-    move_mouse(pos.x, pos.y)
-    _sleep_with_cancel(0.05)
+    pt = POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+    move_mouse_smooth(
+        float(pt.x),
+        float(pt.y),
+        pos.x,
+        pos.y,
+        steps=16,
+        min_delay=0.0006,
+        max_delay=0.0015,
+        no_delay=False,
+        jitter_px=3.0,
+    )
+    _sleep_with_cancel(0.03)
     mouse_down()
     _sleep_with_cancel(0.03)
     mouse_up()
@@ -974,9 +986,25 @@ def click_topbar_tab(name: str) -> bool:
 
 
 def click_at(x, y, hold=0.03, settle=0.15):
-    """Generic single left-click at an absolute screen coordinate."""
+    """Generic single left-click at an absolute screen coordinate.
+
+    Uses the same smooth cursor path as the sorter (move_mouse_smooth) so
+    in-game movement stays consistent with stash sorting.
+    """
     _ensure_not_cancelled()
-    move_mouse(x, y)
+    pt = POINT()
+    ctypes.windll.user32.GetCursorPos(ctypes.byref(pt))
+    move_mouse_smooth(
+        float(pt.x),
+        float(pt.y),
+        x,
+        y,
+        steps=16,
+        min_delay=0.0006,
+        max_delay=0.0015,
+        no_delay=False,
+        jitter_px=3.0,
+    )
     _sleep_with_cancel(0.03)
     mouse_down()
     _sleep_with_cancel(hold)
