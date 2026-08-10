@@ -351,11 +351,14 @@ watch (
 );
 
 function previewStyle (it) {
+  const r = RARITY[it.rarity] || RARITY.Common;
   return {
     left: it.x * (CELL + GAP) + 'px',
     top: it.y * (CELL + GAP) + 'px',
     width: it.width * CELL + (it.width - 1) * GAP + 'px',
     height: it.height * CELL + (it.height - 1) * GAP + 'px',
+    '--rc': r.c,
+    '--rbg': r.bg,
   };
 }
 
@@ -939,9 +942,8 @@ watch (() => props.stashId, () => reportStashState ());
             <span v-for="(b, i) in scanBrights" :key="i" class="scan-chip" :class="{ hot: b === Math.max(...scanBrights) }" :style="{ opacity: Math.max(0.25, Math.min(1, b / 200)) }">{{ b }}</span>
           </div>
           <button v-if="!isEquipment" class="debug-btn" :class="{ on: debugPreview }" :disabled="previewLoading" @click="togglePreview">
-            {{ previewLoading ? '计算中…' : (debugPreview ? '关闭预览' : '排序预览') }}
+            {{ previewLoading ? '计算中…' : (debugPreview ? `预览中 · ${previewSteps ?? 0} 步` : '排序预览') }}
           </button>
-          <span v-if="debugPreview && previewSteps !== null" class="preview-steps">移动 {{ previewSteps }} 步</span>
         </div>
 
         <div class="grid-scroll">
@@ -971,8 +973,8 @@ watch (() => props.stashId, () => reportStashState ());
             </div>
             <template v-if="debugPreview && previewItems.length">
               <div v-for="(pi, i) in previewItems" :key="'p'+i" class="preview-item"
-                   :style="previewStyle (pi)">
-                <span class="preview-label">{{ pi.name }}</span>
+                   :style="previewStyle (pi)" :title="pi.name">
+                <img v-if="pi.icon" class="item-icon" :src="iconUrl (pi)" alt="" loading="lazy" />
               </div>
             </template>
           </div>
@@ -1237,23 +1239,11 @@ html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 .debug-btn:hover { border-color: var(--accent-soft); }
 .debug-btn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .debug-btn:disabled { opacity: .5; cursor: default; }
-.preview-steps {
-  flex: none; margin-left: 8px;
-  padding: 4px 10px; font-size: 12px; font-weight: 600;
-  border: 1px solid var(--accent-soft); border-radius: 6px;
-  background: rgba(255, 140, 0, 0.12); color: var(--accent);
-}
 .preview-item {
-  position: absolute; display: grid; place-items: center;
-  background: rgba(255, 140, 0, 0.22);
-  border: 1.5px dashed rgba(255, 140, 0, 0.7);
-  border-radius: 4px; pointer-events: none; z-index: 10;
-}
-.preview-label {
-  font-size: 10px; font-weight: 700; color: #ff8c00;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-  line-height: 1.2; text-align: center;
-  overflow: hidden; word-break: break-all;
-  padding: 2px;
+  position: absolute;
+  background: var(--rbg);
+  border-radius: 5px;
+  overflow: hidden;
+  pointer-events: none; z-index: 10;
 }
 </style>

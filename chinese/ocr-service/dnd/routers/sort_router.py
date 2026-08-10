@@ -436,13 +436,25 @@ def sort_preview(character_id: str, stash_id: str,
         steps = sum(1 for itm in items if plan.positions.get(id(itm)) != itm.position)
 
     result = []
+    from dnd.items.game_data import item_data_manager
+    from dnd.items.icon_pak import canonical_icon_path
     for itm in items:
         pos = plan.positions.get(id(itm))
         if pos:
             cn_name = en_to_cn.get(itm.name, itm.name or "")
+            icon = ""
+            try:
+                if getattr(itm, "item_id", None):
+                    icon = canonical_icon_path(
+                        item_data_manager.get_item_data(itm.item_id).get("iconPath")
+                    ) or ""
+            except Exception:
+                icon = ""
             result.append({
                 "x": pos.x, "y": pos.y,
                 "width": itm.width, "height": itm.height,
                 "name": cn_name,
+                "rarity": item_data_manager.id_to_rarity(getattr(itm, "rarity", None)) or "Common",
+                "icon": icon,
             })
     return {"items": result, "width": storage.width, "height": storage.height, "steps": steps}
