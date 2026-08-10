@@ -289,6 +289,45 @@ const tooltipPosition = computed(() => {
   return { left, top };
 });
 
+// Position the marker: attached follows tooltip coords; corner modes anchor to a fixed edge
+function positionMarker(x, y, width, height) {
+  const mouseDeltaX = currentMousePos.value.x - scanStartMousePos.value.x;
+  const mouseDeltaY = currentMousePos.value.y - scanStartMousePos.value.y;
+
+  if (props.alignment === "attached") {
+    markerTop.value = y + mouseDeltaY;
+    markerLeft.value = x + mouseDeltaX;
+    markerWidth.value = width;
+    markerHeight.value = height;
+    return;
+  }
+
+  markerWidth.value = 1;
+  markerHeight.value = 1;
+  if (!gameBounds.value) return;
+  switch (props.alignment) {
+    case "top-right":
+      markerTop.value = EDGE_PADDING;
+      markerLeft.value = gameBounds.value.width - EDGE_PADDING;
+      break;
+
+    case "top-left":
+      markerTop.value = EDGE_PADDING;
+      markerLeft.value = EDGE_PADDING;
+      break;
+
+    case "bottom-right":
+      markerTop.value = gameBounds.value.height - EDGE_PADDING;
+      markerLeft.value = gameBounds.value.width - EDGE_PADDING;
+      break;
+
+    case "bottom-left":
+      markerTop.value = gameBounds.value.height - EDGE_PADDING;
+      markerLeft.value = EDGE_PADDING;
+      break;
+  }
+}
+
 const scan = (source = 'auto') => {
   if (props.mode === modes.disabled) {
     return;
@@ -347,6 +386,38 @@ electron.on("scan:start", (data) => {
   }
 });
 
+// Main rejected this request (another scan in flight); wait for the active one instead
+electron.on("scan:dropped", ({ scanId, activeScanId }) => {
+  if (scanId !== currentScanId.value) return;
+  logger.debug(`Scan dropped by main (scanId ${scanId}), waiting for active scan ${activeScanId}`);
+  currentScanId.value = activeScanId;
+});
+
+// Test-only: F9 in app → show a fake tooltip to verify overlay rendering (clear with F8)
+electron.on("test:tooltip", () => {
+  errorMessage.value = null;
+  isLoading.value = false;
+  livePriceLoading.value = false;
+  chineseItemName.value = "测试物品";
+  itemRarity.value = "Epic";
+  item.value.demand = 8;
+  item.value.quality = null;
+  item.value.adventurePoints = 25;
+  item.value.quests = [{ merchant: "收藏家", title: "英雄之证", count: 3 }];
+  item.value.attributes.primary = [{ display: "Strength", min: 10, max: 15 }];
+  item.value.attributes.secondary = [
+    { display: "Physical Damage Bonus", value: 12, min: 5, max: 20, grade: "A", is_percentage: false },
+  ];
+  item.value.prices.market = 500;
+  item.value.prices.live = 420;
+  item.value.prices.vendor = 100;
+  item.value.prices.density = 50;
+  selectedAffixes.value = [];
+  selectionDirty = false;
+  positionMarker(currentMousePos.value.x, currentMousePos.value.y, 300, 100);
+  isTooltipActive.value = true;
+});
+
 electron.on("clear", (data) => {
   // Ignore stale clear events
   if (data?.scanId && data.scanId !== currentScanId.value) {
@@ -394,6 +465,9 @@ electron.on("set-scan-mouse-button", (buttonName) => {
 
 onMounted(() => {
   logger.info("Tooltip mounted");
+
+  // Pull current window state/bounds after listeners are registered (startup race guard)
+  electron.send("overlay:sync-state");
 
   // Listen for mouse button clicks for scanning
   window.addEventListener("mousedown", (event) => {
@@ -451,15 +525,7 @@ onMounted(() => {
     selectionDirty = false;
 
     // Position marker at tooltip location
-    const mouseDeltaX = currentMousePos.value.x - scanStartMousePos.value.x;
-    const mouseDeltaY = currentMousePos.value.y - scanStartMousePos.value.y;
-
-    if (props.alignment === "attached") {
-      markerTop.value = data.y + mouseDeltaY;
-      markerLeft.value = data.x + mouseDeltaX;
-      markerWidth.value = data.width;
-      markerHeight.value = data.height;
-    }
+    positionMarker(data.x, data.y, data.width, data.height);
 
     // Show preview with loading state
     isLoading.value = true;
@@ -514,40 +580,7 @@ onMounted(() => {
     }
 
     // Position marker (may already be set by preview, but update in case)
-    const mouseDeltaX = currentMousePos.value.x - scanStartMousePos.value.x;
-    const mouseDeltaY = currentMousePos.value.y - scanStartMousePos.value.y;
-
-    if (props.alignment === "attached") {
-      markerTop.value = data.y + mouseDeltaY;
-      markerLeft.value = data.x + mouseDeltaX;
-      markerWidth.value = data.width;
-      markerHeight.value = data.height;
-    }
-
-    switch (props.alignment) {
-      case "attached":
-        break;
-
-      case "top-right":
-        markerTop.value = EDGE_PADDING;
-        markerLeft.value = gameBounds.value.width - EDGE_PADDING;
-        break;
-
-      case "top-left":
-        markerTop.value = EDGE_PADDING;
-        markerLeft.value = EDGE_PADDING;
-        break;
-
-      case "bottom-right":
-        markerTop.value = gameBounds.value.height - EDGE_PADDING;
-        markerLeft.value = gameBounds.value.width - EDGE_PADDING;
-        break;
-
-      case "bottom-left":
-        markerTop.value = gameBounds.value.height - EDGE_PADDING;
-        markerLeft.value = EDGE_PADDING;
-        break;
-    }
+    positionMarker(data.x, data.y, data.width, data.height);
 
     setMouseSleepPosition();
 
@@ -579,15 +612,7 @@ onMounted(() => {
     errorMessage.value = data.message || "未知错误";
     setTimeout(() => { errorMessage.value = null; }, 1000);
 
-    const mouseDeltaX = currentMousePos.value.x - scanStartMousePos.value.x;
-    const mouseDeltaY = currentMousePos.value.y - scanStartMousePos.value.y;
-
-    if (props.alignment === "attached") {
-      markerTop.value = data.y + mouseDeltaY;
-      markerLeft.value = data.x + mouseDeltaX;
-      markerWidth.value = data.width || 100;
-      markerHeight.value = data.height || 50;
-    }
+    positionMarker(data.x, data.y, data.width || 100, data.height || 50);
 
     setMouseSleepPosition();
   });

@@ -261,6 +261,12 @@ app.on ('ready', async () => {
     debugging ? overlay.webContents.openDevTools ({ mode: 'detach' }) : overlay.webContents.closeDevTools ();
   });
   globalShortcut.register ('F8', () => overlay.webContents.send ('clear'));
+  globalShortcut.register ('F9', () => overlay.webContents.send ('test:tooltip'));
+
+  safeHandle ('overlay:test-tooltip', () => {
+    overlay.webContents.send ('test:tooltip');
+    return { success: true };
+  });
 
   registerScanHotkey (overlay);
   registerSortHotkeys ();

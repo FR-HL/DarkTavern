@@ -725,6 +725,12 @@ function onScaleInput (e) {
 }
 async function saveScale () { const r = await invoke ('settings:save', { scale: scale.value }); if (r.success) showToast ('已保存'); }
 
+async function testTooltip () {
+  const r = await invoke ('overlay:test-tooltip');
+  if (r?.success) showToast ('已弹出测试悬浮窗 · 游戏内按 F8 关闭');
+  else showToast ('弹出失败，请查看日志');
+}
+
 async function toggleComponent (key) {
   const prev = components.value;
   const next = prev.includes (key) ? prev.filter (k => k !== key) : [ ...prev, key ];
@@ -1157,6 +1163,15 @@ onBeforeUnmount (() => {
                   <input type="range" min="0.6" max="2" step="0.1" :value="scale" @input="onScaleInput">
                   <span class="range-val">{{ scaleVal }}</span>
                 </div>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">测试悬浮窗</div>
+                <div class="srow-d">游戏内立即弹出示例悬浮窗，验证显示是否正常（快捷键 F9）</div>
+              </div>
+              <div class="srow-ctl">
+                <button class="btn subtle sm" @click="testTooltip">弹出测试</button>
               </div>
             </div>
           </div>

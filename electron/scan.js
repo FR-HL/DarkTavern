@@ -13,6 +13,7 @@ const MARKET_URL = 'https://api.darkerdb.com/v2/market';
 const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
 
 let scanning = false;
+let activeScanId = 0;
 let cache = { text: null, result: null, ts: 0 };
 const CACHE_TTL = 10000;
 let lastAnalyze = null;
@@ -32,6 +33,10 @@ export function wire (overlay, sendBall = null, hooks = null) {
     resendState ();
   });
 
+  ipcMain.on ('overlay:sync-state', () => {
+    resendState ();
+  });
+
   ipcMain.on ('log', (e, data) => {
     logger.log (data.level, data.message, { module: 'frontend', ...(data.meta || {}) });
   });
@@ -39,8 +44,12 @@ export function wire (overlay, sendBall = null, hooks = null) {
   ipcMain.on ('scan', async (e, data) => {
     const scanId = data?.scanId || 0;
     const source = data?.source || 'auto';
-    if (scanning) return;
+    if (scanning) {
+      send ('scan:dropped', { scanId, activeScanId });
+      return;
+    }
     scanning = true;
+    activeScanId = scanId;
     markScan (true);
     const t0 = Date.now ();
 
