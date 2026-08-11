@@ -4,7 +4,6 @@ import StashPane from './StashPane.vue';
 import { refreshCapture } from '../composables/capture.js';
 import { useSell } from '../composables/sell.js';
 import { ATTR_ZH, attrField } from '@/shared/lib/stats-zh.js';
-import ItemDetailModal from './ItemDetailModal.vue';
 import GameTooltip from '@/shared/components/GameTooltip.vue';
 
 const props = defineProps ({
@@ -103,90 +102,66 @@ function toggleSellPick (it, e) {
   sellSelected.value = m;
 }
 
-// ── 右键菜单 / 详情 / 悬停 ──
-const ctxMenu = ref (null); // { x, y, it }
-const detailItem = ref (null);
+// ── tooltip（右键固定显示） ──
 const hoverItem = ref (null);
-let hoverTimer = null;
 
-function openCtx (e, it) {
-  ctxMenu.value = { x: e.clientX, y: e.clientY, it };
+function showTooltip (it, e) {
+  // 固定在右键点击时的鼠标位置（不随鼠标移动）
+  const x = e?.clientX ?? 0;
+  const y = e?.clientY ?? 0;
+  hoverTipLeft.value = x;
+  hoverTipTop.value = y;
+  const tipW = 250;
+  hoverTipSide.value = (x + tipW + 40 > window.innerWidth) ? 'left' : 'right';
+  hoverItem.value = it;
+  tooltipSelected.value = new Map ();
 }
 
-function closeCtx () {
-  ctxMenu.value = null;
-}
-
-function ctxOpenDetail () {
-  detailItem.value = ctxMenu.value?.it || null;
-  closeCtx ();
-}
-
-function ctxAddSell () {
-  const it = ctxMenu.value?.it;
-  if (it) toggleSellPick (it, null);
-  closeCtx ();
-}
-
-function ctxRemoveSell () {
-  const it = ctxMenu.value?.it;
-  if (it) {
-    const m = new Map (sellSelected.value);
-    m.delete (sellKey (props.stashId, it.slot_id));
-    sellSelected.value = m;
-  }
-  closeCtx ();
-}
-
-function closeDetail () {
-  detailItem.value = null;
-}
-
-function detailAddSell () {
-  if (detailItem.value) {
-    const it = detailItem.value;
-    const m = new Map (sellSelected.value);
-    m.set (sellKey (props.stashId, it.slot_id), { ...it, stash_id: props.stashId, uid: sellKey (props.stashId, it.slot_id) });
-    sellSelected.value = m;
-  }
-}
-
-function detailRemoveSell () {
-  if (detailItem.value) {
-    const m = new Map (sellSelected.value);
-    m.delete (sellKey (props.stashId, detailItem.value.slot_id));
-    sellSelected.value = m;
-  }
-}
-
-function startHover (it, e) {
-  clearTimeout (hoverTimer);
-  if (e) {
-    hoverTipLeft.value = e.clientX;
-    hoverTipTop.value = e.clientY;
-    updateHoverSide (e.clientX);
-  }
-  hoverTimer = setTimeout (() => { hoverItem.value = it; }, 300);
-}
-
-function clearHover () {
-  clearTimeout (hoverTimer);
-  hoverTimer = null;
+function closeTooltip () {
   hoverItem.value = null;
   tooltipSelected.value = new Map ();
 }
 
-// 悬停时跟随鼠标移动
-function onGridMouseMove (e) {
-  if (!hoverItem.value) return;
-  hoverTipLeft.value = e.clientX;
-  hoverTipTop.value = e.clientY;
-  updateHoverSide (e.clientX);
+// 勾选点点击：切换该词条是否参与查价，然后按当前勾选组合重新查价
+async function onToggleSecondary (it, index) {
+  const en = it.sp_en || [];
+  const key = toCanonicalId (it.item_id);
+  const rec = histPrices.value.get (key);
+  const cur = new Set (tooltipSelected.value.get (key) || rec?.usedAffixes || []);
+  const display = en[index]?.[0];
+  if (display) {
+    if (cur.has (display)) cur.delete (display);
+    else cur.add (display);
+  }
+  tooltipSelected.value = new Map (tooltipSelected.value).set (key, cur);
 }
 
-function updateHoverSide (x) {
-  const tipW = 250;
-  hoverTipSide.value = (x + tipW + 40 > window.innerWidth) ? 'left' : 'right';
+// tooltip 操作按钮：查询价格 / 加入上架
+const tooltipBusy = ref (false);
+
+async function onTooltipAction (key) {
+  const it = hoverItem.value;
+  if (!it) return;
+  if (key === 'sell') {
+    toggleSellPick (it, null);
+    return;
+  }
+  if (key === 'price') {
+    if (tooltipBusy.value) return;
+    tooltipBusy.value = true;
+    try {
+      const en = it.sp_en || [];
+      const keyId = toCanonicalId (it.item_id);
+      const cur = tooltipSelected.value.get (keyId) || new Set (histPrices.value.get (keyId)?.usedAffixes || []);
+      const spEn = en.filter ((item) => cur.has (item[0]));
+      await fetchPrices ([{
+        item_id: it.item_id,
+        rarity: it.rarity,
+        sp_en: spEn,
+      }]);
+    } catch (e) {}
+    tooltipBusy.value = false;
+  }
 }
 
 function hoverAttrCn (name) {
@@ -207,29 +182,6 @@ function hoverSecondary (it) {
     value: item[1],
     selected: used.has (en[i]?.[0]),
   }));
-}
-
-// 勾选点点击：切换该词条是否参与查价，然后按当前勾选组合重新查价
-async function onToggleSecondary (it, index) {
-  const en = it.sp_en || [];
-  const key = toCanonicalId (it.item_id);
-  const rec = histPrices.value.get (key);
-  const cur = new Set (tooltipSelected.value.get (key) || rec?.usedAffixes || []);
-  const display = en[index]?.[0];
-  if (display) {
-    if (cur.has (display)) cur.delete (display);
-    else cur.add (display);
-  }
-  tooltipSelected.value = new Map (tooltipSelected.value).set (key, cur);
-  // 按当前勾选词条重新查价（只传勾选的词条，降级仍由主进程兜底）
-  const spEn = en.filter ((item, i) => cur.has (item[0]));
-  try {
-    await fetchPrices ([{
-      item_id: it.item_id,
-      rarity: it.rarity,
-      sp_en: spEn,
-    }]);
-  } catch (e) {}
 }
 
 function hoverPrices (it) {
@@ -967,7 +919,6 @@ onBeforeUnmount (() => {
   if (followTimer) { clearInterval (followTimer); followTimer = null; }
   if (retryTimer) { clearInterval (retryTimer); retryTimer = null; }
   if (unsubOcr) unsubOcr ();
-  if (hoverTimer) { clearTimeout (hoverTimer); hoverTimer = null; }
   if (unsubHist) unsubHist ();
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
@@ -1173,7 +1124,6 @@ watch (() => props.stashId, () => reportStashState ());
 
         <div class="grid-scroll">
           <div class="stash-grid"
-               @mousemove="onGridMouseMove"
                :style="{
                  width: currentStash.width * (34 + 2) - 2 + 'px',
                  height: currentStash.height * (34 + 2) - 2 + 'px',
@@ -1193,9 +1143,7 @@ watch (() => props.stashId, () => reportStashState ());
                  :class="{ hidden: debugPreview, 'sell-picked': isSellPicked(it) }"
                  :style="itemStyle (it)"
                  @click="!isEquipment && toggleSellPick(it, $event)"
-                 @contextmenu.prevent="!isEquipment && openCtx($event, it)"
-                 @mouseenter="!isEquipment && startHover(it, $event)"
-                 @mouseleave="clearHover()">
+                 @contextmenu.prevent="!isEquipment && showTooltip(it, $event)">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
               <span v-if="isSellPicked(it) && sellPriceOf(it) != null" class="cell-price">{{ fmtSellG (it, sellPriceOf (it)) }}</span>
               <span v-else-if="histPriceOf(it) != null" class="cell-price hist">{{ fmtSellG (it, histPriceOf (it)) }}</span>
@@ -1214,34 +1162,24 @@ watch (() => props.stashId, () => reportStashState ());
 
     <div v-else-if="loading" class="empty-hint"><div class="empty-t">加载中…</div></div>
 
-    <!-- 右键菜单 -->
-    <div v-if="ctxMenu" class="ctx-mask" @click="closeCtx" @contextmenu.prevent="closeCtx"></div>
-    <div v-if="ctxMenu" class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
-      <button class="ctx-item" @click="ctxOpenDetail">查看详情</button>
-      <button class="ctx-item" @click="ctxAddSell">加入上架</button>
-      <button class="ctx-item" @click="ctxRemoveSell">移除上架</button>
+    <!-- 右键显示的 tooltip（固定物品格旁） -->
+    <div v-if="hoverItem && !debugPreview" class="tip-mask" @click="closeTooltip" @contextmenu.prevent="closeTooltip"></div>
+    <div v-if="hoverItem && !debugPreview" class="tip-wrap" :class="hoverTipSide"
+         :style="{ left: hoverTipLeft + 'px', top: hoverTipTop + 'px' }">
+      <GameTooltip
+        :title="hoverItem.name"
+        :title-color="rarityColorCss (hoverItem.rarity)"
+        :secondary="hoverSecondary (hoverItem)"
+        :prices="hoverPrices (hoverItem)"
+        @toggle-secondary="i => onToggleSecondary (hoverItem, i)"
+      />
+      <div class="tip-btns">
+        <button class="tip-btn" :disabled="tooltipBusy" @click="onTooltipAction('price')">
+          {{ tooltipBusy ? '查询中…' : '查询价格' }}
+        </button>
+        <button class="tip-btn" @click="onTooltipAction('sell')">加入上架</button>
+      </div>
     </div>
-
-    <!-- 悬停词条提示 -->
-    <GameTooltip
-      v-if="hoverItem && !debugPreview"
-      class="stash-tooltip"
-      :class="hoverTipSide"
-      :style="{ left: hoverTipLeft + 'px', top: hoverTipTop + 'px' }"
-      :title="hoverItem.name"
-      :title-color="rarityColorCss (hoverItem.rarity)"
-      :secondary="hoverSecondary (hoverItem)"
-      :prices="hoverPrices (hoverItem)"
-      @toggle-secondary="i => onToggleSecondary (hoverItem, i)"
-    />
-
-    <!-- 物品详情弹窗 -->
-    <ItemDetailModal
-      :item="detailItem"
-      @close="closeDetail"
-      @add-sell="detailAddSell"
-      @remove-sell="detailRemoveSell"
-    />
   </div>
 </template>
 
@@ -1486,31 +1424,50 @@ watch (() => props.stashId, () => reportStashState ());
 .sell-note { font-size: 11.5px; color: var(--green); line-height: 1.4; }
 .sell-note.warn { color: var(--red); }
 
-/* 右键菜单 */
-.ctx-mask {
-  position: fixed; inset: 0; z-index: 190;
+/* tooltip 遮罩：点击空白关闭 */
+.tip-mask {
+  position: fixed; inset: 0; z-index: 170;
 }
-.ctx-menu {
-  position: fixed; z-index: 195; min-width: 120px;
-  background: var(--card); border: 1px solid var(--line-soft); border-radius: 9px;
-  padding: 5px; box-shadow: 0 6px 24px rgba(0,0,0,0.35);
-}
-.ctx-item {
-  display: block; width: 100%; text-align: left;
-  padding: 7px 11px; font-size: 13px; font-weight: 550;
-  color: var(--text-2); background: none; border: none; border-radius: 6px;
-  cursor: pointer; transition: all .12s var(--ease);
-}
-.ctx-item:hover { background: var(--card-2); color: var(--text); }
 
-/* 悬停词条提示（GameTooltip 定位：跟随鼠标） */
-.stash-tooltip {
+/* 右键显示 tooltip（固定物品格旁，按钮在 tooltip 外） */
+.tip-wrap {
   position: fixed;
   z-index: 180;
-  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
-.stash-tooltip.right { transform: translate (16px, 10px); }
-.stash-tooltip.left { transform: translate (-266px, 10px); }
+.tip-wrap.right { transform: translate (16px, 10px); }
+.tip-wrap.left { transform: translate (-266px, 10px); }
+
+/* 外部操作按钮：与 tooltip 同款哥特样式（纹理背景 + 九宫格边框） */
+.tip-btns { display: flex; gap: 8px; }
+.tip-btn {
+  flex: 1;
+  padding: 10px 0;
+  font-family: 'SaintKDG_Light', sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: var(--dnd-gold, #ffd400);
+
+  background-image: url('@assets/images/Background_TooltipTexture.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: #14121a;
+
+  border-image-slice: 21 21 21 21;
+  border-image-width: 14px 14px 14px 14px;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-image-source: url('@assets/images/Background_TooltipBorder.png');
+
+  cursor: pointer;
+  transition: filter .15s var(--ease), color .15s var(--ease);
+}
+.tip-btn:hover { color: #ffea80; filter: brightness(1.15); }
+.tip-btn:disabled { opacity: .5; cursor: default; }
 
 html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 
