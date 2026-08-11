@@ -903,24 +903,24 @@ function getGradeColor(grade) {
               </div>
             </div>
 
+            <!-- 上架按钮：商人回收价格区下方 -->
+            <div
+              v-if="!isLoading && isTooltipActive && currentItemId && props.showSellButtons"
+              ref="sellActionsNode"
+              class="sell-actions"
+            >
+              <button class="sell-btn" @click="sendSellAction('sell:add-item')">加入列表</button>
+              <button class="sell-btn" :disabled="item.prices.live === null && item.prices.market === null" @click="sendSellAction('sell:start-item')">开始上架</button>
+            </div>
+
             <div class="tooltip-separator"></div>
 
             <div class="text-xs" style="color: var(--dnd-oak)">
               by 7. & 方源Official | 官网: dnd.wiki
             </div>
           </div>
+          </div>
         </div>
-      </div>
-
-      <!-- 上架按钮：tooltip 容器内正常流，宽度自动与悬浮窗一致 -->
-      <div
-        v-if="shouldShowContent && !isLoading && isTooltipActive && currentItemId && props.showSellButtons"
-        ref="sellActionsNode"
-        class="sell-actions"
-      >
-        <button class="sell-btn" @click="sendSellAction('sell:add-item')">加入列表</button>
-        <button class="sell-btn" :disabled="item.prices.live === null && item.prices.market === null" @click="sendSellAction('sell:start-item')">开始上架</button>
-      </div>
       </div>
     </transition>
   </div>
@@ -993,11 +993,12 @@ function getGradeColor(grade) {
   animation: spin 1s linear infinite;
 }
 
-/* 加入列表 / 开始上架（悬浮窗容器内正常流，宽度自动与 tooltip 一致） */
+/* 加入列表 / 开始上架（悬浮窗内容底部，宽度自动一致） */
 .sell-actions {
   display: flex;
   gap: 8px;
   margin-top: 8px;
+  padding: 0 4px 4px;
 }
 .sell-btn {
   flex: 1;
