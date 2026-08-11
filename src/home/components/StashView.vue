@@ -3,6 +3,8 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import StashPane from './StashPane.vue';
 import { refreshCapture } from '../composables/capture.js';
 import { useSell } from '../composables/sell.js';
+import { ATTR_ZH, attrField } from '@/shared/lib/stats-zh.js';
+import ItemDetailModal from './ItemDetailModal.vue';
 
 const props = defineProps ({
   charId: { type: String, default: '' },
@@ -41,16 +43,130 @@ function sellPriceOf (it) {
   return sellSelected.value.get (sellKey (props.stashId, it.slot_id))?.price ?? null;
 }
 
-function toggleSellPick (it) {
+// Shift 批量选择：记录上次点选的物品，Shift+单击时按格子顺序全选区间
+const lastPickedSlot = ref (null);
+const lastPickedStash = ref ('');
+
+function toggleSellPick (it, e) {
   const key = sellKey (props.stashId, it.slot_id);
+
+  if (e?.shiftKey && lastPickedSlot.value != null && lastPickedStash.value === props.stashId) {
+    const sorted = [...(currentStash.value?.items || [])].sort ((a, b) => a.y - b.y || a.x - b.x);
+    const idxA = sorted.findIndex (t => t.slot_id === lastPickedSlot.value);
+    const idxB = sorted.findIndex (t => t.slot_id === it.slot_id);
+    if (idxA >= 0 && idxB >= 0) {
+      const [lo, hi] = idxA <= idxB ? [idxA, idxB] : [idxB, idxA];
+      const m = new Map (sellSelected.value);
+      for (let i = lo; i <= hi; i++) {
+        const t = sorted[i];
+        m.set (sellKey (props.stashId, t.slot_id), { ...t, stash_id: props.stashId, uid: sellKey (props.stashId, t.slot_id) });
+      }
+      sellSelected.value = m;
+    }
+    lastPickedSlot.value = it.slot_id;
+    return;
+  }
+
+  lastPickedSlot.value = it.slot_id;
+  lastPickedStash.value = props.stashId;
   const m = new Map (sellSelected.value);
   if (m.has (key)) m.delete (key);
   else m.set (key, { ...it, stash_id: props.stashId, uid: key });
   sellSelected.value = m;
 }
 
+// ── 右键菜单 / 详情 / 悬停 ──
+const ctxMenu = ref (null); // { x, y, it }
+const detailItem = ref (null);
+const hoverItem = ref (null);
+let hoverTimer = null;
+
+function openCtx (e, it) {
+  ctxMenu.value = { x: e.clientX, y: e.clientY, it };
+}
+
+function closeCtx () {
+  ctxMenu.value = null;
+}
+
+function ctxOpenDetail () {
+  detailItem.value = ctxMenu.value?.it || null;
+  closeCtx ();
+}
+
+function ctxAddSell () {
+  const it = ctxMenu.value?.it;
+  if (it) toggleSellPick (it, null);
+  closeCtx ();
+}
+
+function ctxRemoveSell () {
+  const it = ctxMenu.value?.it;
+  if (it) {
+    const m = new Map (sellSelected.value);
+    m.delete (sellKey (props.stashId, it.slot_id));
+    sellSelected.value = m;
+  }
+  closeCtx ();
+}
+
+function closeDetail () {
+  detailItem.value = null;
+}
+
+function detailAddSell () {
+  if (detailItem.value) {
+    const it = detailItem.value;
+    const m = new Map (sellSelected.value);
+    m.set (sellKey (props.stashId, it.slot_id), { ...it, stash_id: props.stashId, uid: sellKey (props.stashId, it.slot_id) });
+    sellSelected.value = m;
+  }
+}
+
+function detailRemoveSell () {
+  if (detailItem.value) {
+    const m = new Map (sellSelected.value);
+    m.delete (sellKey (props.stashId, detailItem.value.slot_id));
+    sellSelected.value = m;
+  }
+}
+
+function startHover (it) {
+  clearTimeout (hoverTimer);
+  hoverTimer = setTimeout (() => { hoverItem.value = it; }, 300);
+}
+
+function clearHover () {
+  clearTimeout (hoverTimer);
+  hoverTimer = null;
+  hoverItem.value = null;
+}
+
+function hoverAttrCn (name) {
+  const field = attrField (String (name).replace (/([a-z0-9])([A-Z])/g, '$1 $2'));
+  return ATTR_ZH[field] || name;
+}
+
+const gridEl = ref (null);
+const hoverTipLeft = ref (0);
+const hoverTipTop = ref (0);
+const hoverTipSide = ref ('right');
+
+watch (hoverItem, (it) => {
+  if (!it || !gridEl.value) return;
+  const r = gridEl.value.getBoundingClientRect ();
+  const x = r.left + it.x * (CELL + GAP);
+  const y = r.top + it.y * (CELL + GAP);
+  hoverTipLeft.value = x;
+  hoverTipTop.value = y;
+  const tipW = 200;
+  hoverTipSide.value = (x + tipW + 40 > window.innerWidth) ? 'left' : 'right';
+});
+
 function clearSellPick () {
   sellSelected.value = new Map ();
+  lastPickedSlot.value = null;
+  lastPickedStash.value = '';
 }
 
 function fmtSellG (it, v) {
@@ -616,7 +732,12 @@ async function loadCharacters () {
   try {
     const d = await invoke ('dnd:characters');
     characters.value = d?.characters || [];
-    if (characters.value.length && !props.charId) emit ('update:charId', characters.value[0].id);
+    if (characters.value.length && !props.charId) {
+      const firstId = characters.value[0].id;
+      emit ('update:charId', firstId);
+      // 主动加载仓库数据：不依赖 watch 的异步链路，保证启动即有数据
+      await loadCharData (firstId, true);
+    }
   } catch (e) {}
 }
 
@@ -744,6 +865,7 @@ onBeforeUnmount (() => {
   if (followTimer) { clearInterval (followTimer); followTimer = null; }
   if (retryTimer) { clearInterval (retryTimer); retryTimer = null; }
   if (unsubOcr) unsubOcr ();
+  if (hoverTimer) { clearTimeout (hoverTimer); hoverTimer = null; }
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
@@ -947,7 +1069,7 @@ watch (() => props.stashId, () => reportStashState ());
         </div>
 
         <div class="grid-scroll">
-          <div class="stash-grid"
+          <div class="stash-grid" ref="gridEl"
                :style="{
                  width: currentStash.width * (34 + 2) - 2 + 'px',
                  height: currentStash.height * (34 + 2) - 2 + 'px',
@@ -967,7 +1089,10 @@ watch (() => props.stashId, () => reportStashState ());
                  :class="{ hidden: debugPreview, 'sell-picked': isSellPicked(it) }"
                  :style="itemStyle (it)"
                  :title="`${it.name} · ${it.rarity} · ${it.width}×${it.height}`"
-                 @click="!isEquipment && toggleSellPick(it)">
+                 @click="!isEquipment && toggleSellPick(it, $event)"
+                 @contextmenu.prevent="!isEquipment && openCtx($event, it)"
+                 @mouseenter="!isEquipment && startHover(it)"
+                 @mouseleave="clearHover()">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
               <span v-if="isSellPicked(it) && sellPriceOf(it) != null" class="cell-price">{{ fmtSellG (it, sellPriceOf (it)) }}</span>
             </div>
@@ -984,6 +1109,39 @@ watch (() => props.stashId, () => reportStashState ());
     </div>
 
     <div v-else-if="loading" class="empty-hint"><div class="empty-t">加载中…</div></div>
+
+    <!-- 右键菜单 -->
+    <div v-if="ctxMenu" class="ctx-mask" @click="closeCtx" @contextmenu.prevent="closeCtx"></div>
+    <div v-if="ctxMenu" class="ctx-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+      <button class="ctx-item" @click="ctxOpenDetail">查看详情</button>
+      <button class="ctx-item" @click="ctxAddSell">加入上架</button>
+      <button class="ctx-item" @click="ctxRemoveSell">移除上架</button>
+    </div>
+
+    <!-- 悬停词条提示 -->
+    <div v-if="hoverItem && !debugPreview" class="stash-tooltip"
+         :class="hoverTipSide"
+         :style="{ left: hoverTipLeft + 'px', top: hoverTipTop + 'px' }">
+      <div class="st-tooltip-name">{{ hoverItem.name }}</div>
+      <div v-if="hoverItem.sp && hoverItem.sp.length" class="st-tooltip-attrs">
+        <div v-for="(a, i) in hoverItem.sp" :key="i" class="st-tooltip-attr">
+          <span>{{ hoverAttrCn (a[0]) }}</span>
+          <span class="st-tooltip-val">{{ a[1] }}</span>
+        </div>
+      </div>
+      <div v-else class="st-tooltip-none">无词条</div>
+      <div class="st-tooltip-meta">
+        {{ hoverItem.quantity > 1 ? '×' + hoverItem.quantity + ' · ' : '' }}{{ hoverItem.width }}×{{ hoverItem.height }}
+      </div>
+    </div>
+
+    <!-- 物品详情弹窗 -->
+    <ItemDetailModal
+      :item="detailItem"
+      @close="closeDetail"
+      @add-sell="detailAddSell"
+      @remove-sell="detailRemoveSell"
+    />
   </div>
 </template>
 
@@ -1225,6 +1383,42 @@ watch (() => props.stashId, () => reportStashState ());
 .sell-panel-actions .btn { width: 100%; }
 .sell-note { font-size: 11.5px; color: var(--green); line-height: 1.4; }
 .sell-note.warn { color: var(--red); }
+
+/* 右键菜单 */
+.ctx-mask {
+  position: fixed; inset: 0; z-index: 190;
+}
+.ctx-menu {
+  position: fixed; z-index: 195; min-width: 120px;
+  background: var(--card); border: 1px solid var(--line-soft); border-radius: 9px;
+  padding: 5px; box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+}
+.ctx-item {
+  display: block; width: 100%; text-align: left;
+  padding: 7px 11px; font-size: 13px; font-weight: 550;
+  color: var(--text-2); background: none; border: none; border-radius: 6px;
+  cursor: pointer; transition: all .12s var(--ease);
+}
+.ctx-item:hover { background: var(--card-2); color: var(--text); }
+
+/* 悬停词条提示 */
+.stash-tooltip {
+  position: fixed; z-index: 180; width: 200px;
+  background: rgba(18, 18, 20, 0.96); border: 1px solid var(--line-soft); border-radius: 9px;
+  padding: 9px 11px; box-shadow: 0 6px 22px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+.stash-tooltip.right { transform: translate (38px, 0); }
+.stash-tooltip.left { transform: translate (-238px, 0); }
+.st-tooltip-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.st-tooltip-attrs { border-top: 1px solid var(--line-soft); padding-top: 6px; }
+.st-tooltip-attr {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-size: 12px; color: var(--text-2); line-height: 1.6;
+}
+.st-tooltip-val { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+.st-tooltip-none { font-size: 12px; color: var(--text-3); }
+.st-tooltip-meta { margin-top: 5px; font-size: 11px; color: var(--text-3); }
 
 html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 

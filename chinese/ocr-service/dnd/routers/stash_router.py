@@ -67,7 +67,7 @@ def _stash_dimensions(stash_id):
 def _stash_label(stash_id):
     try:
         sid = int(stash_id)
-    except (ValueError, TypeError):
+    except (TypeError, ValueError):
         return f"仓库 {stash_id}"
 
     fixed = {
@@ -84,6 +84,48 @@ def _stash_label(stash_id):
     if 100 <= sid <= 102:
         return f"装备方案 {sid - 99}"
     return f"仓库 {sid}"
+
+
+# 英文物品名 -> 中文（chinese/mapping/items.json 反向映射，模块级缓存）
+_item_zh_cache = None
+
+
+def _item_zh_mapping():
+    global _item_zh_cache
+    if _item_zh_cache is None:
+        mapping = {}
+        try:
+            mapping_path = os.path.join(
+                os.path.dirname(__file__), "..", "..", "..", "mapping", "items.json"
+            )
+            with open(mapping_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            mapping = {v: k for k, v in raw.items()}
+        except Exception as exc:
+            logger.warning("Failed to load item zh mapping: %s", exc)
+        _item_zh_cache = mapping
+    return _item_zh_cache
+
+
+_EFFECT_PREFIX = "DesignDataItemPropertyType:Id_ItemPropertyType_Effect_"
+
+
+def _parse_item_sp(item):
+    """Item secondary properties. Prefers the cached ``sp`` field; falls back
+    to the raw ``data.secondaryPropertyArray`` (packet JSON stores affixes at
+    the top level of the item data)."""
+    sp = item.get("sp") or []
+    if sp:
+        return sp
+    try:
+        data = item.get("data") or {}
+        sp = []
+        for p in data.get("secondaryPropertyArray", []):
+            if isinstance(p, dict) and p.get("propertyTypeId") is not None and p.get("propertyValue") is not None:
+                sp.append([p["propertyTypeId"].replace(_EFFECT_PREFIX, ""), p["propertyValue"]])
+        return sp
+    except Exception:
+        return []
 
 
 @router.get("/icon/{path:path}")
@@ -638,8 +680,9 @@ def get_character(character_id: str):
                     logger.debug("Equipment item with unknown slot id: %s", slot_id)
             else:
                 x, y = slot_id % width, slot_id // width
+            zh_map = _item_zh_mapping()
             item_list.append({
-                "name": item.get("name", "Unknown"),
+                "name": zh_map.get(item.get("name", ""), item.get("name", "Unknown")),
                 "item_id": item_id,
                 "rarity": item_db.get("rarity", "Common"),
                 "icon": canonical_icon_path(item_db.get("iconPath")),
@@ -650,7 +693,7 @@ def get_character(character_id: str):
                 "slot_id": slot_id,
                 "quantity": item.get("itemCount", 1),
                 "vendor_price": item.get("vendor_price", 0),
-                "sp": item.get("sp", []),
+                "sp": _parse_item_sp(item),
             })
         stash_entry = {
             "label": _stash_label(stash_id),
