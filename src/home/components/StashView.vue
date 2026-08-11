@@ -40,7 +40,7 @@ async function loadHistPrices () {
     }
     if (!ids.length) return;
     const r = await invoke ('history:by-ids', ids);
-    histPrices.value = new Map (Object.entries (r?.records || {}).map (([id, rec]) => [id, { price: rec.price, ts: rec.ts }]));
+    histPrices.value = new Map (Object.entries (r?.records || {}).map (([id, rec]) => [id, { price: rec.price, ts: rec.ts, usedAffixes: rec.usedAffixes || [] }]));
   } catch (e) {}
 }
 
@@ -173,6 +173,7 @@ function clearHover () {
   clearTimeout (hoverTimer);
   hoverTimer = null;
   hoverItem.value = null;
+  tooltipSelected.value = new Map ();
 }
 
 // 悬停时跟随鼠标移动
@@ -193,12 +194,48 @@ function hoverAttrCn (name) {
   return ATTR_ZH[field] || name;
 }
 
+// 悬停 tooltip 词条勾选的临时状态：canonicalId -> Set<DarkerDB display 名>
+const tooltipSelected = ref (new Map ());
+
 function hoverSecondary (it) {
-  return (it.sp || []).map (([name, value]) => ({ name: hoverAttrCn (name), value }));
+  const en = it.sp_en || [];
+  const rec = histPrices.value.get (toCanonicalId (it.item_id));
+  const temp = tooltipSelected.value.get (toCanonicalId (it.item_id));
+  const used = temp || new Set (rec?.usedAffixes || []);
+  return (it.sp || []).map ((item, i) => ({
+    name: hoverAttrCn (item[0]),
+    value: item[1],
+    selected: used.has (en[i]?.[0]),
+  }));
+}
+
+// 勾选点点击：切换该词条是否参与查价，然后按当前勾选组合重新查价
+async function onToggleSecondary (it, index) {
+  const en = it.sp_en || [];
+  const key = toCanonicalId (it.item_id);
+  const rec = histPrices.value.get (key);
+  const cur = new Set (tooltipSelected.value.get (key) || rec?.usedAffixes || []);
+  const display = en[index]?.[0];
+  if (display) {
+    if (cur.has (display)) cur.delete (display);
+    else cur.add (display);
+  }
+  tooltipSelected.value = new Map (tooltipSelected.value).set (key, cur);
+  // 按当前勾选词条重新查价（只传勾选的词条，降级仍由主进程兜底）
+  const spEn = en.filter ((item, i) => cur.has (item[0]));
+  try {
+    await fetchPrices ([{
+      item_id: it.item_id,
+      rarity: it.rarity,
+      sp_en: spEn,
+    }]);
+  } catch (e) {}
 }
 
 function hoverPrices (it) {
   const p = {};
+  const rec = histPrices.value.get (toCanonicalId (it.item_id));
+  if (rec?.price != null) p.market = rec.price;
   if (it.vendor_price) p.vendor = it.vendor_price;
   return p;
 }
@@ -218,7 +255,7 @@ function clearSellPick () {
 function fmtSellG (it, v) {
   if (v == null) return '—';
   const compact = (it.width === 1 && it.height === 1) || (it.width === 1 && it.height === 2);
-  return Number (v).toLocaleString () + (compact ? '' : ' G');
+  return Number (v) + (compact ? '' : ' G');
 }
 
 async function doFetchSellPrices () {
@@ -1161,7 +1198,7 @@ watch (() => props.stashId, () => reportStashState ());
                  @mouseleave="clearHover()">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
               <span v-if="isSellPicked(it) && sellPriceOf(it) != null" class="cell-price">{{ fmtSellG (it, sellPriceOf (it)) }}</span>
-              <span v-else-if="!isSellPicked(it) && histPriceOf(it) != null" class="cell-price hist">{{ fmtSellG (it, histPriceOf (it)) }}</span>
+              <span v-else-if="histPriceOf(it) != null" class="cell-price hist">{{ fmtSellG (it, histPriceOf (it)) }}</span>
             </div>
             <template v-if="debugPreview && previewItems.length">
               <div v-for="(pi, i) in previewItems" :key="'p'+i" class="preview-item"
@@ -1195,6 +1232,7 @@ watch (() => props.stashId, () => reportStashState ());
       :title-color="rarityColorCss (hoverItem.rarity)"
       :secondary="hoverSecondary (hoverItem)"
       :prices="hoverPrices (hoverItem)"
+      @toggle-secondary="i => onToggleSecondary (hoverItem, i)"
     />
 
     <!-- 物品详情弹窗 -->

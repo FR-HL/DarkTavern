@@ -454,7 +454,13 @@ app.on ('ready', async () => {
     for (const r of priceHistory) {
       if (canonIds.has (r.id)) {
         const cur = out[r.id];
-        if (!cur || r.ts > cur.ts) out[r.id] = r;
+        if (!cur || r.ts > cur.ts) {
+          out[r.id] = {
+            price: r.price,
+            ts: r.ts,
+            usedAffixes: r.usedAffixes || [],
+          };
+        }
       }
     }
     return { records: out };

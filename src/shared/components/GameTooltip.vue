@@ -8,13 +8,15 @@ const props = defineProps ({
   title: { type: String, default: '' },
   titleColor: { type: String, default: '' },
   primary: { type: Array, default: () => [] },      // [{ name, value }] 固定属性
-  secondary: { type: Array, default: () => [] },    // [{ name, value, selected }] 随机属性
+  secondary: { type: Array, default: () => [] },    // [{ name, value, selected, range, grade }] 随机属性
   prices: { type: Object, default: () => ({}) },    // { live, market, vendor, density } null=暂无
   stats: { type: Object, default: () => ({}) },     // { demand, demandColor, adventure }
   footer: { type: String, default: '作者: 方源Official | 官网: dnd.wiki' },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
 });
+
+const emit = defineEmits ([ 'toggle-secondary' ]);
 
 const PRICE_LABELS = [
   ['live', '市场现价'],
@@ -34,6 +36,19 @@ function fmt (v) {
 
 function signed (v) {
   return v > 0 ? '+' + v : String (v);
+}
+
+// 词条等级颜色（与查价器悬浮窗一致：S 金/A 橙/B 紫/C 蓝/D 绿/F 白）
+function gradeColor (grade) {
+  const colors = {
+    S: '#ecd99a',
+    A: '#ff9a00',
+    B: '#d067ff',
+    C: '#00aaee',
+    D: '#80d600',
+    F: '#eeeeee',
+  };
+  return colors[grade] || 'inherit';
 }
 </script>
 
@@ -66,9 +81,12 @@ function signed (v) {
             <div v-for="(s, i) in secondary" :key="'s' + i">
               <div class="affix-line1">
                 <span class="tooltip-attribute"><span><b>{{ signed (s.value) }}</b>&nbsp;{{ s.name }}</span></span>
-                <span class="affix-check" :class="{ on: s.selected }"></span>
+                <span class="affix-check" :class="{ on: s.selected }" @click="emit('toggle-secondary', i)"></span>
               </div>
-              <div v-if="s.range" class="attr-sub">({{ s.range }})</div>
+              <div v-if="s.range || s.grade" class="attr-sub">
+                <span v-if="s.range">({{ s.range }})</span>
+                <span v-if="s.grade" :style="{ color: gradeColor (s.grade) }"> ({{ s.grade }})</span>
+              </div>
             </div>
             <div class="tooltip-separator"></div>
           </section>
