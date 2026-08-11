@@ -104,6 +104,81 @@ function toggleSellPick (it, e) {
 
 // ── tooltip（右键固定显示） ──
 const hoverItem = ref (null);
+const gridElRef = ref (null);
+
+// ── 左键框选批量选择 ──
+const selBox = ref (null);        // { left, top, width, height } 像素
+let dragState = null;             // { x, y, active }
+let suppressClickUntil = 0;
+
+function onGridMouseDown (e) {
+  if (e.button !== 0 || isEquipment.value) return;
+  dragState = { x: e.clientX, y: e.clientY, active: false };
+}
+
+function onGridMouseMove (e) {
+  if (!dragState || !gridElRef.value) return;
+  if (!dragState.active && Math.hypot (e.clientX - dragState.x, e.clientY - dragState.y) > 6) {
+    dragState.active = true;
+  }
+  if (dragState.active) {
+    const r = gridElRef.value.getBoundingClientRect ();
+    const x1 = dragState.x - r.left;
+    const y1 = dragState.y - r.top;
+    const x2 = e.clientX - r.left;
+    const y2 = e.clientY - r.top;
+    selBox.value = {
+      left: Math.min (x1, x2),
+      top: Math.min (y1, y2),
+      width: Math.abs (x2 - x1),
+      height: Math.abs (y2 - y1),
+    };
+  }
+}
+
+function onGridMouseUp () {
+  if (!dragState) return;
+  if (dragState.active && selBox.value) {
+    applyBoxSelect ();
+    // 抑制拖拽结束后的 click（避免误切换刚框选到的物品）
+    suppressClickUntil = Date.now () + 250;
+  }
+  dragState = null;
+  selBox.value = null;
+}
+
+function onGridMouseLeave () {
+  dragState = null;
+  selBox.value = null;
+}
+
+function isSuppressedClick () {
+  return Date.now () < suppressClickUntil;
+}
+
+// 框选区域（像素）转格子坐标，选中所有与之相交的物品（追加到现有选择）
+function applyBoxSelect () {
+  const box = selBox.value;
+  if (!box || !gridElRef.value) return;
+  const cell = CELL + GAP;
+  const gx1 = Math.floor (box.left / cell);
+  const gy1 = Math.floor (box.top / cell);
+  const gx2 = Math.floor ((box.left + box.width) / cell);
+  const gy2 = Math.floor ((box.top + box.height) / cell);
+  const m = new Map (sellSelected.value);
+  let changed = false;
+  for (const it of (currentStash.value?.items || [])) {
+    const ix = it.x, iy = it.y, iw = it.width || 1, ih = it.height || 1;
+    if (ix < gx2 && ix + iw > gx1 && iy < gy2 && iy + ih > gy1) {
+      const key = sellKey (props.stashId, it.slot_id);
+      if (!m.has (key)) {
+        m.set (key, { ...it, stash_id: props.stashId, uid: key });
+        changed = true;
+      }
+    }
+  }
+  if (changed) sellSelected.value = m;
+}
 
 function showTooltip (it, e) {
   // 固定在右键点击时的鼠标位置（不随鼠标移动）
@@ -115,11 +190,33 @@ function showTooltip (it, e) {
   hoverTipSide.value = (x + tipW + 40 > window.innerWidth) ? 'left' : 'right';
   hoverItem.value = it;
   tooltipSelected.value = new Map ();
+  installTipCloseHandler ();
 }
 
 function closeTooltip () {
   hoverItem.value = null;
   tooltipSelected.value = new Map ();
+  uninstallTipCloseHandler ();
+}
+
+// 全局点击非 tooltip 区域关闭（不拦截其他区域的点击/滚动）
+let tipDocHandler = null;
+
+function installTipCloseHandler () {
+  if (tipDocHandler) return;
+  tipDocHandler = (ev) => {
+    if (!hoverItem.value) return;
+    if (ev.target && ev.target.closest && ev.target.closest ('.tip-wrap')) return;
+    closeTooltip ();
+  };
+  document.addEventListener ('mousedown', tipDocHandler);
+}
+
+function uninstallTipCloseHandler () {
+  if (tipDocHandler) {
+    document.removeEventListener ('mousedown', tipDocHandler);
+    tipDocHandler = null;
+  }
 }
 
 // 勾选点点击：切换该词条是否参与查价，然后按当前勾选组合重新查价
@@ -920,6 +1017,7 @@ onBeforeUnmount (() => {
   if (retryTimer) { clearInterval (retryTimer); retryTimer = null; }
   if (unsubOcr) unsubOcr ();
   if (unsubHist) unsubHist ();
+  uninstallTipCloseHandler ();
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
@@ -1122,8 +1220,14 @@ watch (() => props.stashId, () => reportStashState ());
           </button>
         </div>
 
-        <div class="grid-scroll">
-          <div class="stash-grid"
+        <div class="grid-scroll"
+             @mousedown="onGridMouseDown"
+             @mousemove="onGridMouseMove"
+             @mouseup="onGridMouseUp"
+             @mouseleave="onGridMouseLeave"
+             @selectstart.prevent
+             @dragstart.prevent>
+          <div class="stash-grid" ref="gridElRef"
                :style="{
                  width: currentStash.width * (34 + 2) - 2 + 'px',
                  height: currentStash.height * (34 + 2) - 2 + 'px',
@@ -1142,12 +1246,14 @@ watch (() => props.stashId, () => reportStashState ());
             <div v-for="(it, i) in currentStash.items" :key="i" class="cell-item"
                  :class="{ hidden: debugPreview, 'sell-picked': isSellPicked(it) }"
                  :style="itemStyle (it)"
-                 @click="!isEquipment && toggleSellPick(it, $event)"
+                 @click="!isEquipment && !isSuppressedClick() && toggleSellPick(it, $event)"
                  @contextmenu.prevent="!isEquipment && showTooltip(it, $event)">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
               <span v-if="isSellPicked(it) && sellPriceOf(it) != null" class="cell-price">{{ fmtSellG (it, sellPriceOf (it)) }}</span>
               <span v-else-if="histPriceOf(it) != null" class="cell-price hist">{{ fmtSellG (it, histPriceOf (it)) }}</span>
             </div>
+            <div v-if="selBox" class="sel-box"
+                 :style="{ left: selBox.left + 'px', top: selBox.top + 'px', width: selBox.width + 'px', height: selBox.height + 'px' }"></div>
             <template v-if="debugPreview && previewItems.length">
               <div v-for="(pi, i) in previewItems" :key="'p'+i" class="preview-item"
                    :style="previewStyle (pi)" :title="pi.name">
@@ -1162,8 +1268,7 @@ watch (() => props.stashId, () => reportStashState ());
 
     <div v-else-if="loading" class="empty-hint"><div class="empty-t">加载中…</div></div>
 
-    <!-- 右键显示的 tooltip（固定物品格旁） -->
-    <div v-if="hoverItem && !debugPreview" class="tip-mask" @click="closeTooltip" @contextmenu.prevent="closeTooltip"></div>
+    <!-- 右键显示的 tooltip（固定鼠标位置，点击其他区域关闭） -->
     <div v-if="hoverItem && !debugPreview" class="tip-wrap" :class="hoverTipSide"
          :style="{ left: hoverTipLeft + 'px', top: hoverTipTop + 'px' }">
       <GameTooltip
@@ -1177,7 +1282,9 @@ watch (() => props.stashId, () => reportStashState ());
         <button class="tip-btn" :disabled="tooltipBusy" @click="onTooltipAction('price')">
           {{ tooltipBusy ? '查询中…' : '查询价格' }}
         </button>
-        <button class="tip-btn" @click="onTooltipAction('sell')">加入上架</button>
+        <button class="tip-btn" @click="onTooltipAction('sell')">
+          {{ isSellPicked (hoverItem) ? '移出上架' : '加入上架' }}
+        </button>
       </div>
     </div>
   </div>
@@ -1361,7 +1468,12 @@ watch (() => props.stashId, () => reportStashState ());
 .scan-chip.hot { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 
 /* grid */
-.grid-scroll { padding: 20px 18px 24px; overflow-x: auto; }
+.grid-scroll {
+  padding: 20px 18px 24px;
+  overflow-x: auto;
+  user-select: none;
+  -webkit-user-select: none;
+}
 .stash-grid { position: relative; margin: 0 auto; }
 .grid-bg { display: grid; gap: 2px; }
 .bg-cell {
@@ -1401,6 +1513,15 @@ watch (() => props.stashId, () => reportStashState ());
   box-shadow: 0 0 4px var(--rc), inset 0 0 0 40px var(--rbg);
   z-index: 6;
 }
+
+/* 左键框选矩形 */
+.sel-box {
+  position: absolute;
+  z-index: 8;
+  border: 1.5px solid var(--accent);
+  background: rgba(0, 113, 227, 0.15);
+  pointer-events: none;
+}
 .cell-price {
   position: absolute; left: 0; right: 0; bottom: 2px;
   text-align: center;
@@ -1424,12 +1545,7 @@ watch (() => props.stashId, () => reportStashState ());
 .sell-note { font-size: 11.5px; color: var(--green); line-height: 1.4; }
 .sell-note.warn { color: var(--red); }
 
-/* tooltip 遮罩：点击空白关闭 */
-.tip-mask {
-  position: fixed; inset: 0; z-index: 170;
-}
-
-/* 右键显示 tooltip（固定物品格旁，按钮在 tooltip 外） */
+/* 右键显示 tooltip（固定鼠标位置，按钮在 tooltip 外） */
 .tip-wrap {
   position: fixed;
   z-index: 180;
