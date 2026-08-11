@@ -5,6 +5,7 @@ import { refreshCapture } from '../composables/capture.js';
 import { useSell } from '../composables/sell.js';
 import { ATTR_ZH, attrField } from '@/shared/lib/stats-zh.js';
 import ItemDetailModal from './ItemDetailModal.vue';
+import GameTooltip from '@/shared/components/GameTooltip.vue';
 
 const props = defineProps ({
   charId: { type: String, default: '' },
@@ -131,8 +132,13 @@ function detailRemoveSell () {
   }
 }
 
-function startHover (it) {
+function startHover (it, e) {
   clearTimeout (hoverTimer);
+  if (e) {
+    hoverTipLeft.value = e.clientX;
+    hoverTipTop.value = e.clientY;
+    updateHoverSide (e.clientX);
+  }
   hoverTimer = setTimeout (() => { hoverItem.value = it; }, 300);
 }
 
@@ -142,26 +148,39 @@ function clearHover () {
   hoverItem.value = null;
 }
 
+// 悬停时跟随鼠标移动
+function onGridMouseMove (e) {
+  if (!hoverItem.value) return;
+  hoverTipLeft.value = e.clientX;
+  hoverTipTop.value = e.clientY;
+  updateHoverSide (e.clientX);
+}
+
+function updateHoverSide (x) {
+  const tipW = 250;
+  hoverTipSide.value = (x + tipW + 40 > window.innerWidth) ? 'left' : 'right';
+}
+
 function hoverAttrCn (name) {
   const field = attrField (String (name).replace (/([a-z0-9])([A-Z])/g, '$1 $2'));
   return ATTR_ZH[field] || name;
 }
 
-const gridEl = ref (null);
+function hoverSecondary (it) {
+  return (it.sp || []).map (([name, value]) => ({ name: hoverAttrCn (name), value }));
+}
+
+function hoverPrices (it) {
+  const p = {};
+  if (it.vendor_price) p.vendor = it.vendor_price;
+  return p;
+}
+
+function rarityColorCss (r) { return (RARITY[r] || RARITY.Common).c; }
+
 const hoverTipLeft = ref (0);
 const hoverTipTop = ref (0);
 const hoverTipSide = ref ('right');
-
-watch (hoverItem, (it) => {
-  if (!it || !gridEl.value) return;
-  const r = gridEl.value.getBoundingClientRect ();
-  const x = r.left + it.x * (CELL + GAP);
-  const y = r.top + it.y * (CELL + GAP);
-  hoverTipLeft.value = x;
-  hoverTipTop.value = y;
-  const tipW = 200;
-  hoverTipSide.value = (x + tipW + 40 > window.innerWidth) ? 'left' : 'right';
-});
 
 function clearSellPick () {
   sellSelected.value = new Map ();
@@ -513,12 +532,13 @@ function tabIconType (label) {
 }
 
 let lastCharLoad = { id: null, ts: 0 };
+let lastStashLoad = { id: null, ts: 0 };
 
-async function loadCharData (id, silent = false) {
+async function loadCharData (id, silent = false, force = false) {
   // 去重：同一角色 2 秒内已加载则跳过——启动时 mounted + watch + WebSocket
-  // onopen 都会触发（旧版同一角色重复请求 3 次）
+  // onopen 都会触发（旧版同一角色重复请求 3 次）；force 用于失败重试
   const now = Date.now ();
-  if (id === lastCharLoad.id && now - lastCharLoad.ts < 2000) return;
+  if (!force && id === lastCharLoad.id && now - lastCharLoad.ts < 2000) return false;
   lastCharLoad = { id, ts: now };
   if (!silent) { loading.value = true; error.value = ''; charData.value = null; }
   try {
@@ -529,11 +549,15 @@ async function loadCharData (id, silent = false) {
         const first = stashList.value[0];
         if (first) emit ('update:stashId', first.id);
       }
-    } else if (!silent) {
-      error.value = d?.error || '加载失败';
+      return true;
     }
-  } catch (e) { if (!silent) error.value = '加载失败'; }
+    logger.warn ('loadCharData failed', { id, error: d?.error || 'empty response' });
+  } catch (e) {
+    logger.warn ('loadCharData exception', { id, error: e?.message || String (e) });
+    if (!silent) error.value = '加载失败';
+  }
   if (!silent) loading.value = false;
+  return false;
 }
 
 async function selectCharacter (id) {
@@ -732,21 +756,26 @@ async function loadCharacters () {
   try {
     const d = await invoke ('dnd:characters');
     characters.value = d?.characters || [];
-    if (characters.value.length && !props.charId) {
-      const firstId = characters.value[0].id;
-      emit ('update:charId', firstId);
-      // 主动加载仓库数据：不依赖 watch 的异步链路，保证启动即有数据
-      await loadCharData (firstId, true);
+    // 主动加载仓库数据：有角色必有仓库。props.charId 启动时可能已被
+    // 恢复配置（非空），此时仍要加载；失败自动重试
+    const targetId = props.charId || characters.value[0]?.id;
+    if (characters.value.length && targetId && !charData.value) {
+      if (!props.charId) emit ('update:charId', targetId);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const ok = await loadCharData (targetId, true, attempt > 0);
+        if (ok) break;
+        await new Promise (r => setTimeout (r, 1200));
+      }
     }
   } catch (e) {}
 }
 
 async function loadStashes () {
   if (!props.charId) { emit ('update:stashId', ''); return; }
-  // 与 loadCharData 共用去重（loadStashes 内部也请求同一角色数据）
+  // 与 loadCharData 去重独立（共享会互相拦截导致仓库数据不加载）
   const now = Date.now ();
-  if (props.charId === lastCharLoad.id && now - lastCharLoad.ts < 2000) return;
-  lastCharLoad = { id: props.charId, ts: now };
+  if (props.charId === lastStashLoad.id && now - lastStashLoad.ts < 2000) return;
+  lastStashLoad = { id: props.charId, ts: now };
   try {
     const d = await invoke ('dnd:character', props.charId);
     if (d && d.stashes) {
@@ -853,10 +882,13 @@ onMounted (async () => {
     loadCalibration ();
     loadFollowCal ();
     loadSortOrder ();
-    loadStashes ();
+    // 角色已有但仓库数据缺失时补拉（启动超时后无其他重试路径）
+    if (!charData.value && props.charId) loadCharData (props.charId, true);
+    else loadStashes ();
   });
   retryTimer = setInterval (() => {
     if (!characters.value.length) loadCharacters ();
+    else if (!charData.value && props.charId) loadCharData (props.charId, true);
     else if (retryTimer) { clearInterval (retryTimer); retryTimer = null; }
   }, 5000);
 });
@@ -1069,7 +1101,8 @@ watch (() => props.stashId, () => reportStashState ());
         </div>
 
         <div class="grid-scroll">
-          <div class="stash-grid" ref="gridEl"
+          <div class="stash-grid"
+               @mousemove="onGridMouseMove"
                :style="{
                  width: currentStash.width * (34 + 2) - 2 + 'px',
                  height: currentStash.height * (34 + 2) - 2 + 'px',
@@ -1088,10 +1121,9 @@ watch (() => props.stashId, () => reportStashState ());
             <div v-for="(it, i) in currentStash.items" :key="i" class="cell-item"
                  :class="{ hidden: debugPreview, 'sell-picked': isSellPicked(it) }"
                  :style="itemStyle (it)"
-                 :title="`${it.name} · ${it.rarity} · ${it.width}×${it.height}`"
                  @click="!isEquipment && toggleSellPick(it, $event)"
                  @contextmenu.prevent="!isEquipment && openCtx($event, it)"
-                 @mouseenter="!isEquipment && startHover(it)"
+                 @mouseenter="!isEquipment && startHover(it, $event)"
                  @mouseleave="clearHover()">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
               <span v-if="isSellPicked(it) && sellPriceOf(it) != null" class="cell-price">{{ fmtSellG (it, sellPriceOf (it)) }}</span>
@@ -1119,21 +1151,16 @@ watch (() => props.stashId, () => reportStashState ());
     </div>
 
     <!-- 悬停词条提示 -->
-    <div v-if="hoverItem && !debugPreview" class="stash-tooltip"
-         :class="hoverTipSide"
-         :style="{ left: hoverTipLeft + 'px', top: hoverTipTop + 'px' }">
-      <div class="st-tooltip-name">{{ hoverItem.name }}</div>
-      <div v-if="hoverItem.sp && hoverItem.sp.length" class="st-tooltip-attrs">
-        <div v-for="(a, i) in hoverItem.sp" :key="i" class="st-tooltip-attr">
-          <span>{{ hoverAttrCn (a[0]) }}</span>
-          <span class="st-tooltip-val">{{ a[1] }}</span>
-        </div>
-      </div>
-      <div v-else class="st-tooltip-none">无词条</div>
-      <div class="st-tooltip-meta">
-        {{ hoverItem.quantity > 1 ? '×' + hoverItem.quantity + ' · ' : '' }}{{ hoverItem.width }}×{{ hoverItem.height }}
-      </div>
-    </div>
+    <GameTooltip
+      v-if="hoverItem && !debugPreview"
+      class="stash-tooltip"
+      :class="hoverTipSide"
+      :style="{ left: hoverTipLeft + 'px', top: hoverTipTop + 'px' }"
+      :title="hoverItem.name"
+      :title-color="rarityColorCss (hoverItem.rarity)"
+      :secondary="hoverSecondary (hoverItem)"
+      :prices="hoverPrices (hoverItem)"
+    />
 
     <!-- 物品详情弹窗 -->
     <ItemDetailModal
@@ -1401,24 +1428,14 @@ watch (() => props.stashId, () => reportStashState ());
 }
 .ctx-item:hover { background: var(--card-2); color: var(--text); }
 
-/* 悬停词条提示 */
+/* 悬停词条提示（GameTooltip 定位：跟随鼠标） */
 .stash-tooltip {
-  position: fixed; z-index: 180; width: 200px;
-  background: rgba(18, 18, 20, 0.96); border: 1px solid var(--line-soft); border-radius: 9px;
-  padding: 9px 11px; box-shadow: 0 6px 22px rgba(0,0,0,0.4);
+  position: fixed;
+  z-index: 180;
   pointer-events: none;
 }
-.stash-tooltip.right { transform: translate (38px, 0); }
-.stash-tooltip.left { transform: translate (-238px, 0); }
-.st-tooltip-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-.st-tooltip-attrs { border-top: 1px solid var(--line-soft); padding-top: 6px; }
-.st-tooltip-attr {
-  display: flex; justify-content: space-between; gap: 10px;
-  font-size: 12px; color: var(--text-2); line-height: 1.6;
-}
-.st-tooltip-val { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
-.st-tooltip-none { font-size: 12px; color: var(--text-3); }
-.st-tooltip-meta { margin-top: 5px; font-size: 11px; color: var(--text-3); }
+.stash-tooltip.right { transform: translate (16px, 10px); }
+.stash-tooltip.left { transform: translate (-266px, 10px); }
 
 html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 

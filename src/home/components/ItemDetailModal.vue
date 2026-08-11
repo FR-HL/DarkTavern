@@ -41,7 +41,8 @@ async function queryPrice () {
       index: 0,
       item_id: props.item.item_id,
       rarity: props.item.rarity,
-      sp: JSON.parse (JSON.stringify (props.item.sp || [])),
+      // 查价用 DarkerDB 显示名词条（sp_en）；sp 为中文显示名
+      sp: JSON.parse (JSON.stringify (props.item.sp_en || [])),
     }]);
     price.value = r?.results?.[0]?.price ?? null;
     if (price.value == null) priceNote.value = '无市场挂单';

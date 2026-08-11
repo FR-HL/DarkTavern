@@ -21,7 +21,8 @@ export function useSell () {
         index: idx,
         item_id: it.item_id,
         rarity: it.rarity,
-        sp: JSON.parse (JSON.stringify (it.sp || [])),
+        // 查价用 DarkerDB 显示名词条（sp_en）；sp 为中文显示名
+        sp: JSON.parse (JSON.stringify (it.sp_en || [])),
       }));
       const r = await invoke ('market:price', payload);
       const map = new Map ((r?.results || []).map (x => [x.index, x.price]));

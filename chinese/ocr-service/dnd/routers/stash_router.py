@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from fastapi import APIRouter, Response, WebSocket
 from pydantic import BaseModel
 from dnd.appdirs import get_characters_dir
@@ -109,21 +110,98 @@ def _item_zh_mapping():
 
 _EFFECT_PREFIX = "DesignDataItemPropertyType:Id_ItemPropertyType_Effect_"
 
+# 词条代号 -> 现有翻译表的英文显示名（chinese/mapping/item_affixes.json）
+# 游戏数据包存代号（PhysicalDamageAdd），翻译表存显示名（Additional Physical
+# Damage）；映射后统一走 attributes.json 反查中文。
+_affix_display_cache = None
 
-def _parse_item_sp(item):
-    """Item secondary properties. Prefers the cached ``sp`` field; falls back
-    to the raw ``data.secondaryPropertyArray`` (packet JSON stores affixes at
-    the top level of the item data)."""
+
+def _affix_display_mapping():
+    global _affix_display_cache
+    if _affix_display_cache is None:
+        mapping = {}
+        try:
+            mapping_path = os.path.join(
+                os.path.dirname(__file__), "..", "..", "..", "mapping", "item_affixes.json"
+            )
+            with open(mapping_path, "r", encoding="utf-8") as f:
+                mapping = json.load(f)
+        except Exception as exc:
+            logger.warning("Failed to load item affix mapping: %s", exc)
+        _affix_display_cache = mapping
+    return _affix_display_cache
+
+
+# 词条英文显示名 -> 中文（chinese/mapping/attributes.json 反向映射，模块级缓存）
+_attr_zh_cache = None
+
+
+def _attr_zh_mapping():
+    global _attr_zh_cache
+    if _attr_zh_cache is None:
+        mapping = {}
+        try:
+            mapping_path = os.path.join(
+                os.path.dirname(__file__), "..", "..", "..", "mapping", "attributes.json"
+            )
+            with open(mapping_path, "r", encoding="utf-8") as f:
+                raw = json.load(f)
+            mapping = {v: k for k, v in raw.items()}
+        except Exception as exc:
+            logger.warning("Failed to load attribute zh mapping: %s", exc)
+        _attr_zh_cache = mapping
+    return _attr_zh_cache
+
+
+def _sp_display(name):
+    """词条代号 -> 英文显示名：先查 item_affixes 映射，否则驼峰拆分。"""
+    name = str(name)
+    display = _affix_display_mapping().get(name)
+    if display:
+        return display
+    return re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', name)
+
+
+def _sp_raw(item):
+    """词条原始数据 [代号, 值] 列表，优先缓存 sp，否则从 data 解析。"""
     sp = item.get("sp") or []
     if sp:
         return sp
+    data = item.get("data") or {}
+    raw_sp = []
+    for p in data.get("secondaryPropertyArray", []):
+        if isinstance(p, dict) and p.get("propertyTypeId") is not None and p.get("propertyValue") is not None:
+            raw_sp.append([p["propertyTypeId"].replace(_EFFECT_PREFIX, ""), p["propertyValue"]])
+    return raw_sp
+
+
+def _parse_item_sp(item):
+    """Item secondary properties for display: Chinese names via the mapping
+    table (item_affixes) then the attributes translation table; names that
+    cannot be resolved stay as-is."""
     try:
-        data = item.get("data") or {}
-        sp = []
-        for p in data.get("secondaryPropertyArray", []):
-            if isinstance(p, dict) and p.get("propertyTypeId") is not None and p.get("propertyValue") is not None:
-                sp.append([p["propertyTypeId"].replace(_EFFECT_PREFIX, ""), p["propertyValue"]])
-        return sp
+        return [[_attr_zh_mapping().get(_sp_display(name), _sp_display(name)), value]
+                for name, value in _sp_raw(item)]
+    except Exception:
+        return []
+
+
+def _parse_item_sp_en(item):
+    """Item secondary properties for DarkerDB market queries.
+
+    Returns [DarkerDB display name, value]; properties whose display name
+    cannot be resolved against the attributes mapping are dropped (an unknown
+    field would fail the whole query). The frontend converts these display
+    names to snake_case fields exactly like the price checker.
+    """
+    try:
+        zh_map = _attr_zh_mapping()
+        out = []
+        for name, value in _sp_raw(item):
+            display = _sp_display(name)
+            if display in zh_map:
+                out.append([display, value])
+        return out
     except Exception:
         return []
 
@@ -694,6 +772,7 @@ def get_character(character_id: str):
                 "quantity": item.get("itemCount", 1),
                 "vendor_price": item.get("vendor_price", 0),
                 "sp": _parse_item_sp(item),
+                "sp_en": _parse_item_sp_en(item),
             })
         stash_entry = {
             "label": _stash_label(stash_id),
