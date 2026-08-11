@@ -163,6 +163,10 @@ function updateBounds () {
 
   const monitor = getMonitorInfo (bounds);
   overlay.setBounds ({ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height });
+  logger.info ('悬浮窗窗口定位', {
+    x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+    monitor: { x: monitor.x, y: monitor.y, scale: monitor.scale },
+  });
   overlay.webContents.send ('game:bounds', {
     ...bounds,
     x: bounds.x - monitor.x,

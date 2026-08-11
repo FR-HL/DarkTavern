@@ -330,6 +330,46 @@ async function doStartSell () {
   if (ok !== false) clearSellPick ();
 }
 
+// 游戏内悬浮窗物品：加入上架列表 / 直接上架当前物品
+function overlayAddItem (data, autoSell) {
+  if (!charData.value || !data?.itemId) return;
+  for (const [sid, s] of Object.entries (charData.value.stashes || {})) {
+    for (const it of (s?.items || [])) {
+      if (toCanonicalId (it.item_id) === data.itemId) {
+        if (autoSell) {
+          // 列表有有价物品 → 上架整个列表；否则直接上架当前物品
+          const listed = sellSelectedList.value.filter (i => i.price != null);
+          if (listed.length) {
+            doStartSell ();
+          } else {
+            const price = data.price ?? null;
+            if (price == null) {
+              note.value = '无市场价，无法直接上架';
+              return;
+            }
+            startSell ([{
+              stash_id: sid,
+              x: it.x,
+              y: it.y,
+              w: it.width || 1,
+              h: it.height || 1,
+              price,
+            }]);
+          }
+          return;
+        }
+        const key = sellKey (sid, it.slot_id);
+        const m = new Map (sellSelected.value);
+        m.set (key, { ...it, stash_id: sid, uid: key, price: data.price ?? null });
+        sellSelected.value = m;
+        note.value = `已加入上架列表：${it.name}`;
+        return;
+      }
+    }
+  }
+  note.value = '未在当前角色仓库中找到该物品';
+}
+
 // ── 仓库状态上报（悬浮球同步） ──
 function reportStashState () {
   const list = stashList.value.map (s => ({ id: s.id, label: s.label }));
@@ -987,6 +1027,9 @@ onMounted (async () => {
   unsubHist = window.electron.on ('history:updated', () => {
     if (charData.value) loadHistPrices ();
   });
+  // 游戏内悬浮窗「加入列表 / 开始上架」
+  window.electron.on ('sell:add-item', (data) => overlayAddItem (data, false));
+  window.electron.on ('sell:start-item', (data) => overlayAddItem (data, true));
   connectEvents ();
   reportStashState ();
   applyFollowMode ();

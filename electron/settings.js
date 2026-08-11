@@ -39,6 +39,7 @@ const defaults = {
     disclaimer_agreed_version: '',
     auto_check_update: true,
     last_update_check: '',
+    show_overlay_sell_buttons: true,
   },
   hotkeys: {
     run_price_check: 'XButton1',

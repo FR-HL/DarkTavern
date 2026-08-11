@@ -77,6 +77,7 @@ const livePriceRelax = ref ('none');
 const scanCacheDays = ref (1);
 const historyDays = ref (3);
 const requeryDebounce = ref (600);
+const showOverlaySell = ref (true);
 const REQUERY_OPTS = [
   { key: 600, label: '防抖 600ms' },
   { key: 0, label: '每次都查' },
@@ -569,6 +570,7 @@ async function loadSettings () {
     scanCacheDays.value = d.scan_cache_days ?? 1;
     historyDays.value = d.history_days ?? 3;
     requeryDebounce.value = d.requery_debounce ?? 600;
+    showOverlaySell.value = d.show_overlay_sell_buttons !== false;
     launchOnStartup.value = !!d.launch_on_startup;
     autoCheckUpdate.value = d.auto_check_update !== false;
     developerMode.value = !!d.developer_mode;
@@ -755,6 +757,11 @@ async function setRequeryDebounce (v) {
   requeryDebounce.value = v;
   const r = await invoke ('settings:save', { requery_debounce: v });
   if (r?.success) showToast ('已保存');
+}
+async function setShowOverlaySell (v) {
+  showOverlaySell.value = v;
+  const r = await invoke ('settings:save', { show_overlay_sell_buttons: v });
+  if (r?.success) showToast ('已保存 · 立即生效');
 }
 async function setScanCacheDays (v) {
   const n = parseFloat (v);
@@ -1104,6 +1111,22 @@ onBeforeUnmount (() => {
                 <div class="seg">
                   <button v-for="o in REQUERY_OPTS" :key="o.key" class="seg-opt" :class="{ on: requeryDebounce === o.key }" @click="setRequeryDebounce(o.key)">
                     <span class="seg-t">{{ o.label }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
+                <div class="srow-t">游戏内上架按钮</div>
+                <div class="srow-d">查价悬浮窗显示「加入列表 / 开始上架」按钮</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="seg">
+                  <button class="seg-opt" :class="{ on: showOverlaySell }" @click="setShowOverlaySell(true)">
+                    <span class="seg-t">显示</span>
+                  </button>
+                  <button class="seg-opt" :class="{ on: !showOverlaySell }" @click="setShowOverlaySell(false)">
+                    <span class="seg-t">隐藏</span>
                   </button>
                 </div>
               </div>

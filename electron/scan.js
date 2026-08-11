@@ -22,10 +22,24 @@ function hashText (t) {
   return createHash ('sha256').update (String (t || '')).digest ('hex').slice (0, 16);
 }
 
+// wire 可重建：保存当前 overlay 目标与回调，重建窗口时只更新目标不重复注册
+let _overlayRef = null;
+let _sendBallRef = null;
+let _hooksRef = null;
+let _wired = false;
+
 export function wire (overlay, sendBall = null, hooks = null) {
-  const send = (msg, data) => overlay.webContents.send (msg, data);
-  const markScan = (active) => { if (sendBall) sendBall ({ active }); };
-  const markResult = (data) => { if (sendBall) sendBall ({ scanResult: data }); };
+  _overlayRef = overlay;
+  _sendBallRef = sendBall;
+  _hooksRef = hooks;
+  if (_wired) return;
+  _wired = true;
+
+  const send = (msg, data) => {
+    if (_overlayRef && !_overlayRef.isDestroyed ()) _overlayRef.webContents.send (msg, data);
+  };
+  const markScan = (active) => { if (_sendBallRef) _sendBallRef ({ active }); };
+  const markResult = (data) => { if (_sendBallRef) _sendBallRef ({ scanResult: data }); };
 
   ipcMain.on ('ready', () => {
     logger.info ('前端就绪');
@@ -54,8 +68,10 @@ export function wire (overlay, sendBall = null, hooks = null) {
     const t0 = Date.now ();
 
     if (source === 'manual') {
-      overlay.setAlwaysOnTop (true, 'screen-saver');
-      overlay.moveTop ();
+      if (_overlayRef && !_overlayRef.isDestroyed ()) {
+        _overlayRef.setAlwaysOnTop (true, 'screen-saver');
+        _overlayRef.moveTop ();
+      }
       send ('scan:start', { scanId, source });
     }
 
@@ -88,7 +104,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
     logger.debug ('提示框识别完成', { scanId, ms: tooltipMs, text: tooltip.text });
 
     const key = hashText (tooltip.text);
-    const cached = hooks?.findScanCache ? hooks.findScanCache (key) : null;
+    const cached = _hooksRef?.findScanCache ? _hooksRef.findScanCache (key) : null;
     if (cached) {
       logger.info ('查价命中缓存', { scanId, key, id: cached.id, totalMs: Date.now () - t0 });
       const attributes = cached.attributes || { primary: [], secondary: [] };
@@ -175,10 +191,10 @@ export function wire (overlay, sendBall = null, hooks = null) {
 
   ipcMain.on ('overlay:set-ignore-mouse', (e, ignore) => {
     if (ignore) {
-      overlay.setIgnoreMouseEvents (true, { forward: true });
+      if (_overlayRef && !_overlayRef.isDestroyed ()) _overlayRef.setIgnoreMouseEvents (true, { forward: true });
       activateGameWindow ();
     } else {
-      overlay.setIgnoreMouseEvents (false);
+      if (_overlayRef && !_overlayRef.isDestroyed ()) _overlayRef.setIgnoreMouseEvents (false);
     }
   });
 

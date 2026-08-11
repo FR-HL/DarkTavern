@@ -32,11 +32,17 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+
+  showSellButtons: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const isTooltipActive = ref(false);
 
 const tooltipNode = ref(null);
+const sellActionsNode = ref(null);
 const tooltipWidth = ref(0);
 const tooltipHeight = ref(0);
 const tooltipVisibility = ref("hidden");
@@ -90,6 +96,16 @@ electron.on("game:state", (state) => {
 const chineseItemName = ref('');
 const chineseLines = ref([]);
 const itemRarity = ref('Common');
+const currentItemId = ref('');
+
+function sendSellAction (channel) {
+  if (!currentItemId.value) return;
+  electron.send (channel, {
+    itemId: currentItemId.value,
+    rarity: itemRarity.value,
+    price: item.value.prices.live ?? item.value.prices.market ?? null,
+  });
+}
 const reverseAttributes = ref({});
 const reverseKeywords = ref({});
 
@@ -131,23 +147,19 @@ function scheduleLeaveHide() {
   }, TOOLTIP_HIDE_GRACE_MS);
 }
 
-// Hit-test the pointer against the tooltip on every mousemove to toggle click-through
-// (mouseenter/leave are unreliable under the forwarded click-through mode)
+// Hit-test the pointer against the tooltip (and the sell buttons) on every
+// mousemove to toggle click-through (mouseenter/leave are unreliable under
+// the forwarded click-through mode)
 function updateTooltipHover(event) {
-  const node = tooltipNode.value;
-  if (!node) {
-    if (hoveringTooltip.value) {
-      hoveringTooltip.value = false;
-      scheduleLeaveHide();
-    }
-    setIgnoreMouse(true);
-    return;
-  }
-
-  const rect = node.getBoundingClientRect();
-  const over =
-    event.clientX >= rect.left && event.clientX <= rect.right &&
-    event.clientY >= rect.top && event.clientY <= rect.bottom;
+  const hit = (el) => {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    return (
+      event.clientX >= rect.left && event.clientX <= rect.right &&
+      event.clientY >= rect.top && event.clientY <= rect.bottom
+    );
+  };
+  const over = hit(tooltipNode.value) || hit(sellActionsNode.value);
 
   if (over) {
     hoveringTooltip.value = true;
@@ -232,6 +244,28 @@ const shouldShowContent = computed(() => {
   return markerWidth.value > 0 && (isLoading.value || errorMessage.value !== null || isTooltipActive.value);
 });
 
+// 诊断：显示条件每次变化都留痕（定位"数据到了但不显示"）
+watch(shouldShowContent, (v) => {
+  logger.info(`shouldShowContent=${v}`, {
+    marker: markerWidth.value,
+    active: isTooltipActive.value,
+    loading: isLoading.value,
+    error: errorMessage.value !== null,
+    bounds: gameBounds.value ? { w: gameBounds.value.width, h: gameBounds.value.height } : null,
+    win: { w: window.innerWidth, h: window.innerHeight },
+  });
+});
+
+// 诊断：上架按钮显示条件
+watch([() => currentItemId.value, () => props.showSellButtons], () => {
+  logger.info("sell buttons cond", {
+    id: currentItemId.value,
+    show: props.showSellButtons,
+    active: isTooltipActive.value,
+    loading: isLoading.value,
+  });
+});
+
 // Watch for tooltip content changes to re-measure dimensions and fix position
 watch([shouldShowContent, isLoading, () => item.value.prices.market, () => item.value.attributes.secondary.length], () => {
   nextTick(() => {
@@ -285,6 +319,16 @@ const tooltipPosition = computed(() => {
   if (markerTop.value + top < 0) {
     top = -markerTop.value + PADDING;
   }
+
+  // 诊断：tooltip 实际渲染位置（确认是否在窗口外）
+  logger.debug("tooltip pos", {
+    markerLeft: Math.round(markerLeft.value),
+    markerTop: Math.round(markerTop.value),
+    markerW: markerWidth.value,
+    left: Math.round(left),
+    top: Math.round(top),
+    win: `${window.innerWidth}x${window.innerHeight}`,
+  });
 
   return { left, top };
 });
@@ -395,6 +439,7 @@ electron.on("scan:dropped", ({ scanId, activeScanId }) => {
 
 // Test-only: F9 in app → show a fake tooltip to verify overlay rendering (clear with F8)
 electron.on("test:tooltip", () => {
+  logger.info("test:tooltip received");
   errorMessage.value = null;
   isLoading.value = false;
   livePriceLoading.value = false;
@@ -560,6 +605,8 @@ onMounted(() => {
     item.value.quests = data.quests || [];
     item.value.attributes.primary = data.item?.primary || [];
     item.value.attributes.secondary = data.item?.secondary || [];
+    currentItemId.value = data.item?.id || '';
+    logger.info("item id set", { id: currentItemId.value, name: data.item?.name || '' });
     selectionDirty = false;
 
     // Update Chinese data if not already set by preview
@@ -864,6 +911,16 @@ function getGradeColor(grade) {
           </div>
         </div>
       </div>
+
+      <!-- 上架按钮：tooltip 容器内正常流，宽度自动与悬浮窗一致 -->
+      <div
+        v-if="shouldShowContent && !isLoading && isTooltipActive && currentItemId && props.showSellButtons"
+        ref="sellActionsNode"
+        class="sell-actions"
+      >
+        <button class="sell-btn" @click="sendSellAction('sell:add-item')">加入列表</button>
+        <button class="sell-btn" :disabled="item.prices.live === null && item.prices.market === null" @click="sendSellAction('sell:start-item')">开始上架</button>
+      </div>
       </div>
     </transition>
   </div>
@@ -935,4 +992,33 @@ function getGradeColor(grade) {
   height: 18px;
   animation: spin 1s linear infinite;
 }
+
+/* 加入列表 / 开始上架（悬浮窗容器内正常流，宽度自动与 tooltip 一致） */
+.sell-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.sell-btn {
+  flex: 1;
+  padding: 8px 0;
+  font-family: 'SaintKDG_Light', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  color: var(--dnd-gold);
+  background-image: url('@assets/images/Background_TooltipTexture.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: #14121a;
+  border-image-slice: 21 21 21 21;
+  border-image-width: 12px 12px 12px 12px;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-image-source: url('@assets/images/Background_TooltipBorder.png');
+  cursor: pointer;
+  transition: filter .15s ease, color .15s ease;
+}
+.sell-btn:hover { color: #ffe066; filter: brightness(1.15); }
+.sell-btn:disabled { opacity: .45; cursor: default; }
 </style>

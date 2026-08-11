@@ -26,6 +26,13 @@ let previousScanAccelerator = null;
 let ocrStatus = false;
 const RESERVED_KEYS = ['F5', 'F6', 'F7', 'F8'];
 
+// ── 悬浮窗（查价 overlay）状态 ──
+let overlay = null;
+let overlayWireCb = null;        // wire 的 sendBall 回调（重建时复用）
+let heartbeatTimer = null;
+let lastHeartbeatPong = 0;
+let heartbeatReloaded = false;   // 心跳超时后已尝试重载（再超时则重建窗口）
+
 // ── 悬浮球状态 ──
 let ballWindow = null;
 let ballLocked = !!settings.general.ball_locked;
@@ -105,6 +112,83 @@ app.on ('second-instance', () => {
   // silently quitting the new instance (which looked like a "flash quit").
   openHomeWindow ();
 });
+
+// ── 悬浮窗窗口创建 / 心跳 / 自愈 ──
+
+function createOverlayWindow () {
+  const win = new BrowserWindow ({
+    backgroundColor: '#00000000',
+    show: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: true,
+    type: 'toolbar',
+    webPreferences: {
+      preload: join (SOURCE, 'preload.cjs'),
+      sandbox: false,
+      backgroundThrottling: true,
+    },
+  });
+
+  win.webContents.setZoomFactor (1);
+  win.loadFile (join (ROOT, 'dist', 'overlay', 'index.html'));
+
+  // 生命周期诊断：加载 / 崩溃 / 无响应 / preload 错误全部留痕
+  win.webContents.on ('did-finish-load', () => logger.info ('悬浮窗页面加载完成'));
+  win.webContents.on ('did-fail-load', (e, code, desc) => {
+    logger.error ('悬浮窗页面加载失败', { code, desc });
+  });
+  win.webContents.on ('render-process-gone', (e, details) => {
+    logger.error ('悬浮窗渲染进程崩溃，自动重建', { reason: details?.reason, exitCode: details?.exitCode });
+    rebuildOverlay ();
+  });
+  win.webContents.on ('unresponsive', () => logger.warn ('悬浮窗渲染进程无响应'));
+  win.webContents.on ('responsive', () => logger.info ('悬浮窗渲染进程恢复'));
+  win.webContents.on ('preload-error', (e, path, error) => {
+    logger.error ('悬浮窗 preload 错误', { path, error: error?.message });
+  });
+
+  return win;
+}
+
+function rebuildOverlay () {
+  logger.info ('重建悬浮窗窗口');
+  try {
+    if (overlay && !overlay.isDestroyed ()) overlay.destroy ();
+  } catch (e) { logger.warn ('销毁旧悬浮窗失败', { error: e?.message }); }
+  overlay = createOverlayWindow ();
+  startTracking (overlay);
+  if (overlayWireCb) wire (overlay, overlayWireCb, { findScanCache });
+  lastHeartbeatPong = 0;
+  heartbeatReloaded = false;
+}
+
+function startHeartbeat () {
+  if (heartbeatTimer) clearInterval (heartbeatTimer);
+  ipcMain.on ('heartbeat-pong', () => {
+    lastHeartbeatPong = Date.now ();
+    heartbeatReloaded = false;
+  });
+  heartbeatTimer = setInterval (() => {
+    if (!overlay || overlay.isDestroyed ()) return;
+    const now = Date.now ();
+    overlay.webContents.send ('heartbeat');
+    // 60 秒无 pong：先重载页面；重载后再超时：重建窗口
+    if (lastHeartbeatPong && now - lastHeartbeatPong > 60000) {
+      if (!heartbeatReloaded) {
+        heartbeatReloaded = true;
+        logger.warn ('悬浮窗心跳超时，重载页面');
+        overlay.webContents.reload ();
+      } else {
+        heartbeatReloaded = false;
+        logger.error ('悬浮窗重载后仍无响应，重建窗口');
+        rebuildOverlay ();
+      }
+    }
+  }, 30000);
+}
 
 // IPC handler 统一包装：异常必记 error（channel+堆栈），失败结果记 warn，
 // 关键路径留痕——任何 handler 出问题都能从日志定位。
@@ -201,27 +285,8 @@ app.on ('ready', async () => {
     pushBallStatus ();
   });
 
-  let overlay = new BrowserWindow ({
-    backgroundColor: '#00000000',
-    show: false,
-    frame: false,
-    transparent: true,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    focusable: true,
-    type: 'toolbar',
-    webPreferences: {
-      preload: join (SOURCE, 'preload.cjs'),
-      sandbox: false,
-      backgroundThrottling: true,
-    },
-  });
-
-  overlay.webContents.setZoomFactor (1);
-  overlay.loadFile (join (ROOT, 'dist', 'overlay', 'index.html'));
-
-  startTracking (overlay);
-  wire (overlay, (data) => {
+  overlay = createOverlayWindow ();
+  overlayWireCb = (data) => {
     if (data?.active !== undefined) {
       ballScanning = !!data.active;
       pushBallStatus ();
@@ -251,20 +316,37 @@ app.on ('ready', async () => {
       if (lastScan.ok && lastScan.id && !r.noRecord) upsertHistoryRecord ();
       sendBallScanResult ();
     }
-  }, { findScanCache });
+  };
 
-  globalShortcut.register ('F5', () => openSettingsWindow ('settings'));
-  globalShortcut.register ('F6', () => openSettingsWindow ('mapping'));
-  globalShortcut.register ('F7', () => {
+  startTracking (overlay);
+  wire (overlay, overlayWireCb, { findScanCache });
+  startHeartbeat ();
+
+  const registerShortcut = (key, fn) => {
+    const ok = globalShortcut.register (key, fn);
+    if (!ok) logger.warn ('快捷键注册失败', { key });
+    return ok;
+  };
+
+  registerShortcut ('F5', () => openSettingsWindow ('settings'));
+  registerShortcut ('F6', () => openSettingsWindow ('mapping'));
+  registerShortcut ('F7', () => {
+    logger.debug ('F7 按下');
+    if (!overlay || overlay.isDestroyed ()) { logger.warn ('F7: 悬浮窗不可用'); return; }
     overlay.webContents.send ('manual:debugger');
     debugging = !debugging;
     debugging ? overlay.webContents.openDevTools ({ mode: 'detach' }) : overlay.webContents.closeDevTools ();
   });
-  globalShortcut.register ('F8', () => overlay.webContents.send ('clear'));
-  globalShortcut.register ('F9', () => overlay.webContents.send ('test:tooltip'));
+  registerShortcut ('F8', () => {
+    if (overlay && !overlay.isDestroyed ()) overlay.webContents.send ('clear');
+  });
+  registerShortcut ('F9', () => {
+    logger.debug ('F9 按下');
+    if (overlay && !overlay.isDestroyed ()) overlay.webContents.send ('test:tooltip');
+  });
 
   safeHandle ('overlay:test-tooltip', () => {
-    overlay.webContents.send ('test:tooltip');
+    if (overlay && !overlay.isDestroyed ()) overlay.webContents.send ('test:tooltip');
     return { success: true };
   });
 
@@ -431,6 +513,10 @@ app.on ('ready', async () => {
   registerCrossHotkeys ();
 
   // ── 查价记录 IPC ──
+
+  // 游戏内悬浮窗「加入列表 / 开始上架」→ 转发给主界面仓库页处理
+  ipcMain.on ('sell:add-item', (e, data) => notifyHome ('sell:add-item', data || {}));
+  ipcMain.on ('sell:start-item', (e, data) => notifyHome ('sell:start-item', data || {}));
 
   safeHandle ('history:list', () => {
     loadHistory ();
@@ -658,6 +744,10 @@ app.on ('ready', async () => {
     if (data.scan_cache_days !== undefined) settings.general.scan_cache_days = toDays (data.scan_cache_days, settings.general.scan_cache_days);
     if (data.history_days !== undefined) settings.general.history_days = toDays (data.history_days, settings.general.history_days);
     if (data.requery_debounce !== undefined) settings.general.requery_debounce = toDebounce (data.requery_debounce);
+    if (data.show_overlay_sell_buttons !== undefined) {
+      settings.general.show_overlay_sell_buttons = !!data.show_overlay_sell_buttons;
+      needSend = true;
+    }
     if (data.launch_on_startup !== undefined) {
       settings.general.launch_on_startup = !!data.launch_on_startup;
       app.setLoginItemSettings ({
@@ -668,7 +758,7 @@ app.on ('ready', async () => {
     }
 
     saveSettings ();
-    if (needSend) overlay.webContents.send ('settings', settings);
+    if (needSend && overlay && !overlay.isDestroyed ()) overlay.webContents.send ('settings', settings);
     if (needReregister) registerScanHotkey (overlay);
     if (needSortReregister) registerSortHotkeys ();
     if (needStashReregister) registerStashHotkeys ();
@@ -778,7 +868,7 @@ async function registerScanHotkey (overlay) {
       let wasPressed = false;
       global._mousePollInterval = setInterval (() => {
         const pressed = (GetAsyncKeyState (vkCode) & 0x8000) !== 0;
-        if (pressed && !wasPressed) overlay.webContents.send ('manual:scan');
+        if (pressed && !wasPressed && overlay && !overlay.isDestroyed ()) overlay.webContents.send ('manual:scan');
         wasPressed = pressed;
       }, 100);
       logger.info (`Scan mouse button: VK=0x${vkCode.toString (16)}`);
@@ -787,7 +877,9 @@ async function registerScanHotkey (overlay) {
     }
   } else {
     try {
-      globalShortcut.register (accelerator, () => overlay.webContents.send ('manual:scan'));
+      globalShortcut.register (accelerator, () => {
+        if (overlay && !overlay.isDestroyed ()) overlay.webContents.send ('manual:scan');
+      });
       logger.info (`Scan key: ${key}`);
     } catch (e) {
       logger.error (`Failed to register ${key}: ${e.message}`);

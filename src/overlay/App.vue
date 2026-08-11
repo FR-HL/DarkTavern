@@ -59,6 +59,8 @@ electron.on("manual:debugger", () => {
 
 onMounted(() => {
   electron.send("ready");
+  // 悬浮窗心跳：主进程定期 ping，回复 pong 表示渲染进程存活
+  electron.on("heartbeat", () => electron.send("heartbeat-pong"));
 });
 </script>
 
@@ -76,6 +78,7 @@ onMounted(() => {
       :alignment="settings.general.alignment"
       :components="settings.general.components"
       :debug="isDebugging"
+      :show-sell-buttons="settings.general.show_overlay_sell_buttons !== false"
     />
 
     <transition
