@@ -146,20 +146,50 @@ def _attr_zh_mapping():
             )
             with open(mapping_path, "r", encoding="utf-8") as f:
                 raw = json.load(f)
-            mapping = {v: k for k, v in raw.items()}
+            # 同英文多中文同义词时保留首个（原版同步顺序，规范名在前），
+            # 避免后出现的别名覆盖规范名（如 额外护甲等级 覆盖 额外护甲值）
+            for k, v in raw.items():
+                mapping.setdefault(v, k)
         except Exception as exc:
             logger.warning("Failed to load attribute zh mapping: %s", exc)
         _attr_zh_cache = mapping
     return _attr_zh_cache
 
 
+def _affix_info(name):
+    """词条代号 -> (英文显示名, 数值缩放倍数)。
+
+    item_affixes.json 条目：{display: 现有翻译表显示名, scale: 内部值需除以的
+    倍数}。百分比/倍率类词条（速度、伤害加成/减免、穿透等）内部存 10 倍值
+    （如 ActionSpeed 15 = 游戏显示 1.5），显示与查价时统一除以 scale。
+    """
+    info = _affix_display_mapping().get(str(name)) or {}
+    return info.get('display'), float(info.get('scale', 1) or 1)
+
+
 def _sp_display(name):
     """词条代号 -> 英文显示名：先查 item_affixes 映射，否则驼峰拆分。"""
     name = str(name)
-    display = _affix_display_mapping().get(name)
+    display, _ = _affix_info(name)
     if display:
         return display
     return re.sub(r'(?<=[a-z0-9])(?=[A-Z])', ' ', name)
+
+
+def _sp_scale(name):
+    _, scale = _affix_info(name)
+    return scale
+
+
+def _sp_value(name, value):
+    """按词条缩放倍数换算为游戏显示值。"""
+    try:
+        scale = _sp_scale(name)
+        if scale <= 1:
+            return value
+        return round(float(value) / scale, 2)
+    except Exception:
+        return value
 
 
 def _sp_raw(item):
@@ -178,9 +208,10 @@ def _sp_raw(item):
 def _parse_item_sp(item):
     """Item secondary properties for display: Chinese names via the mapping
     table (item_affixes) then the attributes translation table; names that
-    cannot be resolved stay as-is."""
+    cannot be resolved stay as-is. Values are scaled to in-game display
+    values (percent/multiplier affixes store 10x internally)."""
     try:
-        return [[_attr_zh_mapping().get(_sp_display(name), _sp_display(name)), value]
+        return [[_attr_zh_mapping().get(_sp_display(name), _sp_display(name)), _sp_value(name, value)]
                 for name, value in _sp_raw(item)]
     except Exception:
         return []
@@ -189,10 +220,10 @@ def _parse_item_sp(item):
 def _parse_item_sp_en(item):
     """Item secondary properties for DarkerDB market queries.
 
-    Returns [DarkerDB display name, value]; properties whose display name
-    cannot be resolved against the attributes mapping are dropped (an unknown
-    field would fail the whole query). The frontend converts these display
-    names to snake_case fields exactly like the price checker.
+    Returns [DarkerDB display name, scaled value]; properties whose display
+    name cannot be resolved against the attributes mapping are dropped (an
+    unknown field would fail the whole query). The frontend converts these
+    display names to snake_case fields exactly like the price checker.
     """
     try:
         zh_map = _attr_zh_mapping()
@@ -200,7 +231,7 @@ def _parse_item_sp_en(item):
         for name, value in _sp_raw(item):
             display = _sp_display(name)
             if display in zh_map:
-                out.append([display, value])
+                out.append([display, _sp_value(name, value)])
         return out
     except Exception:
         return []
