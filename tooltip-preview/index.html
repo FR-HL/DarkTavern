@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>查价悬浮窗 Tooltip 复刻预览</title>
+<style>
+  /* ── 暗黑地牢风格 CSS 变量（复刻自 src/shared/styles/overlay.css） ── */
+  :root {
+    --dnd-gold:       #ffd400;
+    --dnd-light-gray: #989898;
+    --dnd-tan:        #ffce79;
+    --dnd-feather:    #b8ac9f;
+    --dnd-dust:       #626262;
+    --dnd-teal:       #8bd1d5;
+    --dnd-turquoise:  #91dadf;
+    --dnd-aqua:       #90d9de;
+    --dnd-blue:       #00aaee;
+    --dnd-oak:        #b18063;
+    --dnd-chalk:      #ecd99a;
+    --dnd-purple:     #d067ff;
+    --dnd-green:      #80d600;
+    --dnd-orange:     #ff9a00;
+    --dnd-gray:       #888888;
+    --dnd-white:      #eeeeee;
+
+    --dnd-poor:      var(--dnd-gray);
+    --dnd-common:    var(--dnd-white);
+    --dnd-uncommon:  var(--dnd-green);
+    --dnd-rare:      var(--dnd-blue);
+    --dnd-epic:      var(--dnd-purple);
+    --dnd-legendary: var(--dnd-orange);
+    --dnd-unique:    var(--dnd-chalk);
+  }
+
+  @font-face {
+    font-family: 'SaintKDG_Light';
+    src: url('../assets/fonts/SaintKDG_Light.ttf') format('truetype');
+  }
+  @font-face {
+    font-family: 'SaintKDG_LMedium';
+    src: url('../assets/fonts/SaintKDG_Medium.ttf') format('truetype');
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+
+  body {
+    font-family: 'SaintKDG_Light', sans-serif;
+    color: #eee;
+    min-height: 100vh;
+    padding: 32px;
+    background:
+      radial-gradient(ellipse at 50% -20%, #2a2432 0%, transparent 60%),
+      linear-gradient(180deg, #17141c 0%, #0d0b11 100%);
+  }
+
+  .page-head { text-align: center; margin-bottom: 28px; }
+  .page-title { font-size: 26px; letter-spacing: 0.08em; color: var(--dnd-chalk); }
+  .page-sub { margin-top: 8px; font-size: 13px; color: var(--dnd-dust); letter-spacing: 0.04em; }
+  .page-sub b { color: var(--dnd-gold); font-weight: normal; }
+
+  .stage { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; align-items: flex-start; }
+  .stage-cell { text-align: center; }
+  .cell-label { font-size: 12px; color: var(--dnd-dust); margin-bottom: 10px; letter-spacing: 0.1em; }
+
+  /* ══ 复刻：查价悬浮窗 #tooltip ══ */
+  #tooltip {
+    display: inline-block;
+    position: relative;
+    text-align: center;
+    min-width: 320px;
+
+    background-image: url('../assets/images/Background_TooltipTexture.png');
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-color: #14121a;
+
+    /* 与原版一致：无布局边框，仅用 border-image 绘制视觉边框，
+       内容紧贴边框内侧 */
+    border-image-slice: 21 21 21 21;
+    border-image-width: 20px 20px 20px 20px;
+    border-image-outset: 0;
+    border-image-repeat: stretch;
+    border-image-source: url('../assets/images/Background_TooltipBorder.png');
+
+    box-shadow: 0 0 4px 2px rgba(0, 0, 0, 0.85);
+  }
+
+  .tooltip-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(217, 210, 219, 0.025);
+    pointer-events: none;
+  }
+
+  .tooltip-content { position: relative; padding: 4px; text-align: center; }
+
+  .tooltip-title { padding: 12px 0; font-size: 26px; }
+  .tooltip-title:after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 4px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    background-image: url('../assets/images/Tooltip_SeparatorThick.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .tooltip-body { font-size: 20px; padding: 0 24px 12px; }
+
+  /* 固定属性：白色文字，居中显示 */
+  .tooltip-primary {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 8px;
+    color: var(--dnd-white);
+    white-space: nowrap;
+  }
+  .tooltip-primary + .tooltip-primary { padding-top: 8px; }
+  .tooltip-primary b { font-weight: normal; }
+
+  .tooltip-attribute {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+    color: var(--dnd-blue);
+    white-space: nowrap;
+  }
+  .tooltip-attribute b { font-weight: normal; }
+  .attr-sub { margin-top: 2px; font-size: 16px; color: var(--dnd-dust); white-space: nowrap; }
+
+  .affix-line1 {
+    display: grid;
+    grid-template-columns: 1.05em minmax(0, 1fr) 1.05em;
+    column-gap: 0.5em;
+    align-items: center;
+  }
+  .affix-line1 .tooltip-attribute { grid-column: 2; justify-content: center; }
+  .affix-check {
+    grid-column: 3;
+    justify-self: center;
+    width: 1.05em;
+    height: 1.05em;
+    border-radius: 50%;
+    border: 0.12em solid var(--dnd-dust);
+    box-sizing: border-box;
+    cursor: pointer;
+  }
+  .affix-check.on {
+    background: var(--dnd-green);
+    border-color: #14121a;
+    border-width: 4px;
+    outline: 3px solid var(--dnd-dust);
+  }
+
+  .tooltip-separator {
+    display: block;
+    width: 100%;
+    height: 4px;
+    margin: 8px 0;
+    background-image: url('../assets/images/Tooltip_SeparatorThin.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .tooltip-stats { font-size: 18px; }
+  .tooltip-stat span:first-child {
+    display: inline-block;
+    margin-right: 8px;
+    color: var(--dnd-dust);
+  }
+
+  .tooltip-prices { white-space: nowrap; }
+  .price-row { display: flex; align-items: center; justify-content: center; }
+  .gold {
+    display: flex;
+    align-items: center;
+    color: var(--dnd-gold);
+  }
+  .gold:before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 20px;
+    margin-right: 4px;
+    background-image: url('../assets/images/Icon_Gold.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+  }
+  .price-empty { color: var(--dnd-dust); opacity: 0.55; }
+  .price-empty:before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 20px;
+    margin-right: 4px;
+    background-image: url('../assets/images/Icon_Gold.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+  }
+
+  .tooltip-footer {
+    font-size: 10px;
+    text-align: center;
+    color: var(--dnd-oak);
+  }
+
+  /* 加载态 */
+  .spinner-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 24px;
+    gap: 8px;
+  }
+  .spinner-image { width: 40px; height: 40px; animation: spin 1s linear infinite; }
+  .spinner-text { font-size: 16px; color: var(--dnd-dust); letter-spacing: 0.05em; }
+
+  /* 错误态 */
+  .error-title {
+    position: relative;
+    padding: 12px 0;
+    font-size: 26px;
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .error-title:after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 4px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    bottom: 0;
+    background-image: url('../assets/images/Tooltip_SeparatorThick.png');
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+  .error-message { font-size: 18px; text-align: center; color: #fecaca; line-height: 1.5; }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+  <div class="page-head">
+    <div class="page-title">查价悬浮窗 Tooltip 复刻预览</div>
+    <div class="page-sub">复刻自 <b>src/overlay/components/Tooltip.vue</b> · 样式源 <b>src/shared/styles/overlay.css</b> · 可拓展为通用组件</div>
+  </div>
+
+  <div class="stage">
+    <!-- 1. 完整示例 -->
+    <div class="stage-cell">
+      <div class="cell-label">完整示例 · 传说稀有度</div>
+      <div id="tooltip">
+        <div class="tooltip-overlay"></div>
+        <div class="tooltip-content">
+          <div class="tooltip-title" style="color: var(--dnd-legendary);">水晶球</div>
+          <div class="tooltip-body">
+            <section>
+              <div class="tooltip-primary"><b>魔法伤害</b><span>7</span></div>
+              <div class="tooltip-primary"><b>移动速度</b><span>-15</span></div>
+              <div class="tooltip-primary"><b>魔法穿透</b><span>100</span></div>
+              <div class="tooltip-separator"></div>
+            </section>
+            <section>
+              <div class="affix-line1">
+                <span class="tooltip-attribute"><span><b>+3</b>&nbsp;魔法伤害</span></span>
+                <span class="affix-check on"></span>
+              </div>
+              <div class="attr-sub">(0 - 5) (<span style="color: var(--dnd-purple);">A</span>)</div>
+              <div class="affix-line1">
+                <span class="tooltip-attribute"><span><b>-2</b>&nbsp;施法速度</span></span>
+                <span class="affix-check"></span>
+              </div>
+              <div class="attr-sub">(0 - 4) (<span style="color: var(--dnd-blue);">B</span>)</div>
+              <div class="tooltip-separator"></div>
+            </section>
+            <section>
+              <div class="tooltip-stats">
+                <div class="tooltip-stat"><span>需求评分:</span><span style="color: var(--dnd-orange);">8.5 / 10</span></div>
+                <div class="tooltip-stat"><span>冒险点数:</span><span>120</span></div>
+              </div>
+              <div class="tooltip-separator"></div>
+            </section>
+            <div class="tooltip-prices">
+              <div class="price-row"><span>市场现价:</span><span class="gold" style="margin-left:8px;">420</span></div>
+              <div class="price-row"><span>市场均价:</span><span class="gold" style="margin-left:8px;">500</span></div>
+              <div class="price-row"><span>商人回收:</span><span class="gold" style="margin-left:8px;">100</span></div>
+              <div class="price-row"><span>每格价值:</span><span class="gold" style="margin-left:8px;">210</span></div>
+            </div>
+            <div class="tooltip-separator"></div>
+            <div class="tooltip-footer">作者: 方源Official | 官网: dnd.wiki</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 紧凑版（无标题/组件开关） -->
+    <div class="stage-cell">
+      <div class="cell-label">紧凑版 · 无标题</div>
+      <div id="tooltip">
+        <div class="tooltip-overlay"></div>
+        <div class="tooltip-content">
+          <div class="tooltip-body" style="padding-top: 12px;">
+            <section>
+              <div class="affix-line1">
+                <span class="tooltip-attribute"><span><b>+5</b>&nbsp;护甲值</span></span>
+                <span class="affix-check on"></span>
+              </div>
+              <div class="attr-sub">(0 - 8) (<span style="color: var(--dnd-purple);">A</span>)</div>
+              <div class="tooltip-separator"></div>
+            </section>
+            <div class="tooltip-prices">
+              <div class="price-row"><span>市场现价:</span><span class="price-empty" style="margin-left:8px;">暂无</span></div>
+              <div class="price-row"><span>商人回收:</span><span class="gold" style="margin-left:8px;">45</span></div>
+            </div>
+            <div class="tooltip-separator"></div>
+            <div class="tooltip-footer">作者: 方源Official | 官网: dnd.wiki</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 加载态 -->
+    <div class="stage-cell">
+      <div class="cell-label">加载态</div>
+      <div id="tooltip">
+        <div class="tooltip-overlay"></div>
+        <div class="tooltip-content">
+          <div class="spinner-wrapper">
+            <img src="../assets/images/Loading_Img.png" alt="" class="spinner-image" />
+            <div class="spinner-text">搜索中...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 错误态 -->
+    <div class="stage-cell">
+      <div class="cell-label">错误态</div>
+      <div id="tooltip">
+        <div class="tooltip-overlay"></div>
+        <div class="tooltip-content">
+          <div class="error-title"><span>⚠</span><span>错误</span></div>
+          <div class="error-message">无法识别物品（翻译不完整）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
