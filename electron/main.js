@@ -383,6 +383,7 @@ app.on ('ready', async () => {
     const results = [];
     for (const it of items) {
       let price = null;
+      let usedAttrs = [];
       try {
         const itemId = toCanonicalItemId (String (it?.item_id || ''));
         if (itemId && itemId !== 'id.item.') {
@@ -395,7 +396,25 @@ app.on ('ready', async () => {
             .filter (a => a.display);
           for (const a of [attrs, []]) {
             const p = await fetchMarketPrice (itemId, it?.rarity, a, byValue, headers);
-            if (p !== null) { price = p; break; }
+            if (p !== null) { price = p; usedAttrs = a; break; }
+          }
+          if (price !== null) {
+            // 与悬浮窗查价记录同源：写入查价记录，仓库页据此直接显示价格
+            pushHistoryRecord ({
+              ts: Date.now (),
+              id: itemId,
+              name: '',
+              zhName: findZhName (itemId),
+              rarity: it?.rarity || '',
+              price,
+              market: null,
+              vendor: null,
+              density: null,
+              attributes: { primary: [], secondary: [] },
+              reverseAttributes: {},
+              usedAffixes: usedAttrs.map (x => x.display),
+              key: 'stash:' + itemId + ':' + (it?.rarity || ''),
+            });
           }
         }
       } catch (err) {
@@ -426,6 +445,19 @@ app.on ('ready', async () => {
     saveHistory ();
     notifyHome ('history:updated', {});
     return { success: true };
+  });
+  // 仓库页预载：按物品 id 批量取最新查价记录（id 自动转 canonical 匹配）
+  safeHandle ('history:by-ids', (e, ids = []) => {
+    loadHistory ();
+    const canonIds = new Set ((Array.isArray (ids) ? ids : []).map (toCanonicalItemId));
+    const out = {};
+    for (const r of priceHistory) {
+      if (canonIds.has (r.id)) {
+        const cur = out[r.id];
+        if (!cur || r.ts > cur.ts) out[r.id] = r;
+      }
+    }
+    return { records: out };
   });
 
   // ── DnD Tools IPC handlers ──
@@ -1345,8 +1377,24 @@ function scheduleSaveHistory () {
   }, 5000);
 }
 
-function upsertHistoryRecord () {
+function pushHistoryRecord (rec) {
   loadHistory ();
+  const last = priceHistory[priceHistory.length - 1];
+  if (last && last.id === rec.id && last.ts === rec.ts) {
+    Object.assign (last, rec);
+  } else {
+    priceHistory.push (rec);
+  }
+  if (rec.key) {
+    const cur = historyKeyIndex ? historyKeyIndex.get (rec.key) : null;
+    if (!cur || rec.ts > cur.ts) historyKeyIndex.set (rec.key, rec);
+  }
+  pruneHistory ();
+  notifyHome ('history:updated', {});
+  scheduleSaveHistory ();
+}
+
+function upsertHistoryRecord () {
   const rec = {
     ts: lastScan.ts,
     id: lastScan.id,
@@ -1362,19 +1410,7 @@ function upsertHistoryRecord () {
     usedAffixes: lastScan.usedAffixes || [],
     key: lastScan.key || '',
   };
-  const last = priceHistory[priceHistory.length - 1];
-  if (last && last.id === rec.id && last.ts === rec.ts) {
-    Object.assign (last, rec);
-  } else {
-    priceHistory.push (rec);
-  }
-  if (rec.key) {
-    const cur = historyKeyIndex ? historyKeyIndex.get (rec.key) : null;
-    if (!cur || rec.ts > cur.ts) historyKeyIndex.set (rec.key, rec);
-  }
-  pruneHistory ();
-  notifyHome ('history:updated', {});
-  scheduleSaveHistory ();
+  pushHistoryRecord (rec);
 }
 
 async function pushBallStatus () {

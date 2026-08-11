@@ -21,6 +21,33 @@ const invoke = (ch, ...args) => window.electron.invoke (ch, ...args);
 // ── 市场上架（网格点选） ──
 const { pricing, selling, status, note, fetchPrices, startSell, stopSell } = useSell ();
 
+// 历史查价价：canonical item id -> { price, ts }（仓库网格直接显示，无需再查）
+const histPrices = ref (new Map ());
+
+function toCanonicalId (raw) {
+  const s = String (raw || '');
+  if (s.startsWith ('id.item.')) return s;
+  return 'id.item.' + s.replace (/([a-z])([A-Z])/g, '$1_$2').toLowerCase ();
+}
+
+async function loadHistPrices () {
+  try {
+    const ids = [];
+    for (const s of Object.values (charData.value?.stashes || {})) {
+      for (const it of (s?.items || [])) {
+        if (it?.item_id) ids.push (it.item_id);
+      }
+    }
+    if (!ids.length) return;
+    const r = await invoke ('history:by-ids', ids);
+    histPrices.value = new Map (Object.entries (r?.records || {}).map (([id, rec]) => [id, { price: rec.price, ts: rec.ts }]));
+  } catch (e) {}
+}
+
+function histPriceOf (it) {
+  return histPrices.value.get (toCanonicalId (it.item_id))?.price ?? null;
+}
+
 // 选中的待上架物品：uid(`${stashId}:${slotId}`) -> 物品数据副本（含 stash_id）
 const sellSelected = ref (new Map ());
 
@@ -545,6 +572,7 @@ async function loadCharData (id, silent = false, force = false) {
     const d = await invoke ('dnd:character', id);
     if (d && !d.error) {
       charData.value = d;
+      loadHistPrices ();
       if (!stashList.value.some (s => s.id === props.stashId)) {
         const first = stashList.value[0];
         if (first) emit ('update:stashId', first.id);
@@ -809,6 +837,7 @@ watch (activeCharacterId, (v) => emit ('update:active', v));
 let ws = null;
 let wsRetry = null;
 let wsClosed = false;
+let unsubHist = null;
 
 async function connectEvents () {
   if (ws || wsClosed) return;
@@ -868,6 +897,10 @@ onMounted (async () => {
   loadCalibration ();
   loadFollowCal ();
   window.addEventListener ('dnd:characters-refresh', onCharactersRefresh);
+  // 任一处查价后刷新历史价（悬浮窗/仓库查价都会触发）
+  unsubHist = window.electron.on ('history:updated', () => {
+    if (charData.value) loadHistPrices ();
+  });
   connectEvents ();
   reportStashState ();
   applyFollowMode ();
@@ -898,6 +931,7 @@ onBeforeUnmount (() => {
   if (retryTimer) { clearInterval (retryTimer); retryTimer = null; }
   if (unsubOcr) unsubOcr ();
   if (hoverTimer) { clearTimeout (hoverTimer); hoverTimer = null; }
+  if (unsubHist) unsubHist ();
   wsClosed = true;
   if (wsRetry) clearTimeout (wsRetry);
   if (ws) { try { ws.close (); } catch (e) {} ws = null; }
@@ -1127,6 +1161,7 @@ watch (() => props.stashId, () => reportStashState ());
                  @mouseleave="clearHover()">
               <img v-if="it.icon" class="item-icon" :src="iconUrl (it)" alt="" loading="lazy" />
               <span v-if="isSellPicked(it) && sellPriceOf(it) != null" class="cell-price">{{ fmtSellG (it, sellPriceOf (it)) }}</span>
+              <span v-else-if="!isSellPicked(it) && histPriceOf(it) != null" class="cell-price hist">{{ fmtSellG (it, histPriceOf (it)) }}</span>
             </div>
             <template v-if="debugPreview && previewItems.length">
               <div v-for="(pi, i) in previewItems" :key="'p'+i" class="preview-item"
@@ -1399,6 +1434,8 @@ watch (() => props.stashId, () => reportStashState ());
   text-shadow: 0 1px 2px rgba(0,0,0,0.9), 0 0 3px rgba(0,0,0,0.7);
   pointer-events: none;
 }
+/* 历史查价价（未选中直接显示，略淡） */
+.cell-price.hist { font-size: 11px; font-weight: 700; opacity: 0.85; }
 .sell-panel {
   padding: 10px;
   background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px;
