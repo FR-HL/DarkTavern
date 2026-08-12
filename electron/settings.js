@@ -26,6 +26,8 @@ const defaults = {
     api_key: '',
     live_price_mode: 'presence',
     live_price_relax: 'none',
+    smart_price_threshold: 50,
+    live_display_basis: 'smart',
     scan_cache_days: '1',
     history_days: '3',
     requery_debounce: '1000',
@@ -64,6 +66,7 @@ const defaults = {
     sell_price_factor: 1.0,
     sell_min_price: 200,
     sell_min_rarity: '',
+    sell_enabled: true,
   },
 };
 

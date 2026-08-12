@@ -4,6 +4,7 @@ import StashPane from './StashPane.vue';
 import { refreshCapture } from '../composables/capture.js';
 import { useSell } from '../composables/sell.js';
 import { ATTR_ZH, attrField } from '@/shared/lib/stats-zh.js';
+import { displayLive } from '@/shared/lib/price-smart.js';
 import GameTooltip from '@/shared/components/GameTooltip.vue';
 
 const props = defineProps ({
@@ -13,6 +14,7 @@ const props = defineProps ({
   includeInv: { type: Boolean, default: false },
   keepInPlace: { type: Boolean, default: true },
   requeryDebounce: { type: Number, default: 1000 },
+  sellEnabled: { type: Boolean, default: true },
 });
 const emit = defineEmits ([ 'update:charId', 'update:stashId', 'update:equipment', 'update:active' ]);
 
@@ -92,6 +94,7 @@ const lastPickedSlot = ref (null);
 const lastPickedStash = ref ('');
 
 function toggleSellPick (it, e) {
+  if (!sellCfg.value.enabled) return;
   const key = sellKey (props.stashId, it.slot_id);
 
   if (e?.shiftKey && lastPickedSlot.value != null && lastPickedStash.value === props.stashId) {
@@ -262,10 +265,10 @@ function onToggleSecondary (it, index) {
       // 切词条重查：只查勾选组合，无降级（与游戏内悬浮窗 requery 同一逻辑）
       const r = await invoke ('market:requery', { item_id: it.item_id, rarity: it.rarity, sp_en: spEn });
       if (seq !== affixQuerySeq) return; // 过期结果丢弃
-      // 以本次组合的查询结果就地更新，tooltip 立即显示（组合恢复 AB 时直接显示 AB 价）
+      // 以本次组合的查询结果就地更新，tooltip 立即显示（组合恢复 AB 时直接显示 AB 价）；显示按配置 smart 化
       if (r && r.price != null) {
         histPrices.value = new Map (histPrices.value).set (key, {
-          price: r.price,
+          price: displayLive (r.price, rec?.market ?? null, sellCfg.value.liveDisplayBasis, sellCfg.value.smartThreshold),
           ts: Date.now (),
           usedAffixes: r.usedAffixes?.length ? r.usedAffixes : [...cur],
           attributes: rec?.attributes || {},
@@ -276,12 +279,17 @@ function onToggleSecondary (it, index) {
   }, props.requeryDebounce);
 }
 
-// tooltip 操作按钮（内容内，与游戏内悬浮窗一致）
+// tooltip 操作按钮（内容内，与游戏内悬浮窗一致）；自动上架关闭时不显示上架按钮
 const tooltipBusy = ref (false);
-const tooltipActions = computed (() => [
-  { label: tooltipBusy.value ? '查询中…' : '查询价格', key: 'price' },
-  { label: hoverItem.value && isSellPicked (hoverItem.value) ? '移出上架' : '加入上架', key: 'sell' },
-]);
+const tooltipActions = computed (() => {
+  const list = [
+    { label: tooltipBusy.value ? '查询中…' : '查询价格', key: 'price' },
+  ];
+  if (sellCfg.value.enabled) {
+    list.push ({ label: hoverItem.value && isSellPicked (hoverItem.value) ? '移出上架' : '加入上架', key: 'sell' });
+  }
+  return list;
+});
 
 async function onTooltipAction (key) {
   const it = hoverItem.value;
@@ -351,7 +359,7 @@ function hoverPrices (it) {
   const p = {};
   const rec = histPrices.value.get (toCanonicalId (it.item_id));
   if (rec) {
-    if (rec.price != null) p.live = rec.price;       // 市场现价（最低挂单价）
+    if (rec.price != null) p.live = displayLive (rec.price, rec.market, sellCfg.value.liveDisplayBasis, sellCfg.value.smartThreshold);  // 市场现价（按显示基准 smart）
     if (rec.market != null) p.market = rec.market;   // 市场均价（平均成交价）
     if (rec.vendor != null) p.vendor = rec.vendor;   // 商人回收
     if (rec.density != null) p.density = rec.density; // 每格价值
@@ -379,21 +387,31 @@ function fmtSellG (it, v) {
 }
 
 // 上架自定义设置（自动上架页配置）
-const sellCfg = ref ({ factor: 1, minPrice: 0, minRarity: '', basis: 'smart' });
+const sellCfg = ref ({ factor: 1, minPrice: 0, minRarity: '', basis: 'smart', enabled: true, smartThreshold: 50, liveDisplayBasis: 'smart' });
 const RARITY_RANK = { Poor: 0, Common: 1, Uncommon: 2, Rare: 3, Epic: 4, Legendary: 5, Unique: 6, Artifact: 7 };
 
 async function loadSellCfg () {
   try {
     const d = await invoke ('settings:get');
     const mp = parseInt (d.sell_min_price);
+    const st = parseInt (d.smart_price_threshold);
     sellCfg.value = {
       factor: parseFloat (d.sell_price_factor) || 1,
       minPrice: isNaN (mp) ? 200 : mp,
       minRarity: d.sell_min_rarity || '',
       basis: ['live', 'market', 'smart'].includes (d.sell_price_basis) ? d.sell_price_basis : 'smart',
+      enabled: d.sell_enabled !== false,
+      smartThreshold: isNaN (st) ? 50 : st,
+      liveDisplayBasis: ['smart', 'live'].includes (d.live_display_basis) ? d.live_display_basis : 'smart',
     };
   } catch (e) {}
 }
+
+// 自动上架开关（App.vue 下发，SellPane 修改后即时同步）——关闭时彻底隐藏上架入口
+watch (() => props.sellEnabled, (v) => {
+  sellCfg.value.enabled = v !== false;
+  if (!v) clearSellPick ();
+});
 
 // 稀有度筛选（神器 Artifact 一律禁止上架）
 function sellFilterPass (it) {
@@ -402,9 +420,10 @@ function sellFilterPass (it) {
   return true;
 }
 
-// 智能基准：现价低于均价 80% 视为被异常低价单污染 → 改用均价；现价可信（或均价缺失）用现价
+// 智能基准：现价低于均价 × 阈值% 视为被异常低价单污染 → 改用均价；现价可信（或均价缺失）用现价
 function smartBase (live, market) {
-  if (market != null && live != null) return live >= market * 0.8 ? live : market;
+  const t = (sellCfg.value.smartThreshold || 50) / 100;
+  if (market != null && live != null) return live >= market * t ? live : market;
   return live ?? market ?? null;
 }
 
@@ -497,6 +516,10 @@ async function doStartSell () {
 // 匹配 = item_id 精确 + 词条集合精确（悬浮窗带上 affixes，仓库里同 id 不同词条的多件不再搞混）
 async function overlayAddItem (data, autoSell) {
   if (!charData.value || !data?.itemId) return;
+  if (!sellCfg.value.enabled) {
+    note.value = '自动上架已关闭，请在「自动上架」页开启';
+    return;
+  }
   const canonTarget = toCanonicalId (data.itemId);
   const targetAffixes = Array.isArray (data.affixes) ? data.affixes : [];
   const hits = [];
@@ -1507,8 +1530,8 @@ watch (() => props.stashId, () => reportStashState ());
             </span>
           </button>
 
-          <!-- 上架面板（Apple/Fluent 风格） -->
-          <div class="sell-panel">
+          <!-- 上架面板（Apple/Fluent 风格），自动上架关闭时不显示 -->
+          <div class="sell-panel" v-if="sellCfg.enabled">
             <div class="sp-head">
               <span class="sp-title">上架</span>
               <button class="sp-clear" v-if="sellSelected.size" @click="clearSellPick">清空</button>

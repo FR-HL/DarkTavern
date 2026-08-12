@@ -66,9 +66,11 @@ function switchCalMode (m) {
 
 // ── 上架自定义设置 ──
 
+const sellEnabled = ref (true);
 const sellSpeed = ref ('fast');
 const sellPriceFactor = ref (1.0);
 const sellPriceBasis = ref ('smart');
+const smartThreshold = ref (50);
 const sellMinPrice = ref (200);
 const sellMinRarity = ref ('');
 
@@ -93,9 +95,12 @@ const BASIS_OPTS = [
 async function loadSellSettings () {
   try {
     const d = await invoke ('settings:get');
+    sellEnabled.value = d.sell_enabled !== false;
     sellSpeed.value = d.sell_speed || 'fast';
     sellPriceFactor.value = parseFloat (d.sell_price_factor) || 1.0;
     sellPriceBasis.value = ['live', 'market', 'smart'].includes (d.sell_price_basis) ? d.sell_price_basis : 'smart';
+    const st = parseInt (d.smart_price_threshold);
+    smartThreshold.value = isNaN (st) ? 50 : st;
     const mp = parseInt (d.sell_min_price);
     sellMinPrice.value = isNaN (mp) ? 200 : mp;
     sellMinRarity.value = d.sell_min_rarity || '';
@@ -111,11 +116,27 @@ function saveSellSettings () {
   });
 }
 
+// 智能阈值（%）：现价低于均价该比例视为异常低价 → 改用均价；默认 50
+function saveSmartThreshold () {
+  const v = Math.min (99, Math.max (1, parseInt (smartThreshold.value) || 50));
+  smartThreshold.value = v;
+  invoke ('settings:save', { smart_price_threshold: v });
+}
+
 async function setSellSpeed (v) {
   sellSpeed.value = v;
   try {
     await invoke ('settings:save', { sell_speed: v });
     await invoke ('market:settings', { sell_speed: v });
+  } catch (e) {}
+}
+
+// 自动上架总开关：关闭后主界面/悬浮窗的所有上架操作入口隐藏
+async function setSellEnabled (v) {
+  sellEnabled.value = v;
+  try {
+    const r = await invoke ('settings:save', { sell_enabled: v });
+    if (r?.success) window.dispatchEvent (new CustomEvent ('sell-settings-changed'));
   } catch (e) {}
 }
 
@@ -130,6 +151,25 @@ onMounted (async () => {
     <div class="page-title">自动上架</div>
     <div class="page-sub">上架操作已并入「角色仓库」页（点击物品格子多选后查价上架）；此处配置坐标校准与上架规则。</div>
 
+    <div class="sec">
+      <div class="sec-label">自动上架</div>
+      <div class="card">
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">自动上架开关</div>
+            <div class="srow-d">关闭后隐藏「角色仓库」页与游戏内悬浮窗的所有上架操作入口</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button class="seg-opt" :class="{ on: sellEnabled }" @click="setSellEnabled(true)"><span class="seg-t">开启</span></button>
+              <button class="seg-opt" :class="{ on: !sellEnabled }" @click="setSellEnabled(false)"><span class="seg-t">关闭</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <template v-if="sellEnabled">
     <div class="sec">
       <div class="sec-label">上架坐标校准</div>
       <div class="card">
@@ -199,6 +239,18 @@ onMounted (async () => {
             </div>
           </div>
         </div>
+        <div class="srow" v-if="sellPriceBasis === 'smart'">
+          <div class="srow-info">
+            <div class="srow-t">智能阈值</div>
+            <div class="srow-d">现价低于均价该比例（%）视为异常低价单，改用均价（1-99）</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="days-ctl">
+              <input type="text" inputmode="numeric" :value="smartThreshold" @change="e => { smartThreshold = parseInt (e.target.value) || 50; saveSmartThreshold (); }">
+              <span class="range-val">%</span>
+            </div>
+          </div>
+        </div>
         <div class="srow">
           <div class="srow-info">
             <div class="srow-t">稀有度筛选</div>
@@ -237,6 +289,7 @@ onMounted (async () => {
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 

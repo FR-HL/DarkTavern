@@ -788,6 +788,8 @@ app.on ('ready', async () => {
     components: settings.general.components || [],
     live_price_mode: settings.general.live_price_mode || 'presence',
     live_price_relax: settings.general.live_price_relax || 'none',
+    smart_price_threshold: (() => { const n = parseInt (settings.general.smart_price_threshold); return isNaN (n) ? 50 : n; })(),
+    live_display_basis: [ 'smart', 'live' ].includes (settings.general.live_display_basis) ? settings.general.live_display_basis : 'smart',
     scan_cache_days: settings.general.scan_cache_days ?? 1,
     history_days: settings.general.history_days ?? 3,
     requery_debounce: settings.general.requery_debounce ?? 1000,
@@ -809,6 +811,7 @@ app.on ('ready', async () => {
     sell_price_factor: parseFloat (settings.dnd?.sell_price_factor) || 1.0,
     sell_min_price: (() => { const n = parseInt (settings.dnd?.sell_min_price); return isNaN (n) ? 200 : n; })(),
     sell_min_rarity: settings.dnd?.sell_min_rarity || '',
+    sell_enabled: settings.dnd?.sell_enabled !== false,
   }));
 
   safeHandle ('settings:save', (e, data) => {
@@ -849,6 +852,10 @@ app.on ('ready', async () => {
     if (data.sell_price_factor !== undefined) settings.dnd.sell_price_factor = Math.min (3, Math.max (0.1, parseFloat (data.sell_price_factor) || 1.0));
     if (data.sell_min_price !== undefined) settings.dnd.sell_min_price = Math.max (0, parseInt (data.sell_min_price) || 0);
     if (data.sell_min_rarity !== undefined) settings.dnd.sell_min_rarity = String (data.sell_min_rarity || '');
+    if (data.sell_enabled !== undefined) {
+      settings.dnd.sell_enabled = !!data.sell_enabled;
+      needSend = true;  // 悬浮窗上架按钮显隐需要同步
+    }
     if (data.developer_mode !== undefined) {
       settings.general.developer_mode = !!data.developer_mode;
       setLogLevel (settings.general.developer_mode ? 'debug' : 'info');
@@ -875,6 +882,11 @@ app.on ('ready', async () => {
     if (data.components !== undefined) { settings.general.components = toComponents (data.components); needSend = true; }
     if (data.live_price_mode !== undefined && [ 'presence', 'value' ].includes (data.live_price_mode)) settings.general.live_price_mode = data.live_price_mode;
     if (data.live_price_relax !== undefined && [ 'none', 'all', 'sa', 'b' ].includes (data.live_price_relax)) settings.general.live_price_relax = data.live_price_relax;
+    if (data.smart_price_threshold !== undefined) settings.general.smart_price_threshold = Math.min (99, Math.max (1, parseInt (data.smart_price_threshold) || 50));
+    if (data.live_display_basis !== undefined && [ 'smart', 'live' ].includes (data.live_display_basis)) {
+      settings.general.live_display_basis = data.live_display_basis;
+      needSend = true;  // 悬浮窗显示基准同步
+    }
     if (data.scan_cache_days !== undefined) settings.general.scan_cache_days = toDays (data.scan_cache_days, settings.general.scan_cache_days);
     if (data.history_days !== undefined) settings.general.history_days = toDays (data.history_days, settings.general.history_days);
     if (data.requery_debounce !== undefined) settings.general.requery_debounce = toDebounce (data.requery_debounce);

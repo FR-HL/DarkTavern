@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { RARITY_CN, rarityColor } from '@/shared/lib/rarity.js';
 import { ATTR_ZH, attrField } from '@/shared/lib/stats-zh.js';
+import { displayLive } from '@/shared/lib/price-smart.js';
 
 import donorKk from '@assets/images/sponsors/donor_kk.webp';
 import donorYueliang from '@assets/images/sponsors/yueliang.webp';
@@ -92,6 +93,13 @@ const LIVE_RELAX = [
   { key: 'b', label: 'B级' },
   { key: 'none', label: '无' },
 ];
+const LIVE_DISPLAY_OPTS = [
+  { key: 'smart', label: '智能' },
+  { key: 'live', label: '最低价' },
+];
+const liveDisplayBasis = ref ('smart');
+const smartThreshold = ref (50);
+const sellEnabled = ref (true);
 
 const settingsStatus = reactive ({ type: '', text: '' });
 const mappingStatus = reactive ({ type: '', text: '' });
@@ -567,6 +575,10 @@ async function loadSettings () {
     components.value = Array.isArray (d.components) ? d.components : [];
     livePriceMode.value = d.live_price_mode || 'presence';
     livePriceRelax.value = d.live_price_relax || 'none';
+    liveDisplayBasis.value = ['smart', 'live'].includes (d.live_display_basis) ? d.live_display_basis : 'smart';
+    const st = parseInt (d.smart_price_threshold);
+    smartThreshold.value = isNaN (st) ? 50 : st;
+    sellEnabled.value = d.sell_enabled !== false;
     scanCacheDays.value = d.scan_cache_days ?? 1;
     historyDays.value = d.history_days ?? 3;
     requeryDebounce.value = d.requery_debounce ?? 1000;
@@ -773,6 +785,11 @@ async function setLiveRelax (v) {
   const r = await invoke ('settings:save', { live_price_relax: v });
   if (r?.success) showToast ('已保存 · 下次查价生效');
 }
+async function setLiveDisplayBasis (v) {
+  liveDisplayBasis.value = v;
+  const r = await invoke ('settings:save', { live_display_basis: v });
+  if (r?.success) showToast ('已保存 · 立即生效');
+}
 async function setRequeryDebounce (v) {
   requeryDebounce.value = v;
   const r = await invoke ('settings:save', { requery_debounce: v });
@@ -849,6 +866,8 @@ onMounted (() => {
   window.electron.on ('history:updated', () => {
     if (pane.value === 'history') loadHistory ();
   });
+  // 自动上架开关变更（SellPane 保存后广播）→ 重载设置，仓库页/悬浮窗即时隐藏上架入口
+  window.addEventListener ('sell-settings-changed', () => { loadSettings (); });
   window.electron.on ('stash:switch-to', (d) => {
     if (!d?.stash_id) return;
     sortStashId.value = String (d.stash_id);
@@ -1155,6 +1174,19 @@ onBeforeUnmount (() => {
             </div>
             <div class="srow">
               <div class="srow-info">
+                <div class="srow-t">现价显示</div>
+                <div class="srow-d">智能=现价低于均价阈值比例时显示均价（异常低价挂单不误导）；最低价=始终显示真实最低挂单</div>
+              </div>
+              <div class="srow-ctl">
+                <div class="seg">
+                  <button v-for="o in LIVE_DISPLAY_OPTS" :key="o.key" class="seg-opt" :class="{ on: liveDisplayBasis === o.key }" @click="setLiveDisplayBasis(o.key)">
+                    <span class="seg-t">{{ o.label }}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="srow">
+              <div class="srow-info">
                 <div class="srow-t">词条改动查价</div>
                 <div class="srow-d">连点词条圆点时合并为一次查价；每次都查则每次点击都请求</div>
               </div>
@@ -1322,7 +1354,7 @@ onBeforeUnmount (() => {
                     </div>
                   </td>
                   <td><span class="hist-rarity" :style="{ color: rarityColor (rec.rarity) }">●</span> <span class="hist-rarity-name">{{ RARITY_CN[rec.rarity] || rec.rarity }}</span></td>
-                  <td class="hist-price">{{ fmtG (rec.price) }}</td>
+                  <td class="hist-price">{{ fmtG (displayLive (rec.price, rec.market, liveDisplayBasis, smartThreshold)) }}</td>
                   <td class="hist-price">{{ fmtG (rec.market) }}</td>
                   <td class="hist-price">{{ fmtG (rec.vendor) }}</td>
                 </tr>
@@ -1524,6 +1556,7 @@ onBeforeUnmount (() => {
           :include-inv="sortIncludeInv"
           :keep-in-place="sortKeepInPlace"
           :requery-debounce="requeryDebounce"
+          :sell-enabled="sellEnabled"
           @update:char-id="v => sortCharId = v"
           @update:stash-id="v => sortStashId = v"
           @update:equipment="v => sortEquipment = v"

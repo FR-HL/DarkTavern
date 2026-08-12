@@ -6,6 +6,8 @@ import {
   EDGE_PADDING,
 } from "../config.js";
 
+import { displayLive } from "../../shared/lib/price-smart.js";
+
 import {
   onMouseStill,
   onMouseWakeup,
@@ -36,6 +38,16 @@ const props = defineProps({
   showSellButtons: {
     type: Boolean,
     default: true,
+  },
+
+  liveDisplayBasis: {
+    type: String,
+    default: 'smart',
+  },
+
+  smartThreshold: {
+    type: Number,
+    default: 50,
   },
 });
 
@@ -109,7 +121,7 @@ function sendSellAction (channel) {
   electron.send (channel, {
     itemId: currentItemId.value,
     rarity: itemRarity.value,
-    price: item.value.prices.live ?? item.value.prices.market ?? null,
+    price: shownLive.value ?? item.value.prices.market ?? null,
     // 词条集合：仓库里同 item_id 多件（不同词条）时用于精确匹配目标物品
     affixes: (item.value.attributes.secondary || []).map (a => a.display).filter (Boolean),
   });
@@ -211,6 +223,11 @@ const item = ref({
     vendor: null,
   },
 });
+
+// 现价显示：按配置（智能/最低价）smart 化——异常低价挂单不误导
+const shownLive = computed(() =>
+  displayLive(item.value.prices.live, item.value.prices.market, props.liveDisplayBasis, props.smartThreshold)
+);
 
 // Common English→Chinese translations for UI display
 const uiTranslations = {
@@ -886,7 +903,7 @@ function getGradeColor(grade) {
               <div class="flex items-center justify-center" v-if="props.components.includes('live')">
                 <span>市场现价:</span>
                 <img v-if="livePriceLoading" src="@assets/images/Loading_Img.png" alt="加载中..." class="price-spinner ml-2">
-                <span v-else class="ml-2" :class="item.prices.live !== null ? 'gold' : 'price-empty'">{{ item.prices.live !== null ? item.prices.live : '暂无' }}</span>
+                <span v-else class="ml-2" :class="shownLive !== null ? 'gold' : 'price-empty'">{{ shownLive !== null ? shownLive : '暂无' }}</span>
               </div>
               <div class="flex items-center justify-center" v-if="props.components.includes('market')">
                 <span>市场均价:</span>
@@ -912,7 +929,7 @@ function getGradeColor(grade) {
               class="sell-actions"
             >
               <button class="sell-btn" @click="sendSellAction('sell:add-item')">{{ sellListCount > 0 ? `列表中（${sellListCount}）` : '加入列表' }}</button>
-              <button class="sell-btn" :disabled="item.prices.live === null && item.prices.market === null" @click="sendSellAction('sell:start-item')">开始上架</button>
+              <button class="sell-btn" :disabled="shownLive === null && item.prices.market === null" @click="sendSellAction('sell:start-item')">开始上架</button>
             </div>
 
             <div class="tooltip-separator"></div>
