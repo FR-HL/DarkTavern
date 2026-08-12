@@ -33,6 +33,29 @@ function toCanonicalId (raw) {
   return 'id.item.' + body.replace (/([a-z])([A-Z])/g, '$1_$2').toLowerCase ();
 }
 
+// 词条组合 key（与主进程 affixKey 一致）：同 id 不同词条的多件物品价格各自独立
+function affixKeyOf (it) {
+  const id = toCanonicalId (it.item_id);
+  const ds = (it.sp_en || []).map (e => e[0]).sort ().join ('|');
+  return 'affix:' + id + ':' + (it.rarity || '') + ':' + ds;
+}
+
+// 按物品词条组合精确取查价记录；无匹配返回 null（同 id 不同词条不共享价格）
+function histRecOf (it) {
+  const byAffix = histPrices.value.get (toCanonicalId (it.item_id));
+  if (!byAffix) return null;
+  return byAffix[affixKeyOf (it)] || null;
+}
+
+// 写入该物品词条组合的查价记录（不影响同 id 其他词条的价格）
+function setHistRec (it, rec) {
+  const key = toCanonicalId (it.item_id);
+  const akey = affixKeyOf (it);
+  const byAffix = { ...(histPrices.value.get (key) || {}) };
+  byAffix[akey] = { ...(byAffix[akey] || {}), ...rec };
+  histPrices.value = new Map (histPrices.value).set (key, byAffix);
+}
+
 async function loadHistPrices () {
   try {
     const ids = [];
@@ -43,20 +66,16 @@ async function loadHistPrices () {
     }
     if (!ids.length) return;
     const r = await invoke ('history:by-ids', ids);
-    histPrices.value = new Map (Object.entries (r?.records || {}).map (([id, rec]) => [id, {
-      price: rec.price,
-      market: rec.market,
-      vendor: rec.vendor,
-      density: rec.density,
-      ts: rec.ts,
-      usedAffixes: rec.usedAffixes || [],
-      attributes: rec.attributes || {},
-    }]));
+    // records: { canonicalId: { affixKey: rec } }
+    histPrices.value = new Map (Object.entries (r?.records || {}));
   } catch (e) {}
 }
 
 function histPriceOf (it) {
-  return histPrices.value.get (toCanonicalId (it.item_id))?.price ?? null;
+  const rec = histRecOf (it);
+  if (!rec || rec.price == null) return null;
+  // 网格角标与 tooltip 一致：按显示基准 smart（异常低价单显示均价）
+  return displayLive (rec.price, rec.market, sellCfg.value.liveDisplayBasis, sellCfg.value.smartThreshold);
 }
 
 // 选中的待上架物品：uid(`${stashId}:${slotId}`) -> 物品数据副本（含 stash_id）
@@ -81,7 +100,7 @@ function isSellPicked (it) {
 // 上架价：本次查价结果优先；未查价的物品复用查价记录价（已查过 → 直接上架）；按设置取现价/均价/智能基准
 function sellPriceOf (it) {
   const sel = sellSelected.value.get (sellKey (props.stashId, it.slot_id));
-  const hist = histPrices.value.get (toCanonicalId (it.item_id));
+  const hist = histRecOf (it);
   const live = sel?.price != null ? sel.price : (hist?.price ?? null);
   const market = sel?.market != null ? sel.market : (hist?.market ?? null);
   if (sellCfg.value.basis === 'market') return market;
@@ -247,7 +266,7 @@ let affixQuerySeq = 0;
 function onToggleSecondary (it, index) {
   const en = it.sp_en || [];
   const key = toCanonicalId (it.item_id);
-  const rec = histPrices.value.get (key);
+  const rec = histRecOf (it);
   // 默认不勾选（与游戏内悬浮窗一致：查价前空勾选，查询后勾选 = 实际使用的组合）
   const cur = new Set (tooltipSelected.value.get (key) || rec?.usedAffixes || []);
   const display = en[index]?.[0];
@@ -267,7 +286,7 @@ function onToggleSecondary (it, index) {
       if (seq !== affixQuerySeq) return; // 过期结果丢弃
       // 以本次组合的查询结果就地更新，tooltip 立即显示（组合恢复 AB 时直接显示 AB 价）；显示按配置 smart 化
       if (r && r.price != null) {
-        histPrices.value = new Map (histPrices.value).set (key, {
+        setHistRec (it, {
           price: displayLive (r.price, rec?.market ?? null, sellCfg.value.liveDisplayBasis, sellCfg.value.smartThreshold),
           ts: Date.now (),
           usedAffixes: r.usedAffixes?.length ? r.usedAffixes : [...cur],
@@ -303,17 +322,16 @@ async function onTooltipAction (key) {
     tooltipBusy.value = true;
     try {
       const en = it.sp_en || [];
-      const keyId = toCanonicalId (it.item_id);
       // 查询用全部词条（与游戏内 OCR 全词条一致，词条评分+降级在查价核心内完成）
       const target = { item_id: it.item_id, rarity: it.rarity, sp_en: en, primary_en: it.primary_en || [] };
       await fetchPrices ([target]);
       // 就地更新 tooltip 价格显示，勾选态 = 查询实际使用的组合（降级结果）
       if (target.price != null) {
-        histPrices.value = new Map (histPrices.value).set (keyId, {
+        setHistRec (it, {
           price: target.price,
           ts: Date.now (),
           usedAffixes: target.usedAffixes?.length ? target.usedAffixes : [],
-          attributes: histPrices.value.get (keyId)?.attributes || {},
+          attributes: (histRecOf (it)?.attributes) || {},
         });
       }
     } catch (e) {}
@@ -331,7 +349,7 @@ const tooltipSelected = ref (new Map ());
 
 function hoverSecondary (it) {
   const key = toCanonicalId (it.item_id);
-  const rec = histPrices.value.get (key);
+  const rec = histRecOf (it);
   const temp = tooltipSelected.value.get (key);
   // 默认不勾选（与游戏内悬浮窗一致）；有临时勾选或历史实际组合时沿用
   const used = temp || new Set (rec?.usedAffixes || []);
@@ -357,7 +375,7 @@ function hoverSecondary (it) {
 
 function hoverPrices (it) {
   const p = {};
-  const rec = histPrices.value.get (toCanonicalId (it.item_id));
+  const rec = histRecOf (it);
   if (rec) {
     if (rec.price != null) p.live = displayLive (rec.price, rec.market, sellCfg.value.liveDisplayBasis, sellCfg.value.smartThreshold);  // 市场现价（按显示基准 smart）
     if (rec.market != null) p.market = rec.market;   // 市场均价（平均成交价）
@@ -429,9 +447,8 @@ function smartBase (live, market) {
 
 // 上架基准价：本次查价结果优先，否则复用记录价；按设置取现价（live）/均价（market）/智能（smart）
 function basePriceOf (it) {
-  const key = toCanonicalId (it.item_id);
   const sel = sellSelected.value.get (sellKey (props.stashId, it.slot_id));
-  const hist = histPrices.value.get (key);
+  const hist = histRecOf (it);
   const live = sel?.price != null ? sel.price : (hist?.price ?? null);
   const market = sel?.market != null ? sel.market : (hist?.market ?? null);
   if (sellCfg.value.basis === 'market') return market;
@@ -458,7 +475,7 @@ async function doFetchSellPrices () {
   const toQuery = [];
   let reused = 0;
   for (const t of targets) {
-    const hist = histPrices.value.get (toCanonicalId (t.item_id));
+    const hist = histRecOf (t);
     const base = sellCfg.value.basis === 'market'
       ? (hist?.market ?? null)
       : sellCfg.value.basis === 'smart'

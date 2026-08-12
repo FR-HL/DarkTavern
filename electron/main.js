@@ -646,13 +646,17 @@ app.on ('ready', async () => {
   safeHandle ('history:by-ids', (e, ids = []) => {
     loadHistory ();
     const canonIds = new Set ((Array.isArray (ids) ? ids : []).map (toCanonicalItemId));
+    // 按物品 id + 词条组合（affixKey）分组：同 id 不同词条的多件物品价格各自独立，不互相覆盖
     const out = {};
     for (const r of priceHistory) {
       const rid = toCanonicalItemId (r.id);
       if (!canonIds.has (rid)) continue;
-      const cur = out[rid];
+      const dkey = r.affixKey || ('affix:' + rid + ':' + (r.rarity || '') + ':' + [...(r.usedAffixes || [])].sort ().join ('|'));
+      if (!out[rid]) out[rid] = {};
+      const cur = out[rid][dkey];
+      // 同组合多条 → 字段级合并：后写非 null 值覆盖，null 保留旧值（仓库查价记录只有现价，不覆盖悬浮窗完整价）
       if (!cur) {
-        out[rid] = {
+        out[rid][dkey] = {
           price: r.price ?? null,
           market: r.market ?? null,
           vendor: r.vendor ?? null,
@@ -660,19 +664,18 @@ app.on ('ready', async () => {
           ts: r.ts,
           usedAffixes: r.usedAffixes || [],
           attributes: r.attributes || {},
+          affixKey: dkey,
         };
-        continue;
-      }
-      // 字段级合并：后写的非 null 值覆盖，null 保留旧值。
-      // 仓库查价记录只有现价（market/vendor/density 为 null），不会覆盖悬浮窗完整价。
-      if (r.price != null) cur.price = r.price;
-      if (r.market != null) cur.market = r.market;
-      if (r.vendor != null) cur.vendor = r.vendor;
-      if (r.density != null) cur.density = r.density;
-      if (r.ts > cur.ts) {
-        cur.ts = r.ts;
-        if (r.usedAffixes?.length) cur.usedAffixes = r.usedAffixes;
-        if (r.attributes?.secondary?.length) cur.attributes = r.attributes;
+      } else {
+        if (r.price != null) cur.price = r.price;
+        if (r.market != null) cur.market = r.market;
+        if (r.vendor != null) cur.vendor = r.vendor;
+        if (r.density != null) cur.density = r.density;
+        if (r.ts > cur.ts) {
+          cur.ts = r.ts;
+          if (r.usedAffixes?.length) cur.usedAffixes = r.usedAffixes;
+          if (r.attributes?.secondary?.length) cur.attributes = r.attributes;
+        }
       }
     }
     return { records: out };
