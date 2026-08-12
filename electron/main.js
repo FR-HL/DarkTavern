@@ -12,7 +12,7 @@ const logger = rootLogger.child ({ module: 'main' });
 import { ROOT, SOURCE, dataDir } from './config.js';
 import { settings, saveSettings, toComponents, toDays, toDebounce } from './settings.js';
 import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
-import { wire, fetchMarketPrice, toCanonicalItemId } from './scan.js';
+import { wire, toCanonicalItemId, fetchMarketPrice, queryItemPrice, requeryLivePrice } from './scan.js';
 import * as backend from './backend.js';
 
 const { app, BrowserWindow, ipcMain, dialog } = electron;
@@ -160,7 +160,7 @@ function rebuildOverlay () {
   } catch (e) { logger.warn ('销毁旧悬浮窗失败', { error: e?.message }); }
   overlay = createOverlayWindow ();
   startTracking (overlay);
-  if (overlayWireCb) wire (overlay, overlayWireCb, { findScanCache });
+  if (overlayWireCb) wire (overlay, overlayWireCb, { findScanCache, affixKey });
   lastHeartbeatPong = 0;
   heartbeatReloaded = false;
 }
@@ -319,7 +319,7 @@ app.on ('ready', async () => {
   };
 
   startTracking (overlay);
-  wire (overlay, overlayWireCb, { findScanCache });
+  wire (overlay, overlayWireCb, { findScanCache, affixKey });
   startHeartbeat ();
 
   const registerShortcut = (key, fn) => {
@@ -464,6 +464,11 @@ app.on ('ready', async () => {
     if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
     const byValue = (settings.general.live_price_mode || 'presence') === 'value';
     const results = [];
+    // 单件超时兜底：任一物品查询超过 12 秒直接放弃该件（保证 invoke 一定返回，前端不会挂死）
+    const withTimeout = (p, ms) => Promise.race ([
+      p,
+      new Promise (resolve => setTimeout (() => resolve (null), ms)),
+    ]);
     for (const it of items) {
       let price = null;
       let usedAttrs = [];
@@ -477,37 +482,96 @@ app.on ('ready', async () => {
               value,
             }))
             .filter (a => a.display);
-          for (const a of [attrs, []]) {
-            const p = await fetchMarketPrice (itemId, it?.rarity, a, byValue, headers);
-            if (p !== null) { price = p; usedAttrs = a; break; }
-          }
-          if (price !== null) {
-            // 与悬浮窗查价记录同源：写入查价记录，仓库页据此直接显示价格
-            pushHistoryRecord ({
-              ts: Date.now (),
-              id: itemId,
-              name: '',
-              zhName: findZhName (itemId),
-              rarity: it?.rarity || '',
-              price,
-              market: null,
-              vendor: null,
-              density: null,
-              attributes: { primary: [], secondary: [] },
-              reverseAttributes: {},
-              usedAffixes: usedAttrs.map (x => x.display),
-              key: 'stash:' + itemId + ':' + (it?.rarity || ''),
-            });
+          // 词条组合级缓存：同物品同词条组合已查过 → 直接复用，不再请求
+          const ckey = affixKey (itemId, it?.rarity || '', attrs.map (a => a.display));
+          const cached = findScanCache (ckey);
+          if (cached && cached.price != null) {
+            price = cached.price;
+            logger.info ('market:price 命中词条组合缓存', { key: ckey, price });
+          } else {
+            const attempt = async () => {
+              let item = null;
+              let pricing = null;
+              const enName = findEnName (itemId);
+              if (!enName) {
+                // items.json 无此物品（数据缺失）：退回无词条现价查询，不产生虚假记录
+                logger.warn ('market:price analyze skipped, no en name', { itemId });
+                price = await fetchMarketPrice (itemId, it?.rarity || '', [], byValue, headers);
+                usedAttrs = [];
+              } else {
+                // 统一查价：与游戏内悬浮窗调用同一个 queryItemPrice（analyze + 现价按评分四级降级）
+                const text = buildTooltipText (enName, it?.rarity || '', attrs);
+                logger.info ('market:price analyze', { itemId, rarity: it?.rarity, text: text.replace (/\n/g, ' | ').slice (0, 200), attrs: attrs.length });
+                const r = await queryItemPrice (text);
+                if (r.ok) {
+                  item = r.data.item;
+                  pricing = r.data.pricing;
+                  price = r.live.price;
+                  usedAttrs = r.live.attrs;
+                  logger.info ('market:price analyze result', { itemId, id: item?.id || '', market: pricing?.market ?? null, live: price });
+                } else {
+                  logger.warn ('market:price analyze failed', { itemId, error: r.error });
+                }
+              }
+              if (price !== null) {
+                // 固定属性：优先数据包自带（仓库抓包物品）；无则用 analyze 返回的（游戏悬浮窗 OCR 物品，游戏同款结构）
+                const pktPrimary = (Array.isArray (it?.primary) ? it.primary : []).map (([display, value, isPct]) => ({
+                  display,
+                  name: String (display).toLowerCase ().replace (/ /g, '_'),
+                  grade: null,
+                  min: value,
+                  max: value,
+                  min_enchanted: null,
+                  max_enchanted: null,
+                  value,
+                  is_percentage: !!isPct,
+                  is_socketed: false,
+                }));
+                const primary = pktPrimary.length ? pktPrimary : (Array.isArray (item?.primary) ? item.primary : []);
+                // 记录与游戏内查价同结构：id 用 analyze 官方 id，四项价格 + 完整词条（含评分）+ 固定属性
+                pushHistoryRecord ({
+                  ts: Date.now (),
+                  id: item?.id || itemId,
+                  name: item?.name || enName || '',
+                  zhName: findZhName (item?.id || itemId),
+                  rarity: item?.rarity || it?.rarity || '',
+                  price,
+                  market: pricing?.market ?? null,
+                  vendor: pricing?.vendor ?? null,
+                  density: pricing?.density ?? null,
+                  attributes: { primary, secondary: item ? item.secondary || [] : [] },
+                  reverseAttributes: {},
+                  usedAffixes: usedAttrs.map (x => x.display),
+                  key: 'stash:' + itemId + ':' + (it?.rarity || ''),
+                  affixKey: ckey,
+                });
+              }
+            };
+            await withTimeout (attempt (), 12000);
           }
         }
       } catch (err) {
         logger.warn ('market:price item failed', { error: err?.message || String (err) });
       }
-      results.push ({ index: it?.index, price });
+      results.push ({ index: it?.index, price, usedAffixes: usedAttrs.map (x => x.display) });
     }
     const withPrice = results.filter (r => r.price != null).length;
     logger.info ('market:price done', { total: results.length, withPrice });
     return { results };
+  });
+
+  // 切词条重查：与游戏内悬浮窗共用同一逻辑（requeryLivePrice，只查勾选组合，无降级；命中组合缓存直接复用）
+  safeHandle ('market:requery', async (e, it = {}) => {
+    const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
+    if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+    const byValue = (settings.general.live_price_mode || 'presence') === 'value';
+    const itemId = toCanonicalItemId (String (it?.item_id || ''));
+    if (!itemId || itemId === 'id.item.') return { index: it?.index ?? 0, price: null, usedAffixes: [] };
+    const secondary = (Array.isArray (it?.sp_en) ? it.sp_en : []).map (([display, value]) => ({ display, value }));
+    const selected = secondary.map (a => a.display);
+    logger.info ('market:requery', { itemId, rarity: it?.rarity, selected });
+    const r = await requeryLivePrice (itemId, it?.rarity || '', secondary, selected, byValue, headers, { affixKey, findScanCache });
+    return { index: it?.index ?? 0, price: r.price, usedAffixes: r.attrs.map (a => a.display) };
   });
 
   registerStashHotkeys ();
@@ -532,7 +596,40 @@ app.on ('ready', async () => {
   safeHandle ('history:list', () => {
     loadHistory ();
     pruneHistory ();
-    return { records: [...priceHistory].reverse ().map ((r) => ({ ...r, icon: historyIconPath (r) })) };
+    // 同物品字段补全：缺失的均价/回收/每格/属性/名称用同 id 其他记录补齐（如游戏查过的完整数据）
+    const byId = new Map ();
+    for (const r of priceHistory) {
+      const rid = toCanonicalItemId (r.id);
+      const cur = byId.get (rid);
+      if (!cur) {
+        byId.set (rid, r);
+        continue;
+      }
+      if (r.market != null) cur.market = r.market;
+      if (r.vendor != null) cur.vendor = r.vendor;
+      if (r.density != null) cur.density = r.density;
+      if (r.name) cur.name = r.name;
+      if (r.zhName) cur.zhName = r.zhName;
+      if (r.attributes?.secondary?.length) cur.attributes = r.attributes;
+    }
+    return {
+      records: [...priceHistory].reverse ().map ((r) => {
+        const src = byId.get (toCanonicalItemId (r.id));
+        if (!src || src === r) return { ...r, icon: historyIconPath (r) };
+        return {
+          ...r,
+          market: r.market ?? src.market ?? null,
+          vendor: r.vendor ?? src.vendor ?? null,
+          density: r.density ?? src.density ?? null,
+          name: r.name || src.name || '',
+          zhName: r.zhName || src.zhName || '',
+          attributes: (r.attributes?.secondary?.length || r.attributes?.primary?.length)
+            ? r.attributes
+            : (src.attributes?.secondary?.length || src.attributes?.primary?.length) ? src.attributes : r.attributes,
+          icon: historyIconPath (r),
+        };
+      }),
+    };
   });
   safeHandle ('history:clear', () => {
     priceHistory = [];
@@ -549,15 +646,31 @@ app.on ('ready', async () => {
     const canonIds = new Set ((Array.isArray (ids) ? ids : []).map (toCanonicalItemId));
     const out = {};
     for (const r of priceHistory) {
-      if (canonIds.has (r.id)) {
-        const cur = out[r.id];
-        if (!cur || r.ts > cur.ts) {
-          out[r.id] = {
-            price: r.price,
-            ts: r.ts,
-            usedAffixes: r.usedAffixes || [],
-          };
-        }
+      const rid = toCanonicalItemId (r.id);
+      if (!canonIds.has (rid)) continue;
+      const cur = out[rid];
+      if (!cur) {
+        out[rid] = {
+          price: r.price ?? null,
+          market: r.market ?? null,
+          vendor: r.vendor ?? null,
+          density: r.density ?? null,
+          ts: r.ts,
+          usedAffixes: r.usedAffixes || [],
+          attributes: r.attributes || {},
+        };
+        continue;
+      }
+      // 字段级合并：后写的非 null 值覆盖，null 保留旧值。
+      // 仓库查价记录只有现价（market/vendor/density 为 null），不会覆盖悬浮窗完整价。
+      if (r.price != null) cur.price = r.price;
+      if (r.market != null) cur.market = r.market;
+      if (r.vendor != null) cur.vendor = r.vendor;
+      if (r.density != null) cur.density = r.density;
+      if (r.ts > cur.ts) {
+        cur.ts = r.ts;
+        if (r.usedAffixes?.length) cur.usedAffixes = r.usedAffixes;
+        if (r.attributes?.secondary?.length) cur.attributes = r.attributes;
       }
     }
     return { records: out };
@@ -1379,21 +1492,48 @@ function findZhName (rawId) {
   const db = loadItemsDb ();
   const direct = db[rawId];
   if (direct && direct.name_zh) return direct.name_zh;
-  for (const key of Object.keys (db)) {
-    const it = db[key];
-    if ((it.origin_id && it.origin_id === rawId) || (it.archetype && it.archetype === rawId)) {
-      if (it.name_zh) return it.name_zh;
-    }
-  }
+  // canonical（id.item.蛇形）→ items.json 的 key（驼峰无前缀）反查
+  const key = String (rawId).replace (/^id\.item\./, '').replace (/(^|_)([a-z])/g, (m, p, c) => c.toUpperCase ());
+  const byKey = db[key];
+  if (byKey && byKey.name_zh) return byKey.name_zh;
+  logger.warn ('findZhName: no match', { rawId, key });
   return '';
+}
+
+// 物品英文名：canonical id → items.json 的 key（驼峰无前缀）反查 name
+function findEnName (rawId) {
+  if (!rawId) return '';
+  const db = loadItemsDb ();
+  const direct = db[rawId];
+  if (direct && direct.name) return direct.name;
+  const key = String (rawId).replace (/^id\.item\./, '').replace (/(^|_)([a-z])/g, (m, p, c) => c.toUpperCase ());
+  const byKey = db[key];
+  return (byKey && byKey.name) || '';
+}
+
+// 构造与游戏提示框等价的英文文本（软件查价 → 同一个 analyze 接口）
+// 词条行格式与游戏 OCR 一致：正值带 +，负值直接写（实测不需要 % 号）
+function buildTooltipText (name, rarity, attrs) {
+  const lines = [name];
+  for (const a of attrs) {
+    const v = Number (a.value);
+    lines.push (`${v >= 0 ? '+' : ''}${a.value} ${a.display}`);
+  }
+  lines.push (`Rarity: ${rarity}`);
+  return lines.filter ((x) => x && x.trim ()).join ('\n');
 }
 
 // ── 查价记录（保存 3 天内查过的物品） ──
 
 let priceHistory = null;
-let historyKeyIndex = null;   // key → 最新记录（findScanCache 用，避免每次扫描全量遍历）
+let historyKeyIndex = null;   // key/affixKey → 最新记录（findScanCache 用，避免每次扫描全量遍历）
 let historySaveTimer = null;  // 写盘节流：5 秒内合并多次扫描为一次写入
 let historyDirty = false;
+
+// 词条组合级缓存 key：同物品同词条组合已查过 → 直接复用，不再请求
+function affixKey (itemId, rarity, displays) {
+  return 'affix:' + itemId + ':' + (rarity || '') + ':' + [...(displays || [])].sort ().join ('|');
+}
 
 function historyTtl () {
   return (settings.general.history_days ?? 3) * 24 * 3600 * 1000;
@@ -1406,9 +1546,10 @@ function scanCacheTtl () {
 function rebuildHistoryKeyIndex () {
   historyKeyIndex = new Map ();
   for (const r of priceHistory) {
-    if (!r.key) continue;
-    const cur = historyKeyIndex.get (r.key);
-    if (!cur || r.ts > cur.ts) historyKeyIndex.set (r.key, r);
+    const dkey = r.affixKey || r.key;
+    if (!dkey) continue;
+    const cur = historyKeyIndex.get (dkey);
+    if (!cur || r.ts > cur.ts) historyKeyIndex.set (dkey, r);
   }
 }
 
@@ -1502,9 +1643,10 @@ function pushHistoryRecord (rec) {
   } else {
     priceHistory.push (rec);
   }
-  if (rec.key) {
-    const cur = historyKeyIndex ? historyKeyIndex.get (rec.key) : null;
-    if (!cur || rec.ts > cur.ts) historyKeyIndex.set (rec.key, rec);
+  if (rec.affixKey || rec.key) {
+    const dkey = rec.affixKey || rec.key;
+    const cur = historyKeyIndex ? historyKeyIndex.get (dkey) : null;
+    if (!cur || rec.ts > cur.ts) historyKeyIndex.set (dkey, rec);
   }
   pruneHistory ();
   notifyHome ('history:updated', {});
@@ -1526,6 +1668,7 @@ function upsertHistoryRecord () {
     reverseAttributes: lastScan.reverseAttributes,
     usedAffixes: lastScan.usedAffixes || [],
     key: lastScan.key || '',
+    affixKey: affixKey (lastScan.id || '', lastScan.rarity || '', lastScan.usedAffixes || []),
   };
   pushHistoryRecord (rec);
 }

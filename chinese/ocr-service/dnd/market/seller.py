@@ -76,6 +76,7 @@ def _enter_price(anchors, price):
     macros._sleep_with_cancel(waits['price'])  # let the input field focus
     macros.press_backspace(PRICE_CLEAR_BACKSPACES)
     macros.type_text(str(int(price)))
+    macros._sleep_with_cancel(0.5)  # 硬性等待 0.5 秒，确保价格完整输入再点击上架
     logger.debug("sell: entered price %d at (%d, %d)",
                  price, anchors['price_input'].x, anchors['price_input'].y)
 

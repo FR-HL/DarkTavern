@@ -205,6 +205,50 @@ def _sp_raw(item):
     return raw_sp
 
 
+# 固定属性代号与 DarkerDB 名不一致的覆盖表（其余用驼峰拆分，与游戏内查价记录名一致）
+_PRIMARY_DISPLAY_OVERRIDES = {
+    "PhysicalWeaponDamage": "Weapon Damage",
+    "HeadshotReductionMod": "Headshot Damage Reduction",
+}
+
+# 固定属性 % 词条缩放覆盖（item_affixes 缺条目的）——内部 10 倍值 → 游戏显示值
+_PRIMARY_SCALE_OVERRIDES = {
+    "HeadshotReductionMod": 10,
+}
+
+
+def _pp_raw(item):
+    """固定属性原始数据 [代号, 值] 列表（数据包自带 primaryPropertyArray）。"""
+    data = item.get("data") or {}
+    raw_pp = []
+    for p in data.get("primaryPropertyArray", []):
+        if isinstance(p, dict) and p.get("propertyTypeId") is not None and p.get("propertyValue") is not None:
+            raw_pp.append([p["propertyTypeId"].replace(_EFFECT_PREFIX, ""), p["propertyValue"]])
+    return raw_pp
+
+
+def _parse_item_primary_en(item):
+    """固定属性 → [英文显示名, 游戏显示值, 是否百分比]，与 _parse_item_sp_en 同构。"""
+    try:
+        out = []
+        for name, value in _pp_raw(item):
+            display = _PRIMARY_DISPLAY_OVERRIDES.get(str(name)) or _sp_display(name)
+            if not display:
+                continue
+            scale = _PRIMARY_SCALE_OVERRIDES.get(str(name), _sp_scale(name))
+            if scale > 1:
+                try:
+                    value = round(float(value) / scale, 2)
+                except (TypeError, ValueError):
+                    pass
+                out.append([display, value, True])
+            else:
+                out.append([display, value, False])
+        return out
+    except Exception:
+        return []
+
+
 def _parse_item_sp(item):
     """Item secondary properties for display: Chinese names via the mapping
     table (item_affixes) then the attributes translation table; names that
@@ -804,6 +848,7 @@ def get_character(character_id: str):
                 "vendor_price": item.get("vendor_price", 0),
                 "sp": _parse_item_sp(item),
                 "sp_en": _parse_item_sp_en(item),
+                "primary_en": _parse_item_primary_en(item),
             })
         stash_entry = {
             "label": _stash_label(stash_id),

@@ -218,8 +218,8 @@ export function wire (overlay, sendBall = null, hooks = null) {
       const attrs = secondary.filter (a => a.display != null && selected.includes (a.display));
       let price = null;
       if (itemId && itemId !== 'id.item.') {
-        try { price = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers); }
-        catch (err) { logger.error (`[MarketRequery] ${err.message}`); }
+        const r = await requeryLivePrice (itemId, rarity, secondary, selected, byValue, headers, _hooksRef);
+        price = r.price;
       }
       send ('hover:live-price', { scanId, price, used_affixes: attrs.map (a => a.display), source: 'requery', seq: payload?.seq });
       markResult ({ ok: true, live: price ?? null, usedAffixes: attrs.map (a => a.display), newRecord: true });
@@ -229,7 +229,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
   });
 }
 
-async function queryPrice (tooltipText) {
+export async function analyzeByText (tooltipText) {
   try {
     const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
     if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
@@ -256,9 +256,15 @@ async function queryPrice (tooltipText) {
   }
 }
 
+async function queryPrice (tooltipText) {
+  return analyzeByText (tooltipText);
+}
+
 export function toCanonicalItemId (rawId) {
-  if (rawId.startsWith ('id.item.')) return rawId;
-  const snake = rawId.replace (/([a-z])([A-Z])/g, '$1_$2').toLowerCase ();
+  const s = String (rawId || '').replace (/^DesignDataItem:Id_Item_/, '');
+  const m = s.match (/^id\.item\.(.*)$/i);
+  const body = m ? m[1] : s;
+  const snake = body.replace (/([a-z])([A-Z])/g, '$1_$2').toLowerCase ();
   return `id.item.${snake}`;
 }
 
@@ -281,7 +287,18 @@ export async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers)
     params.set (`secondary[${field}]`, byValue ? `>=${attr.value}` : '>=0');
   }
 
-  const res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: AbortSignal.timeout (10000) });
+  // 手动 AbortController 兜底：请求 10 秒未完成即放弃（AbortSignal.timeout 在部分环境失效）
+  const ac = new AbortController ();
+  const timer = setTimeout (() => ac.abort (), 10000);
+  let res;
+  try {
+    res = await fetch (`${MARKET_URL}?${params}`, { headers, signal: ac.signal });
+  } catch (e) {
+    logger.warn ('市场现价查询超时/失败', { itemId, rarity, error: e?.name || e?.message });
+    return null;
+  } finally {
+    clearTimeout (timer);
+  }
   if (!res.ok) {
     logger.warn ('市场现价查询失败', { itemId, rarity, status: res.status });
     return null;
@@ -290,6 +307,69 @@ export async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers)
   const listings = (await res.json ()).body;
   if (Array.isArray (listings) && listings.length > 0) return listings[0].price;
   return null;
+}
+
+// 现价查询（游戏内悬浮窗与软件内查价共用同一逻辑）：
+// 全部词条按评分排序 → S/A 级 → B 级 → 无词条，四级降级，由 live_price_relax 控制
+export async function fetchMarketLivePrice (itemId, rarity, secondary, byValue, headers) {
+  const sorted = [...secondary]
+    .filter (a => a.grade && a.value != null)
+    .sort ((a, b) => (GRADE_ORDER[a.grade] ?? 9) - (GRADE_ORDER[b.grade] ?? 9));
+
+  const gradeA = sorted.filter (a => a.grade === 'S' || a.grade === 'A');
+  const gradeB = sorted.filter (a => a.grade === 'B');
+
+  const relaxDepth = { all: 0, sa: 1, b: 2, none: 3 } [settings.general.live_price_relax || 'none'] ?? 3;
+  const attempts = [sorted, gradeA, gradeB, []].slice (0, relaxDepth + 1);
+
+  for (const attrs of attempts) {
+    const p = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers);
+    if (p !== null) {
+      logger.info (`[MarketLive] price=${p} (${attrs.length} attrs filtered)`);
+      return { price: p, attrs };
+    }
+  }
+  logger.info (`[MarketLive] no active listings`);
+  return { price: null, attrs: [] };
+}
+
+// 切词条重查（游戏内悬浮窗与软件内共用同一逻辑）：
+// 只查勾选组合，无降级；命中词条组合缓存直接复用
+export async function requeryLivePrice (itemId, rarity, secondary, selected, byValue, headers, hooks) {
+  const attrs = secondary.filter (a => a.display != null && selected.includes (a.display));
+  const ckey = hooks?.affixKey
+    ? hooks.affixKey (itemId, rarity, attrs.map (a => a.display))
+    : '';
+  const cached = ckey && hooks?.findScanCache ? hooks.findScanCache (ckey) : null;
+  if (cached && cached.price != null) {
+    logger.info ('[MarketRequery] 命中词条组合缓存', { key: ckey, price: cached.price });
+    return { price: cached.price, attrs, cached: true };
+  }
+  try {
+    const price = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers);
+    return { price, attrs, cached: false };
+  } catch (err) {
+    logger.error (`[MarketRequery] ${err.message}`);
+    return { price: null, attrs, cached: false };
+  }
+}
+
+// 统一查价核心：游戏内悬浮窗与软件内查价共用同一函数
+// 输入英文工具提示文本 → analyze（词条+评分+均价/回收/每格）→ 现价（按评分四级降级）
+// 所有查价配置（live_price_relax / live_price_mode）都在此函数内生效，两端天然一致
+export async function queryItemPrice (tooltipText) {
+  const analysis = await analyzeByText (tooltipText);
+  if (!analysis.success) return { ok: false, error: analysis.error };
+  const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
+  if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+  const data = analysis.data;
+  const item = data.item || {};
+  const itemId = toCanonicalItemId (item.id || item.item_id || '');
+  const byValue = (settings.general.live_price_mode || 'presence') === 'value';
+  const live = itemId && itemId !== 'id.item.'
+    ? await fetchMarketLivePrice (itemId, item.rarity || '', item.secondary || [], byValue, headers)
+    : { price: null, attrs: [] };
+  return { ok: true, data, itemId, live };
 }
 
 async function queryMarketLive (data, scanId, send) {
@@ -303,29 +383,11 @@ async function queryMarketLive (data, scanId, send) {
     if (itemId && itemId !== 'id.item.') {
       const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
       if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
-
-      const sorted = [...secondary]
-        .filter (a => a.grade && a.value != null)
-        .sort ((a, b) => (GRADE_ORDER[a.grade] ?? 9) - (GRADE_ORDER[b.grade] ?? 9));
-
-      const gradeA = sorted.filter (a => a.grade === 'S' || a.grade === 'A');
-      const gradeB = sorted.filter (a => a.grade === 'B');
-
-      const relaxDepth = { all: 0, sa: 1, b: 2, none: 3 } [settings.general.live_price_relax || 'none'] ?? 3;
-      const attempts = [sorted, gradeA, gradeB, []].slice (0, relaxDepth + 1);
       const byValue = (settings.general.live_price_mode || 'presence') === 'value';
 
-      for (const attrs of attempts) {
-        const p = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers);
-        if (p !== null) {
-          price = p;
-          usedAttrs = attrs;
-          logger.info (`[MarketLive] price=${price} (${attrs.length} attrs filtered)`);
-          break;
-        }
-      }
-
-      if (price === null) logger.info (`[MarketLive] no active listings`);
+      const r = await fetchMarketLivePrice (itemId, rarity, secondary, byValue, headers);
+      price = r.price;
+      usedAttrs = r.attrs;
     }
   } catch (e) {
     logger.error (`[MarketLive] ${e.message}`);

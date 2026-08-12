@@ -1472,6 +1472,7 @@ onBeforeUnmount (() => {
           :stack-mode="sortStack"
           :include-inv="sortIncludeInv"
           :keep-in-place="sortKeepInPlace"
+          :requery-debounce="requeryDebounce"
           @update:char-id="v => sortCharId = v"
           @update:stash-id="v => sortStashId = v"
           @update:equipment="v => sortEquipment = v"

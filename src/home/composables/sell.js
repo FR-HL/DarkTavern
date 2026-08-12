@@ -23,10 +23,17 @@ export function useSell () {
         rarity: it.rarity,
         // 查价用 DarkerDB 显示名词条（sp_en）；sp 为中文显示名
         sp: JSON.parse (JSON.stringify (it.sp_en || [])),
+        // 固定属性（数据包自带，保存记录用）
+        primary: JSON.parse (JSON.stringify (it.primary_en || [])),
       }));
       const r = await invoke ('market:price', payload);
-      const map = new Map ((r?.results || []).map (x => [x.index, x.price]));
-      targets.forEach ((it, idx) => { it.price = map.has (idx) ? map.get (idx) : null; });
+      const map = new Map ((r?.results || []).map (x => [x.index, x]));
+      targets.forEach ((it, idx) => {
+        const res = map.get (idx);
+        it.price = res ? res.price : null;
+        // 实际使用的词条组合（降级后），用于勾选态回填
+        if (res && Array.isArray (res.usedAffixes) && res.usedAffixes.length) it.usedAffixes = res.usedAffixes;
+      });
       const withPrice = targets.filter (t => t.price != null).length;
       note.value = `查价完成：${withPrice}/${targets.length} 件有市场价（无价的已跳过）`;
     } catch (e) {
