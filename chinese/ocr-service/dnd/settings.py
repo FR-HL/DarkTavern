@@ -128,6 +128,7 @@ class SettingsManager:
             "lockedStashes": [],
             "useQuickPlace": True,
             "sortLearningEnabled": False,
+            "sellSpeed": "normal",
         }
 
     def set_logger(self, logger: Optional[logging.Logger]) -> None:

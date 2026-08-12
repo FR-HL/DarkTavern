@@ -97,8 +97,14 @@ const chineseItemName = ref('');
 const chineseLines = ref([]);
 const itemRarity = ref('Common');
 const currentItemId = ref('');
+const sellListCount = ref(0);
+
+electron.on("sell:list-count", (data) => {
+  sellListCount.value = data?.count ?? 0;
+});
 
 function sendSellAction (channel) {
+  logger.info("sell action clicked", { channel, id: currentItemId.value });
   if (!currentItemId.value) return;
   electron.send (channel, {
     itemId: currentItemId.value,
@@ -176,8 +182,8 @@ function updateTooltipHover(event) {
 const rarityColors = {
   'Poor': '#808080',       // 灰色 - 粗糙
   'Common': '#ffffff',     // 白色 - 普通
-  'Uncommon': '#4caf50',   // 绿色 - 非凡
-  'Rare': '#2196f3',       // 蓝色 - 稀有
+  'Uncommon': '#4caf50',   // 绿色 - 优秀
+  'Rare': '#2196f3',       // 蓝色 - 罕见
   'Epic': '#9c27b0',       // 紫色 - 史诗
   'Legendary': '#ff8c00',  // 橙金色 - 传说
   'Unique': '#d4c68a',     // 淡金色 - 独特
@@ -909,7 +915,7 @@ function getGradeColor(grade) {
               ref="sellActionsNode"
               class="sell-actions"
             >
-              <button class="sell-btn" @click="sendSellAction('sell:add-item')">加入列表</button>
+              <button class="sell-btn" @click="sendSellAction('sell:add-item')">{{ sellListCount > 0 ? `列表中（${sellListCount}）` : '加入列表' }}</button>
               <button class="sell-btn" :disabled="item.prices.live === null && item.prices.market === null" @click="sendSellAction('sell:start-item')">开始上架</button>
             </div>
 

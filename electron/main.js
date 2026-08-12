@@ -457,6 +457,7 @@ app.on ('ready', async () => {
   safeHandle ('market:sell', (e, items) => backend.marketSell (Array.isArray (items) ? items : []));
   safeHandle ('market:status', () => backend.marketStatus ());
   safeHandle ('market:cancel', () => backend.marketCancel ());
+  safeHandle ('market:settings', (e, data = {}) => backend.marketSettings (data));
   safeHandle ('market:price', async (e, items = []) => {
     logger.info ('market:price called', { count: Array.isArray (items) ? items.length : -1 });
     const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
@@ -515,8 +516,18 @@ app.on ('ready', async () => {
   // ── 查价记录 IPC ──
 
   // 游戏内悬浮窗「加入列表 / 开始上架」→ 转发给主界面仓库页处理
-  ipcMain.on ('sell:add-item', (e, data) => notifyHome ('sell:add-item', data || {}));
-  ipcMain.on ('sell:start-item', (e, data) => notifyHome ('sell:start-item', data || {}));
+  ipcMain.on ('sell:add-item', (e, data) => {
+    logger.info ('sell:add-item 收到', { itemId: data?.itemId, price: data?.price });
+    notifyHome ('sell:add-item', data || {});
+  });
+  ipcMain.on ('sell:start-item', (e, data) => {
+    logger.info ('sell:start-item 收到', { itemId: data?.itemId, price: data?.price });
+    notifyHome ('sell:start-item', data || {});
+  });
+  // 仓库页上架列表数量 → 游戏内悬浮窗按钮文案（列表中 N）
+  ipcMain.on ('sell:list-count', (e, data) => {
+    if (overlay && !overlay.isDestroyed ()) overlay.webContents.send ('sell:list-count', { count: data?.count ?? 0 });
+  });
 
   safeHandle ('history:list', () => {
     loadHistory ();
@@ -679,6 +690,10 @@ app.on ('ready', async () => {
     app_version: app.getVersion (),
     disclaimer_agreed_version: settings.general.disclaimer_agreed_version || '',
     auto_check_update: settings.general.auto_check_update !== false,
+    sell_speed: settings.dnd?.sell_speed || 'normal',
+    sell_price_factor: parseFloat (settings.dnd?.sell_price_factor) || 1.0,
+    sell_min_price: (() => { const n = parseInt (settings.dnd?.sell_min_price); return isNaN (n) ? 200 : n; })(),
+    sell_min_rarity: settings.dnd?.sell_min_rarity || '',
   }));
 
   safeHandle ('settings:save', (e, data) => {
@@ -715,6 +730,10 @@ app.on ('ready', async () => {
     if (data.cross_config !== undefined) {
       settings.dnd.cross_config = typeof data.cross_config === 'string' ? data.cross_config : JSON.stringify (data.cross_config || {});
     }
+    if (data.sell_speed !== undefined && [ 'fast', 'normal', 'slow' ].includes (data.sell_speed)) settings.dnd.sell_speed = data.sell_speed;
+    if (data.sell_price_factor !== undefined) settings.dnd.sell_price_factor = Math.min (3, Math.max (0.1, parseFloat (data.sell_price_factor) || 1.0));
+    if (data.sell_min_price !== undefined) settings.dnd.sell_min_price = Math.max (0, parseInt (data.sell_min_price) || 0);
+    if (data.sell_min_rarity !== undefined) settings.dnd.sell_min_rarity = String (data.sell_min_rarity || '');
     if (data.developer_mode !== undefined) {
       settings.general.developer_mode = !!data.developer_mode;
       setLogLevel (settings.general.developer_mode ? 'debug' : 'info');

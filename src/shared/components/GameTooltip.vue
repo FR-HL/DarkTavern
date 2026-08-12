@@ -12,11 +12,12 @@ const props = defineProps ({
   prices: { type: Object, default: () => ({}) },    // { live, market, vendor, density } null=暂无
   stats: { type: Object, default: () => ({}) },     // { demand, demandColor, adventure }
   footer: { type: String, default: '作者: 方源Official | 官网: dnd.wiki' },
+  actions: { type: Array, default: () => [] },    // [{ label, key }] 价格区下操作按钮
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
 });
 
-const emit = defineEmits ([ 'toggle-secondary' ]);
+const emit = defineEmits ([ 'toggle-secondary', 'action' ]);
 
 const PRICE_LABELS = [
   ['live', '市场现价'],
@@ -111,8 +112,15 @@ function gradeColor (grade) {
                 {{ prices[k] !== null ? fmt (prices[k]) : '暂无' }}
               </span>
             </div>
-            <div class="tooltip-separator"></div>
           </div>
+
+          <div v-if="actions.length" class="sell-actions">
+            <button v-for="a in actions" :key="a.key" class="sell-btn" @click="emit('action', a.key)">
+              {{ a.label }}
+            </button>
+          </div>
+
+          <div class="tooltip-separator"></div>
 
           <div class="tooltip-footer">{{ footer }}</div>
         </div>
@@ -274,6 +282,36 @@ function gradeColor (grade) {
   text-align: center;
   color: var(--dnd-oak);
 }
+
+/* 操作按钮（与游戏内悬浮窗一致：内容内、等宽、哥特样式） */
+.sell-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 0 4px 4px;
+}
+.sell-btn {
+  flex: 1;
+  padding: 8px 0;
+  font-family: 'SaintKDG_Light', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  color: var(--dnd-gold);
+  background-image: url('@assets/images/Background_TooltipTexture.png');
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: #14121a;
+  border-image-slice: 21 21 21 21;
+  border-image-width: 12px 12px 12px 12px;
+  border-image-outset: 0;
+  border-image-repeat: stretch;
+  border-image-source: url('@assets/images/Background_TooltipBorder.png');
+  cursor: pointer;
+  transition: filter .15s var(--ease), color .15s var(--ease);
+}
+.sell-btn:hover { color: #ffe066; filter: brightness(1.15); }
+.sell-btn:disabled { opacity: .45; cursor: default; }
 
 /* 加载态 */
 .spinner-wrapper {

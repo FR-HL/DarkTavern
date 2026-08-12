@@ -12,8 +12,8 @@ export const RARITY_COLORS = {
 export const RARITY_CN = {
   Poor: '粗糙',
   Common: '普通',
-  Uncommon: '非凡',
-  Rare: '稀有',
+  Uncommon: '优秀',
+  Rare: '罕见',
   Epic: '史诗',
   Legendary: '传说',
   Unique: '独特',

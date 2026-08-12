@@ -12,8 +12,12 @@ const RECT = koffi.struct ('_RECT', { left: 'long', top: 'long', right: 'long', 
 
 const WinEventProc = koffi.proto ('void WinEventProc(void *hWinEventHook, uint event, void *hwnd, long idObject, long idChild, uint dwEventThread, uint dwmsEventTime)');
 const WinEventProcPtr = koffi.pointer (WinEventProc);
+const EnumWindowsProc = koffi.proto ('bool EnumWindowsProc(void *hwnd, long lParam)');
 
 const FindWindowW = user32.func ('void *FindWindowW(str16 lpClassName, str16 lpWindowName)');
+const EnumWindows = user32.func ('bool EnumWindows(EnumWindowsProc *cb, long lParam)');
+const GetWindowTextW = user32.func ('int GetWindowTextW(void *hwnd, _Out_ char16 *lpString, int nMaxCount)');
+const GetWindowTextLengthW = user32.func ('int GetWindowTextLengthW(void *hwnd)');
 const GetWindowRect = user32.func ('bool GetWindowRect(void *hWnd, _Out_ _RECT *lpRect)');
 const IsWindowVisible = user32.func ('bool IsWindowVisible(void *hWnd)');
 const SetWinEventHook = user32.func ('void *SetWinEventHook(uint eventMin, uint eventMax, void *hmodWinEventProc, WinEventProc *pfnWinEventProc, uint idProcess, uint idThread, uint dwFlags)');
@@ -78,12 +82,46 @@ export function stopTracking () {
   removeHooks ();
 }
 
+function windowTitle (hwnd) {
+  try {
+    const n = GetWindowTextLengthW (hwnd);
+    if (n <= 0) return '';
+    const buf = koffi.alloc ('char16', n + 1);
+    GetWindowTextW (hwnd, buf, n + 1);
+    return koffi.decode (buf, 'char16', n).trim ();
+  } catch (e) { return ''; }
+}
+
 function findGameWindow () {
-  for (const title of GAME_TITLES) {
-    const hwnd = FindWindowW (null, title);
-    if (hwnd && IsWindowVisible (hwnd)) return hwnd;
+  // 枚举所有同标题的可见窗口，选面积最大的真实游戏窗口。
+  // FindWindowW 只返回第一个匹配——可能命中最小化/幽灵窗口
+  // （-32000 屏幕外 160×28），导致悬浮窗被定位到屏幕外。
+  let best = null;
+  let bestArea = 0;
+  let cb = null;
+  try {
+    cb = koffi.register ((hwnd, lParam) => {
+      try {
+        const title = windowTitle (hwnd).toLowerCase ();
+        if (!GAME_TITLES.some (t => t.trim ().toLowerCase () === title)) return true;
+        if (!IsWindowVisible (hwnd)) return true;
+        const rect = {};
+        if (!GetWindowRect (hwnd, rect)) return true;
+        const w = rect.right - rect.left;
+        const h = rect.bottom - rect.top;
+        if (rect.left < -10000 || rect.top < -10000) return true; // 最小化 / 屏幕外
+        if (w < 200 || h < 150) return true;                       // 过滤极小窗口
+        const area = w * h;
+        if (area > bestArea) { bestArea = area; best = hwnd; }
+      } catch (e) {}
+      return true;
+    }, koffi.pointer (EnumWindowsProc));
+    EnumWindows (cb, 0);
+  } catch (e) { return null; }
+  finally {
+    try { if (cb) koffi.unregister (cb); } catch (e) {}
   }
-  return null;
+  return best;
 }
 
 function tryDetect () {

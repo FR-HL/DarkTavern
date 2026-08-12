@@ -513,6 +513,10 @@ export async function marketCancel () {
   return await postOrError ('/market/cancel');
 }
 
+export async function marketSettings (data) {
+  return await postOrError ('/market/settings', data);
+}
+
 // ── DnD Tools: Sort ──
 
 export async function sortStart (params) {

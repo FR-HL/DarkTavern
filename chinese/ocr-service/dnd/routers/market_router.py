@@ -55,6 +55,28 @@ class SellRequest(BaseModel):
     items: List[SellItem] = []
 
 
+class MarketSettingsRequest(BaseModel):
+    sell_speed: Optional[str] = None
+
+
+# ── Settings ──
+
+@router.get("/settings")
+def get_market_settings():
+    """上架相关设置（sellSpeed 供 seller 读取）。"""
+    from dnd.settings import settings_manager
+    return {"sell_speed": settings_manager.get("sellSpeed", "normal")}
+
+
+@router.post("/settings")
+def update_market_settings(body: MarketSettingsRequest):
+    from dnd.settings import settings_manager
+    if body.sell_speed in ("fast", "normal", "slow"):
+        settings_manager.update({"sellSpeed": body.sell_speed}, persist=True)
+        logger.info("Market sell speed set to %s", body.sell_speed)
+    return {"sell_speed": settings_manager.get("sellSpeed", "normal")}
+
+
 # ── Calibration ──
 
 @router.get("/calibration")

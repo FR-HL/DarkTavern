@@ -51,64 +51,155 @@ async function resetCalibration () {
   if (r?.success) await loadCalibration ();
 }
 
+// ── 上架自定义设置 ──
+
+const sellSpeed = ref ('normal');
+const sellPriceFactor = ref (1.0);
+const sellMinPrice = ref (200);
+const sellMinRarity = ref ('');
+
+const RARITY_OPTS = [
+  { key: '', label: '全部' },
+  { key: 'Uncommon', label: '优秀+' },
+  { key: 'Rare', label: '罕见+' },
+  { key: 'Epic', label: '史诗+' },
+  { key: 'Legendary', label: '传说+' },
+];
+const SPEED_OPTS = [
+  { key: 'fast', label: '快' },
+  { key: 'normal', label: '中' },
+  { key: 'slow', label: '慢' },
+];
+
+async function loadSellSettings () {
+  try {
+    const d = await invoke ('settings:get');
+    sellSpeed.value = d.sell_speed || 'normal';
+    sellPriceFactor.value = parseFloat (d.sell_price_factor) || 1.0;
+    const mp = parseInt (d.sell_min_price);
+    sellMinPrice.value = isNaN (mp) ? 200 : mp;
+    sellMinRarity.value = d.sell_min_rarity || '';
+  } catch (e) {}
+}
+
+function saveSellSettings () {
+  invoke ('settings:save', {
+    sell_price_factor: sellPriceFactor.value,
+    sell_min_price: sellMinPrice.value,
+    sell_min_rarity: sellMinRarity.value,
+  });
+}
+
+async function setSellSpeed (v) {
+  sellSpeed.value = v;
+  try {
+    await invoke ('settings:save', { sell_speed: v });
+    await invoke ('market:settings', { sell_speed: v });
+  } catch (e) {}
+}
+
 onMounted (async () => {
   await loadCalibration ();
+  await loadSellSettings ();
 });
 </script>
 
 <template>
   <div>
     <div class="page-title">自动上架</div>
-    <div class="page-sub">上架操作已并入「角色仓库」页（点击物品格子多选后查价上架）；此处仅保留坐标校准。</div>
+    <div class="page-sub">上架操作已并入「角色仓库」页（点击物品格子多选后查价上架）；此处配置坐标校准与上架规则。</div>
 
-    <!-- 坐标校准 -->
-    <div class="card" style="padding: 16px 18px;">
-      <div class="card-head" style="margin-bottom: 10px;">
-        <span class="card-title">上架坐标校准</span>
-      </div>
-      <div class="sel-d" style="margin-bottom: 12px;">
-        点「记录」后，把鼠标移到游戏内对应按钮上<b>点击一次</b>即完成采集；全部按钮已内置默认坐标，仅在默认坐标不准时校准。
-      </div>
-      <div class="sel-anchors">
-        <div class="sel-a" v-for="a in anchors" :key="a.key">
-          <div class="sel-a-info">
-            <div class="sel-a-t">{{ a.label }}</div>
-            <div class="sel-a-d">
+    <div class="sec">
+      <div class="sec-label">上架坐标校准</div>
+      <div class="card">
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">校准说明</div>
+            <div class="srow-d">点「记录」后，把鼠标移到游戏内对应按钮上<b>点击一次</b>即完成采集；全部按钮已内置默认坐标，仅在默认坐标不准时校准。</div>
+          </div>
+          <div class="srow-ctl">
+            <button class="btn primary" :disabled="calSaving || pendingCount === 0" @click="saveCalibration">
+              {{ calSaving ? '保存中…' : '保存校准' }}
+            </button>
+            <button class="btn subtle" @click="resetCalibration">清除校准</button>
+            <span v-if="calNote" class="sel-note">{{ calNote }}</span>
+          </div>
+        </div>
+        <div class="srow" v-for="a in anchors" :key="a.key">
+          <div class="srow-info">
+            <div class="srow-t">{{ a.label }}</div>
+            <div class="srow-d">
               <template v-if="a.pending">待保存 ({{ a.pending.x }}, {{ a.pending.y }})</template>
               <template v-else-if="a.saved">已校准 ({{ a.saved.x }}, {{ a.saved.y }})</template>
               <template v-else-if="a.has_default">内置默认坐标</template>
               <template v-else>未校准</template>
             </div>
           </div>
-          <button class="btn sm" :disabled="armingKey !== ''" @click="recordAnchor(a.key)">
-            {{ armingKey === a.key ? '等待点击…' : '记录' }}
-          </button>
+          <div class="srow-ctl">
+            <button class="btn sm" :disabled="armingKey !== ''" @click="recordAnchor(a.key)">
+              {{ armingKey === a.key ? '等待点击…' : '记录' }}
+            </button>
+          </div>
         </div>
       </div>
-      <div class="sel-row" style="margin-top: 12px;">
-        <button class="btn primary" :disabled="calSaving || pendingCount === 0" @click="saveCalibration">
-          {{ calSaving ? '保存中…' : '保存校准' }}
-        </button>
-        <button class="btn subtle" @click="resetCalibration">清除校准</button>
-        <span v-if="calNote" class="sel-note">{{ calNote }}</span>
+    </div>
+
+    <div class="sec">
+      <div class="sec-label">上架自定义设置</div>
+      <div class="card">
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">上架速度</div>
+            <div class="srow-d">页面渲染等待时长；快=省时，慢=更稳</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in SPEED_OPTS" :key="o.key" class="seg-opt" :class="{ on: sellSpeed === o.key }" @click="setSellSpeed(o.key)">
+                <span class="seg-t">{{ o.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">价格系数</div>
+            <div class="srow-d">上架价 = 市场价 × 系数（0.1-3）；如 0.95 快速出手</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="days-ctl">
+              <input type="text" inputmode="decimal" :value="sellPriceFactor" @change="e => { sellPriceFactor = parseFloat (e.target.value) || 1.0; saveSellSettings (); }">
+            </div>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">最低价阈值</div>
+            <div class="srow-d">市场价低于该值的物品不查价不上架；0 为不限制</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="days-ctl">
+              <input type="text" inputmode="numeric" :value="sellMinPrice" @change="e => { sellMinPrice = parseInt (e.target.value) || 0; saveSellSettings (); }">
+              <span class="range-val">金币</span>
+            </div>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">稀有度筛选</div>
+            <div class="srow-d">只上架 ≥ 指定稀有度的物品</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in RARITY_OPTS" :key="o.key" class="seg-opt" :class="{ on: sellMinRarity === o.key }" @click="sellMinRarity = o.key; saveSellSettings ();">
+                <span class="seg-t">{{ o.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.sel-d { font-size: 12.5px; color: var(--text-3); line-height: 1.6; }
-.sel-d b { color: var(--red); font-weight: 650; }
-.sel-anchors { display: flex; flex-wrap: wrap; gap: 8px; }
-.sel-a {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--card-2); border: 1px solid var(--line-soft); border-radius: 8px;
-  padding: 8px 10px; min-width: 220px;
-}
-.sel-a-info { flex: 1; min-width: 0; }
-.sel-a-t { font-size: 13px; font-weight: 600; color: var(--text); }
-.sel-a-d { margin-top: 2px; font-size: 11.5px; color: var(--text-3); }
-.sel-row { display: flex; align-items: center; gap: 10px; }
-.sel-note { font-size: 12.5px; color: var(--green); margin-left: 4px; }
-.sel-note.warn { color: var(--red); }
 </style>

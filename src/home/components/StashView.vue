@@ -233,8 +233,12 @@ async function onToggleSecondary (it, index) {
   tooltipSelected.value = new Map (tooltipSelected.value).set (key, cur);
 }
 
-// tooltip 操作按钮：查询价格 / 加入上架
+// tooltip 操作按钮（内容内，与游戏内悬浮窗一致）
 const tooltipBusy = ref (false);
+const tooltipActions = computed (() => [
+  { label: tooltipBusy.value ? '查询中…' : '查询价格', key: 'price' },
+  { label: hoverItem.value && isSellPicked (hoverItem.value) ? '移出上架' : '加入上架', key: 'sell' },
+]);
 
 async function onTooltipAction (key) {
   const it = hoverItem.value;
@@ -307,41 +311,115 @@ function fmtSellG (it, v) {
   return Number (v) + (compact ? '' : ' G');
 }
 
+// 上架自定义设置（自动上架页配置）
+const sellCfg = ref ({ factor: 1, minPrice: 0, minRarity: '' });
+const RARITY_RANK = { Poor: 0, Common: 1, Uncommon: 2, Rare: 3, Epic: 4, Legendary: 5, Unique: 6, Artifact: 7 };
+
+async function loadSellCfg () {
+  try {
+    const d = await invoke ('settings:get');
+    const mp = parseInt (d.sell_min_price);
+    sellCfg.value = {
+      factor: parseFloat (d.sell_price_factor) || 1,
+      minPrice: isNaN (mp) ? 200 : mp,
+      minRarity: d.sell_min_rarity || '',
+    };
+  } catch (e) {}
+}
+
+// 稀有度筛选（神器 Artifact 一律禁止上架）
+function sellFilterPass (it) {
+  if (it.rarity === 'Artifact') return false;
+  if (sellCfg.value.minRarity && (RARITY_RANK[it.rarity] ?? 0) < (RARITY_RANK[sellCfg.value.minRarity] ?? 0)) return false;
+  return true;
+}
+
+// 上架价 = 市场价 × 系数（最低 1）
+function finalSellPrice (raw) {
+  return Math.max (1, Math.round ((raw ?? 0) * (sellCfg.value.factor || 1)));
+}
+
+// 整仓批量上架：选择仓库（可多选）→ 按稀有度筛选 → 查价 → 按最低价/系数上架
+// 注意：batchStashOptions 依赖 stashList，必须定义在 stashList 之后（见下方）
+
 async function doFetchSellPrices () {
-  const targets = [...sellSelected.value.values ()];
-  if (!targets.length) return;
-  await fetchPrices (targets);
+  await loadSellCfg ();
+  const targets = [...sellSelected.value.values ()].filter (sellFilterPass);
+  if (!targets.length) {
+    note.value = '当前列表没有符合条件的物品（检查稀有度设置）';
+    return;
+  }
+  // 已有查价记录的物品直接复用记录价，不重复请求
+  const toQuery = [];
+  let reused = 0;
+  for (const t of targets) {
+    const hist = histPrices.value.get (toCanonicalId (t.item_id));
+    if (hist?.price != null) {
+      t.price = hist.price;
+      reused++;
+    } else {
+      toQuery.push (t);
+    }
+  }
+  if (toQuery.length) {
+    pricing.value = true;
+    note.value = `正在查询 ${toQuery.length} 件物品价格…`;
+    await fetchPrices (toQuery);
+    pricing.value = false;
+  }
+  const withPrice = targets.filter (i => i.price != null).length;
+  note.value = reused
+    ? `价格就绪 ${withPrice} 件（复用记录 ${reused} 件）`
+    : `价格就绪 ${withPrice} 件`;
 }
 
 async function doStartSell () {
-  const targets = sellSelectedList.value.filter (i => i.price != null);
+  await loadSellCfg ();
+  const artifactCount = sellSelectedList.value.filter (i => i.rarity === 'Artifact').length;
+  const targets = sellSelectedList.value
+    .filter (i => i.price != null)
+    .filter (sellFilterPass)
+    .filter (i => sellCfg.value.minPrice <= 0 || i.price >= sellCfg.value.minPrice);
   if (!targets.length) {
-    note.value = '请先查价，且至少一件物品有市场价';
+    note.value = sellSelectedList.value.length
+      ? '没有符合条件（稀有度/最低价/神器）且有价的物品'
+      : '请先查价，且至少一件物品有市场价';
     return;
   }
+  note.value = artifactCount ? `跳过 ${artifactCount} 件神器，上架 ${targets.length} 件…` : `上架 ${targets.length} 件…`;
   const ok = await startSell (targets.map (i => ({
     stash_id: i.stash_id,
     x: i.x,
     y: i.y,
     w: i.width,
     h: i.height,
-    price: i.price,
+    price: finalSellPrice (i.price),
   })));
   if (ok !== false) clearSellPick ();
 }
 
-// 游戏内悬浮窗物品：加入上架列表 / 直接上架当前物品
-function overlayAddItem (data, autoSell) {
+// 游戏内悬浮窗物品：加入/移出上架列表 / 直接上架当前物品
+async function overlayAddItem (data, autoSell) {
   if (!charData.value || !data?.itemId) return;
+  const canonTarget = toCanonicalId (data.itemId);
   for (const [sid, s] of Object.entries (charData.value.stashes || {})) {
     for (const it of (s?.items || [])) {
-      if (toCanonicalId (it.item_id) === data.itemId) {
+      if (toCanonicalId (it.item_id) === canonTarget) {
         if (autoSell) {
           // 列表有有价物品 → 上架整个列表；否则直接上架当前物品
           const listed = sellSelectedList.value.filter (i => i.price != null);
           if (listed.length) {
             doStartSell ();
           } else {
+            if (it.rarity === 'Artifact') {
+              note.value = '神器禁止上架';
+              return;
+            }
+            await loadSellCfg ();
+            if (!sellFilterPass ({ ...it, stash_id: sid })) {
+              note.value = '该物品不满足稀有度设置，无法直接上架';
+              return;
+            }
             const price = data.price ?? null;
             if (price == null) {
               note.value = '无市场价，无法直接上架';
@@ -353,22 +431,33 @@ function overlayAddItem (data, autoSell) {
               y: it.y,
               w: it.width || 1,
               h: it.height || 1,
-              price,
+              price: finalSellPrice (price),
             }]);
           }
           return;
         }
+        // 加入/移出切换
         const key = sellKey (sid, it.slot_id);
         const m = new Map (sellSelected.value);
-        m.set (key, { ...it, stash_id: sid, uid: key, price: data.price ?? null });
+        if (m.has (key)) {
+          m.delete (key);
+          note.value = `已移出上架列表：${it.name}`;
+        } else {
+          m.set (key, { ...it, stash_id: sid, uid: key, price: data.price ?? null });
+          note.value = `已加入上架列表：${it.name}`;
+        }
         sellSelected.value = m;
-        note.value = `已加入上架列表：${it.name}`;
         return;
       }
     }
   }
   note.value = '未在当前角色仓库中找到该物品';
 }
+
+// 上架列表数量变化 → 通知游戏内悬浮窗更新按钮文案
+watch (() => sellSelected.value.size, (n) => {
+  window.electron.send ('sell:list-count', { count: n });
+});
 
 // ── 仓库状态上报（悬浮球同步） ──
 function reportStashState () {
@@ -432,6 +521,77 @@ const currentStash = computed (() =>
 );
 
 const isEquipment = computed (() => !!currentStash.value && currentStash.value.layout === 'equipment');
+
+// ── 整仓批量上架（依赖 stashList，必须在其后定义） ──
+const batchStashIds = ref ([]);
+const batchPickerOpen = ref (false);
+const sellMode = ref ('pick'); // pick=点选 / batch=批量
+
+const sellPct = computed (() => {
+  const total = status.value?.total || 0;
+  const cur = status.value?.current || 0;
+  return total ? Math.round (cur / total * 100) + '%' : '0%';
+});
+
+const batchStashOptions = computed (() =>
+  stashList.value
+    .filter (s => parseInt (s.id) >= 4 && s.items.length > 0)
+    .map (s => ({ id: s.id, label: s.label, count: s.items.length }))
+);
+
+watch (stashList, () => {
+  if (!batchStashIds.value.length) {
+    const first = batchStashOptions.value[0];
+    if (first) batchStashIds.value = [first.id];
+  }
+});
+
+function toggleBatchStash (id) {
+  const cur = new Set (batchStashIds.value);
+  if (cur.has (id)) cur.delete (id);
+  else cur.add (id);
+  batchStashIds.value = [...cur];
+}
+
+async function startBatchSell () {
+  if (!batchStashIds.value.length) return;
+  await loadSellCfg ();
+  let artifactCount = 0;
+  const rawItems = [];
+  for (const sid of batchStashIds.value) {
+    const items = charData.value?.stashes?.[sid]?.items || [];
+    artifactCount += items.filter (i => i.rarity === 'Artifact').length;
+    rawItems.push (...items.map (it => ({ ...it, stash_id: sid })));
+  }
+  const candidates = rawItems.filter (sellFilterPass);
+  if (!candidates.length) {
+    note.value = artifactCount
+      ? `所选仓库 ${artifactCount} 件物品均为神器，禁止上架`
+      : '所选仓库没有符合稀有度设置的物品';
+    return;
+  }
+  const targets = candidates.map (it => ({ ...it }));
+  pricing.value = true;
+  note.value = `跳过 ${artifactCount} 件神器，正在查询 ${targets.length} 件物品价格…`;
+  await fetchPrices (targets);
+  pricing.value = false;
+  const okTargets = targets.filter (i =>
+    i.price != null && (sellCfg.value.minPrice <= 0 || i.price >= sellCfg.value.minPrice)
+  );
+  if (!okTargets.length) {
+    note.value = '没有符合条件（稀有度/最低价）且有价的物品';
+    return;
+  }
+  note.value = `上架 ${okTargets.length} 件（跳过 ${artifactCount} 件神器）…`;
+  await startSell (okTargets.map (i => ({
+    stash_id: i.stash_id,
+    x: i.x,
+    y: i.y,
+    w: i.width || 1,
+    h: i.height || 1,
+    price: finalSellPrice (i.price),
+  })));
+}
 
 watch (currentStash, (s) => emit ('update:equipment', !!(s && s.layout === 'equipment')), { immediate: true });
 
@@ -1012,6 +1172,7 @@ async function connectEvents () {
 onMounted (async () => {
   await loadCharacters ();
   try { servicePort.value = await invoke ('dnd:service-port'); } catch (e) {}
+  await loadSellCfg ();
   if (props.charId) {
     selected.value = props.charId;
     await loadCharData (props.charId);
@@ -1027,9 +1188,16 @@ onMounted (async () => {
   unsubHist = window.electron.on ('history:updated', () => {
     if (charData.value) loadHistPrices ();
   });
+  // 默认批量仓库选择（避免 setup 同步期访问未初始化数据）
+  if (!batchStashIds.value.length) {
+    const first = batchStashOptions.value[0];
+    if (first) batchStashIds.value = [first.id];
+  }
   // 游戏内悬浮窗「加入列表 / 开始上架」
   window.electron.on ('sell:add-item', (data) => overlayAddItem (data, false));
   window.electron.on ('sell:start-item', (data) => overlayAddItem (data, true));
+  // 初始列表数量同步给悬浮窗
+  window.electron.send ('sell:list-count', { count: sellSelected.value.size });
   connectEvents ();
   reportStashState ();
   applyFollowMode ();
@@ -1223,23 +1391,51 @@ watch (() => props.stashId, () => reportStashState ());
             </span>
           </button>
 
-          <!-- 上架面板（与仓库选择同列） -->
-          <div v-if="sellSelected.size" class="sell-panel">
-            <div class="sell-panel-head">
-              <span class="sell-panel-t">上架（{{ sellSelected.size }} 件）</span>
-              <button class="btn subtle sm" @click="clearSellPick">清空</button>
+          <!-- 上架面板（Apple/Fluent 风格） -->
+          <div class="sell-panel">
+            <div class="sp-head">
+              <span class="sp-title">上架</span>
+              <button class="sp-clear" v-if="sellSelected.size" @click="clearSellPick">清空</button>
             </div>
-            <div class="sell-panel-hint">价格显示在物品图标下方；点击物品可增减选择</div>
-            <div class="sell-panel-actions">
-              <button class="btn primary" :disabled="pricing || selling" @click="doFetchSellPrices">
-                {{ pricing ? '查价中…' : '查询市场价' }}
-              </button>
-              <button class="btn primary" :disabled="selling || pricedSellCount === 0" @click="doStartSell">
-                {{ selling ? `上架中 ${status?.current || 0}/${status?.total || 0}` : `开始上架（${pricedSellCount} 件）` }}
-              </button>
-              <button class="btn danger" v-if="selling" @click="stopSell">停止</button>
-              <span v-if="note" class="sell-note" :class="{ warn: note.indexOf ('失败') >= 0 }">{{ note }}</span>
+
+            <div class="sp-seg">
+              <button :class="{ on: sellMode === 'pick' }" @click="sellMode = 'pick'">点选</button>
+              <button :class="{ on: sellMode === 'batch' }" @click="sellMode = 'batch'">批量</button>
             </div>
+
+            <div v-if="sellMode === 'pick'" class="sp-body">
+              <button class="sp-btn" :class="{ on: !pricing && !selling && sellSelected.size > 0 }"
+                      :disabled="pricing || selling || sellSelected.size === 0" @click="doFetchSellPrices">
+                {{ pricing ? '查价中…' : `查询价格 ${sellSelected.size}` }}
+              </button>
+              <button class="sp-btn primary" :disabled="selling || pricedSellCount === 0" @click="doStartSell">
+                {{ selling ? '上架中…' : `开始上架${pricedSellCount ? `（${pricedSellCount}）` : ''}` }}
+              </button>
+            </div>
+
+            <div v-else class="sp-body">
+              <button class="sp-btn" :class="{ on: batchPickerOpen }" @click="batchPickerOpen = !batchPickerOpen">
+                选择仓库{{ batchStashIds.length ? `（${batchStashIds.length}）` : '' }}
+              </button>
+              <div v-if="batchPickerOpen" class="sp-picker">
+                <label v-for="s in batchStashOptions" :key="s.id" :class="{ on: batchStashIds.includes (s.id) }">
+                  <input type="checkbox" :checked="batchStashIds.includes (s.id)" @change="toggleBatchStash (s.id)" />
+                  <span>{{ s.label }}</span><em>{{ s.count }}</em>
+                </label>
+                <div v-if="!batchStashOptions.length" class="sp-picker-empty">暂无可用仓库</div>
+              </div>
+              <button class="sp-btn primary" :disabled="pricing || selling || !batchStashIds.length" @click="startBatchSell">
+                {{ pricing ? '查价中…' : (selling ? '上架中…' : '批量上架') }}
+              </button>
+            </div>
+
+            <div v-if="selling" class="sp-progress">
+              <div class="sp-bar"><div class="sp-bar-fill" :style="{ width: sellPct }"></div></div>
+              <span>{{ status?.current || 0 }} / {{ status?.total || 0 }}</span>
+              <button @click="stopSell">停止</button>
+            </div>
+
+            <div v-if="note" class="sp-note" :class="{ warn: note.indexOf ('失败') >= 0 }">{{ note }}</div>
           </div>
         </div>
 
@@ -1319,16 +1515,10 @@ watch (() => props.stashId, () => reportStashState ());
         :title-color="rarityColorCss (hoverItem.rarity)"
         :secondary="hoverSecondary (hoverItem)"
         :prices="hoverPrices (hoverItem)"
+        :actions="tooltipActions"
         @toggle-secondary="i => onToggleSecondary (hoverItem, i)"
+        @action="onTooltipAction"
       />
-      <div class="tip-btns">
-        <button class="tip-btn" :disabled="tooltipBusy" @click="onTooltipAction('price')">
-          {{ tooltipBusy ? '查询中…' : '查询价格' }}
-        </button>
-        <button class="tip-btn" @click="onTooltipAction('sell')">
-          {{ isSellPicked (hoverItem) ? '移出上架' : '加入上架' }}
-        </button>
-      </div>
     </div>
   </div>
 </template>
@@ -1460,6 +1650,7 @@ watch (() => props.stashId, () => reportStashState ());
 .side-tab .count { color: var(--text-3); font-size: 14px; font-variant-numeric: tabular-nums; flex: none; }
 .side-tab.active .count { color: rgba(255,255,255,0.85); }
 .side-tab.active .tab-ic { color: rgba(255,255,255,0.9); }
+
 /* Lock button: an outlined chip so it's clearly visible & clickable by default */
 .lock-btn {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1576,17 +1767,107 @@ watch (() => props.stashId, () => reportStashState ());
 }
 /* 历史查价价（未选中直接显示，略淡） */
 .cell-price.hist { font-size: 11px; font-weight: 700; opacity: 0.85; }
+
+/* ── 上架面板：Apple / Fluent 风格 ── */
 .sell-panel {
-  padding: 10px;
-  background: var(--card); border: 1px solid var(--line-soft); border-radius: 10px;
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
 }
-.sell-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.sell-panel-t { font-size: 13.5px; font-weight: 650; color: var(--text); }
-.sell-panel-hint { margin-top: 3px; font-size: 11px; color: var(--text-3); line-height: 1.4; }
-.sell-panel-actions { display: flex; flex-direction: column; gap: 7px; margin-top: 9px; }
-.sell-panel-actions .btn { width: 100%; }
-.sell-note { font-size: 11.5px; color: var(--green); line-height: 1.4; }
-.sell-note.warn { color: var(--red); }
+.sp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.sp-title { font-size: 14px; font-weight: 650; color: var(--text); letter-spacing: -0.01em; }
+.sp-clear {
+  font-size: 12px; color: var(--text-3);
+  background: none; border: none; cursor: pointer; padding: 2px 4px;
+  transition: color .15s var(--ease);
+}
+.sp-clear:hover { color: var(--red); }
+
+/* 分段控件（segmented control） */
+.sp-seg {
+  display: flex; gap: 2px;
+  background: var(--card-2);
+  border-radius: 9px;
+  padding: 3px;
+  margin-bottom: 12px;
+}
+.sp-seg button {
+  flex: 1; padding: 6px 0;
+  font-size: 12.5px; font-weight: 600;
+  color: var(--text-3);
+  background: none; border: none; border-radius: 7px;
+  cursor: pointer;
+  transition: all .18s var(--ease);
+}
+.sp-seg button.on {
+  background: var(--card); color: var(--text);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* 操作区 */
+.sp-body { display: flex; flex-direction: column; gap: 9px; }
+.sp-btn {
+  padding: 9px 0;
+  font-size: 13px; font-weight: 600;
+  color: var(--text-2);
+  background: var(--card-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  cursor: pointer;
+  transition: all .15s var(--ease);
+}
+.sp-btn:hover { filter: brightness(1.03); border-color: var(--accent-soft); }
+.sp-btn:disabled { opacity: .45; cursor: default; }
+.sp-btn.on { color: var(--green); background: var(--green-soft); border-color: var(--green-soft); }
+.sp-btn.primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+.sp-btn.primary:hover { filter: brightness(1.08); border-color: var(--accent); }
+
+/* 仓库弹选 */
+.sp-picker {
+  border: 1px solid var(--line-soft); border-radius: 9px;
+  padding: 6px 8px; max-height: 140px; overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.sp-picker::-webkit-scrollbar { width: 5px; }
+.sp-picker::-webkit-scrollbar-track { background: transparent; }
+.sp-picker::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.sp-picker::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+.sp-picker label {
+  display: flex; align-items: center; gap: 7px;
+  padding: 4px 6px;
+  font-size: 12.5px; color: var(--text-2);
+  cursor: pointer; border-radius: 6px;
+  transition: background .12s var(--ease);
+}
+.sp-picker label:hover { background: var(--card-2); }
+.sp-picker label.on { color: var(--accent); font-weight: 600; }
+.sp-picker label em { margin-left: auto; font-style: normal; color: var(--text-3); font-size: 11.5px; }
+.sp-picker-empty { font-size: 12px; color: var(--text-3); padding: 6px; }
+
+/* 进度条 */
+.sp-progress {
+  display: flex; align-items: center; gap: 9px;
+  margin-top: 12px;
+}
+.sp-bar { flex: 1; height: 5px; background: var(--card-2); border-radius: 3px; overflow: hidden; }
+.sp-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s var(--ease); }
+.sp-progress span { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.sp-progress button {
+  font-size: 12px; color: var(--red);
+  background: none; border: none; cursor: pointer;
+}
+.sp-progress button:hover { text-decoration: underline; }
+
+/* 状态提示 */
+.sp-note { margin-top: 10px; font-size: 12px; color: var(--green); line-height: 1.4; }
+.sp-note.warn { color: var(--red); }
 
 /* 右键显示 tooltip（固定鼠标位置，按钮在 tooltip 外） */
 .tip-wrap {
@@ -1599,34 +1880,6 @@ watch (() => props.stashId, () => reportStashState ());
 }
 .tip-wrap.right { transform: translate (16px, 10px); }
 .tip-wrap.left { transform: translate (-266px, 10px); }
-
-/* 外部操作按钮：与 tooltip 同款哥特样式（纹理背景 + 九宫格边框） */
-.tip-btns { display: flex; gap: 8px; }
-.tip-btn {
-  flex: 1;
-  padding: 10px 0;
-  font-family: 'SaintKDG_Light', sans-serif;
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  color: var(--dnd-gold, #ffd400);
-
-  background-image: url('@assets/images/Background_TooltipTexture.png');
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-color: #14121a;
-
-  border-image-slice: 21 21 21 21;
-  border-image-width: 14px 14px 14px 14px;
-  border-image-outset: 0;
-  border-image-repeat: stretch;
-  border-image-source: url('@assets/images/Background_TooltipBorder.png');
-
-  cursor: pointer;
-  transition: filter .15s var(--ease), color .15s var(--ease);
-}
-.tip-btn:hover { color: #ffea80; filter: brightness(1.15); }
-.tip-btn:disabled { opacity: .5; cursor: default; }
 
 html[data-theme="dark"] .bg-cell { background: rgba(255,255,255,0.03); }
 
