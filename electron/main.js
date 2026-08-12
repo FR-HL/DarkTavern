@@ -160,7 +160,7 @@ function rebuildOverlay () {
   } catch (e) { logger.warn ('销毁旧悬浮窗失败', { error: e?.message }); }
   overlay = createOverlayWindow ();
   startTracking (overlay);
-  if (overlayWireCb) wire (overlay, overlayWireCb, { findScanCache, affixKey });
+  if (overlayWireCb) wire (overlay, overlayWireCb, { findScanCache, affixKey, lookupItemKey });
   lastHeartbeatPong = 0;
   heartbeatReloaded = false;
 }
@@ -319,7 +319,7 @@ app.on ('ready', async () => {
   };
 
   startTracking (overlay);
-  wire (overlay, overlayWireCb, { findScanCache, affixKey });
+  wire (overlay, overlayWireCb, { findScanCache, affixKey, lookupItemKey });
   startHeartbeat ();
 
   const registerShortcut = (key, fn) => {
@@ -1599,6 +1599,28 @@ function historyIconPath (rec) {
   if (!name) return null;
   const rarity = String (rec.rarity || '').toLowerCase ();
   return itemIconIndex.byNameRarity[`${name}|${rarity}`] || itemIconIndex.byName[name] || null;
+}
+
+// 英文物品名 → 官方 id（items.json 反查，同名取第一个）——用于 OCR 悬浮窗现价并行预查
+let itemKeyIndex = null;
+function itemKeyByName () {
+  if (itemKeyIndex) return itemKeyIndex;
+  itemKeyIndex = {};
+  try {
+    const d = JSON.parse (readFileSync (join (ROOT, 'assets', 'items.json'), 'utf-8'));
+    for (const [k, v] of Object.entries (d)) {
+      const n = String (v?.name || '').toLowerCase ();
+      if (!n || itemKeyIndex[n]) continue;
+      itemKeyIndex[n] = k;
+    }
+  } catch (e) { logger.error (`Failed to load items.json: ${e.message}`); }
+  return itemKeyIndex;
+}
+
+function lookupItemKey (name) {
+  const n = String (name || '').trim ().toLowerCase ();
+  if (!n) return '';
+  return itemKeyByName ()[n] || '';
 }
 
 function historyPath () {

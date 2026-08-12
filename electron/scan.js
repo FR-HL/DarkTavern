@@ -132,12 +132,25 @@ export function wire (overlay, sendBall = null, hooks = null) {
     let result;
     const now = Date.now ();
     let apiMs = 0;
+    let preLiveNow = null;
     if (cache.text === tooltip.text && (now - cache.ts) < CACHE_TTL) {
       result = cache.result;
       logger.debug ('命中 10 秒短缓存', { scanId });
     } else {
       const apiStart = Date.now ();
-      result = await queryPrice (tooltip.text);
+      // 并行：识别请求 + 本地全词条现价预查（预查不依赖识别结果，只在默认 presence 模式采用）
+      const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
+      if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+      const byValue = (settings.general.live_price_mode || 'presence') === 'value';
+      preLiveNow = byValue ? null : buildPreLive (tooltip.text);
+      const preReq = preLiveNow
+        ? fetchMarketPrice (preLiveNow.id, preLiveNow.rarity, preLiveNow.attrs, byValue, headers)
+            .then (p => { preLiveNow.price = p; return preLiveNow; })
+            .catch (() => { preLiveNow.price = null; return preLiveNow; })
+        : Promise.resolve (null);
+      const [r, pre] = await Promise.all ([queryPrice (tooltip.text), preReq]);
+      result = r;
+      if (pre) logger.info ('现价预查完成', { itemId: pre.id, price: pre.price ?? null, attrs: pre.attrs.length });
       apiMs = Date.now () - apiStart;
       cache = { text: tooltip.text, result, ts: now };
     }
@@ -163,7 +176,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
       queryMarketLive (result.data, scanId, (msg, payload) => {
         send (msg, payload);
         if (msg === 'hover:live-price') markResult ({ ok: true, live: payload?.price ?? null, usedAffixes: payload?.used_affixes || [] });
-      });
+      }, preLiveNow);
     } else {
       logger.warn ('查价失败', { scanId, error: result.error, apiMs, totalMs: Date.now () - t0 });
       send ('hover:error', {
@@ -227,6 +240,45 @@ export function wire (overlay, sendBall = null, hooks = null) {
     if (ms <= 0) run ();
     else requeryTimer = setTimeout (run, ms);
   });
+}
+
+// 本地现价预查：OCR 文本 → 官方 id（items.json 反查）+ 全词条组合，与识别请求并行发出
+// 识别回来后只有 id 与词条集合完全一致才采用（value 模式不预查，直接走原逻辑）
+// 固定属性行（Weapon Damage 等）不属于词条，预查时跳过，避免与识别词条集合比较失败
+const PRIMARY_DISPLAY_NAMES = new Set ([
+  'Weapon Damage', 'Magical Damage', 'Magic Weapon Damage', 'Move Speed',
+  'Armor Rating', 'Magic Penetration', 'Headshot Damage Reduction',
+  'Max Health', 'Magic Resistance', 'Strength', 'Dexterity', 'Vigor',
+  'Resourcefulness', 'Agility', 'Will', 'Knowledge', 'Memory',
+]);
+
+function buildPreLive (text) {
+  try {
+    if (!_hooksRef?.lookupItemKey) return null;
+    const lines = String (text || '').split ('\n').map (l => l.trim ()).filter (Boolean);
+    if (lines.length < 2) return null;
+    const id = _hooksRef.lookupItemKey (lines[0]);
+    if (!id) return null; // items.json 无此物品 → 无法预查，走原流程
+    const rareLine = lines[lines.length - 1].match (/^Rarity:\s*(.*)$/i);
+    const attrs = [];
+    const end = rareLine ? lines.length - 1 : lines.length;
+    for (let i = 1; i < end; i++) {
+      const m = lines[i].match (/^[+-]?\d+(?:\.\d+)?\s+(.+)$/);
+      if (!m || PRIMARY_DISPLAY_NAMES.has (m[1])) continue;
+      attrs.push ({ display: m[1], value: parseFloat (lines[i]) });
+    }
+    return { id, rarity: rareLine ? rareLine[1] : '', attrs, price: null };
+  } catch (e) {
+    return null;
+  }
+}
+
+function sameDisplaySet (attrs, secondary) {
+  const a = new Set ((attrs || []).map (x => x.display));
+  const b = new Set ((secondary || []).map (x => x.display));
+  if (a.size !== b.size) return false;
+  for (const d of a) if (!b.has (d)) return false;
+  return true;
 }
 
 export async function analyzeByText (tooltipText) {
@@ -311,7 +363,8 @@ export async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers)
 
 // 现价查询（游戏内悬浮窗与软件内查价共用同一逻辑）：
 // 全部词条按评分排序 → S/A 级 → B 级 → 无词条，四级降级，由 live_price_relax 控制
-export async function fetchMarketLivePrice (itemId, rarity, secondary, byValue, headers) {
+// opts.skipFirst：预查已试过全词条组合（无货）→ 从 S/A 级直接开始，避免重复请求
+export async function fetchMarketLivePrice (itemId, rarity, secondary, byValue, headers, opts = {}) {
   const sorted = [...secondary]
     .filter (a => a.grade && a.value != null)
     .sort ((a, b) => (GRADE_ORDER[a.grade] ?? 9) - (GRADE_ORDER[b.grade] ?? 9));
@@ -320,7 +373,8 @@ export async function fetchMarketLivePrice (itemId, rarity, secondary, byValue, 
   const gradeB = sorted.filter (a => a.grade === 'B');
 
   const relaxDepth = { all: 0, sa: 1, b: 2, none: 3 } [settings.general.live_price_relax || 'none'] ?? 3;
-  const attempts = [sorted, gradeA, gradeB, []].slice (0, relaxDepth + 1);
+  let attempts = [sorted, gradeA, gradeB, []].slice (0, relaxDepth + 1);
+  if (opts.skipFirst) attempts = attempts.slice (1);
 
   for (const attrs of attempts) {
     const p = await fetchMarketPrice (itemId, rarity, attrs, byValue, headers);
@@ -372,7 +426,7 @@ export async function queryItemPrice (tooltipText) {
   return { ok: true, data, itemId, live };
 }
 
-async function queryMarketLive (data, scanId, send) {
+async function queryMarketLive (data, scanId, send, preLive) {
   let price = null;
   let usedAttrs = [];
   try {
@@ -385,9 +439,23 @@ async function queryMarketLive (data, scanId, send) {
       if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
       const byValue = (settings.general.live_price_mode || 'presence') === 'value';
 
-      const r = await fetchMarketLivePrice (itemId, rarity, secondary, byValue, headers);
-      price = r.price;
-      usedAttrs = r.attrs;
+      // 预查采用：id 一致 + 词条集合完全一致 → 现价 = 预查结果（等价降级链第一层命中）
+      if (preLive && preLive.id === itemId && sameDisplaySet (preLive.attrs, secondary)) {
+        if (preLive.price != null) {
+          logger.info (`[MarketLive] 预查命中 price=${preLive.price} (${preLive.attrs.length} attrs)`);
+          price = preLive.price;
+          usedAttrs = preLive.attrs;
+        } else {
+          // 预查已试过全词条组合（无货）→ 降级链从 S/A 级开始，不重复请求
+          const r = await fetchMarketLivePrice (itemId, rarity, secondary, byValue, headers, { skipFirst: true });
+          price = r.price;
+          usedAttrs = r.attrs;
+        }
+      } else {
+        const r = await fetchMarketLivePrice (itemId, rarity, secondary, byValue, headers);
+        price = r.price;
+        usedAttrs = r.attrs;
+      }
     }
   } catch (e) {
     logger.error (`[MarketLive] ${e.message}`);
