@@ -987,6 +987,14 @@ async function firstCalibrate () {
         ],
       };
       await reloadCharacters ();
+      // 校准返回的角色 id 直接回填：标记「游戏中」+ 自动选中并加载数据（不依赖 WS 事件，事件可能先于监听发出或 cached 分支根本不广播）
+      const cid = r.character_id;
+      if (cid && characters.value.some (c => c.id === cid)) {
+        activeCharacterId.value = cid;
+        if (selected.value !== cid) selected.value = cid;
+        if (props.charId !== cid) emit ('update:charId', cid);
+        loadCharData (cid, true);
+      }
       await loadCalibration ();
       await loadFollowCal ();
     } else {
