@@ -14,8 +14,6 @@ const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4, F: 5 };
 
 let scanning = false;
 let activeScanId = 0;
-let cache = { text: null, result: null, ts: 0 };
-const CACHE_TTL = 10000;
 let lastAnalyze = null;
 
 function hashText (t) {
@@ -130,30 +128,23 @@ export function wire (overlay, sendBall = null, hooks = null) {
     }
 
     let result;
-    const now = Date.now ();
     let apiMs = 0;
     let preLiveNow = null;
-    if (cache.text === tooltip.text && (now - cache.ts) < CACHE_TTL) {
-      result = cache.result;
-      logger.debug ('命中 10 秒短缓存', { scanId });
-    } else {
-      const apiStart = Date.now ();
-      // 并行：识别请求 + 本地全词条现价预查（预查不依赖识别结果，只在默认 presence 模式采用）
-      const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
-      if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
-      const byValue = (settings.general.live_price_mode || 'presence') === 'value';
-      preLiveNow = byValue ? null : buildPreLive (tooltip.text);
-      const preReq = preLiveNow
-        ? fetchMarketPrice (preLiveNow.id, preLiveNow.rarity, preLiveNow.attrs, byValue, headers)
-            .then (p => { preLiveNow.price = p; return preLiveNow; })
-            .catch (() => { preLiveNow.price = null; return preLiveNow; })
-        : Promise.resolve (null);
-      const [r, pre] = await Promise.all ([queryPrice (tooltip.text), preReq]);
-      result = r;
-      if (pre) logger.info ('现价预查完成', { itemId: pre.id, price: pre.price ?? null, attrs: pre.attrs.length });
-      apiMs = Date.now () - apiStart;
-      cache = { text: tooltip.text, result, ts: now };
-    }
+    const apiStart = Date.now ();
+    // 并行：识别请求 + 本地全词条现价预查（预查不依赖识别结果，只在默认 presence 模式采用）
+    const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
+    if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
+    const byValue = (settings.general.live_price_mode || 'presence') === 'value';
+    preLiveNow = byValue ? null : buildPreLive (tooltip.text);
+    const preReq = preLiveNow
+      ? fetchMarketPrice (preLiveNow.archetype, preLiveNow.rarity, preLiveNow.attrs, byValue, headers, preLiveNow.archetype)
+          .then (p => { preLiveNow.price = p; return preLiveNow; })
+          .catch (() => { preLiveNow.price = null; return preLiveNow; })
+      : Promise.resolve (null);
+    const [r, pre] = await Promise.all ([queryPrice (tooltip.text), preReq]);
+    result = r;
+    if (pre) logger.info ('现价预查完成', { archetype: pre.archetype, price: pre.price ?? null, attrs: pre.attrs.length });
+    apiMs = Date.now () - apiStart;
 
     if (result.success) {
       logger.info ('查价完成', { scanId, name: result.data?.item?.name || '', apiMs, totalMs: Date.now () - t0 });
@@ -202,6 +193,45 @@ export function wire (overlay, sendBall = null, hooks = null) {
   ipcMain.handle ('auth:status', () => ({ linked: !!settings.general.api_key }));
   ipcMain.handle ('auth:logout', () => { settings.general.api_key = ''; saveSettings (); return { success: true }; });
 
+  // 接口连通性测试：health-check 测网络、带 key 轻量请求测凭证——两部分独立结果，分开显示
+  ipcMain.handle ('dnd:api-test', async () => {
+    const headers = { 'User-Agent': 'AdventurersSquire/1.0' };
+    const key = settings.general.api_key || '';
+    if (key) headers['X-API-Key'] = key;
+
+    // ① 网络连通性（health-check，免 key）
+    let network = { ok: false, message: '' };
+    try {
+      const hc = await fetch ('https://api.darkerdb.com/v2/health-check', { headers, signal: AbortSignal.timeout (10000) });
+      if (hc.ok) network = { ok: true, message: '连通正常' };
+      else if (hc.status === 429) network = { ok: false, message: '请求过于频繁（限流），请稍后重试' };
+      else network = { ok: false, message: `服务器响应异常（${hc.status}）` };
+    } catch (e) {
+      network = { ok: false, message: '无法连接 DarkerDB 服务器（网络不通或服务器不可达）' };
+    }
+
+    // ② API Key 凭证（仅配置了 key 才测）
+    let keyTest = { tested: false, ok: null, message: '' };
+    if (!key) {
+      keyTest = { tested: false, ok: null, message: '未配置 API Key（仅能识别物品名与属性，无价格数据）' };
+    } else if (!network.ok) {
+      keyTest = { tested: false, ok: null, message: '网络不可用，跳过凭证验证' };
+    } else {
+      try {
+        const kc = await fetch ('https://api.darkerdb.com/v2/items/id.item.crystal_ball_8001', { headers, signal: AbortSignal.timeout (10000) });
+        if (kc.ok) keyTest = { tested: true, ok: true, message: 'API Key 有效（数据/实时作用域均可查询）' };
+        else if (kc.status === 403) keyTest = { tested: true, ok: false, message: 'Key 无效或缺少所需作用域（请检查 SCOPES 是否全选）' };
+        else if (kc.status === 401) keyTest = { tested: true, ok: false, message: '未授权：API Key 未被服务器认可' };
+        else if (kc.status === 429) keyTest = { tested: true, ok: null, message: '请求过于频繁（限流），请稍后重试' };
+        else keyTest = { tested: true, ok: false, message: `凭证验证响应异常（${kc.status}）` };
+      } catch (e) {
+        keyTest = { tested: true, ok: null, message: '凭证验证请求失败（超时或网络中断）' };
+      }
+    }
+
+    return { network, key: keyTest };
+  });
+
   ipcMain.on ('overlay:set-ignore-mouse', (e, ignore) => {
     if (ignore) {
       if (_overlayRef && !_overlayRef.isDestroyed ()) _overlayRef.setIgnoreMouseEvents (true, { forward: true });
@@ -218,7 +248,7 @@ export function wire (overlay, sendBall = null, hooks = null) {
     if (!lastAnalyze) { send ('hover:live-price', { scanId, price: null, used_affixes: [], source: 'requery', seq: payload?.seq }); return; }
 
     if (requeryTimer) { clearTimeout (requeryTimer); requeryTimer = null; }
-    const ms = settings.general.requery_debounce ?? 600;
+    const ms = settings.general.requery_debounce ?? 1000;
     const run = async () => {
       requeryTimer = null;
       const itemId = toCanonicalItemId (lastAnalyze.item?.id || lastAnalyze.item?.item_id || '');
@@ -242,9 +272,8 @@ export function wire (overlay, sendBall = null, hooks = null) {
   });
 }
 
-// 本地现价预查：OCR 文本 → 官方 id（items.json 反查）+ 全词条组合，与识别请求并行发出
-// 识别回来后只有 id 与词条集合完全一致才采用（value 模式不预查，直接走原逻辑）
-// 固定属性行（Weapon Damage 等）不属于词条，预查时跳过，避免与识别词条集合比较失败
+// 本地现价预查：OCR 文本 → 物品族 archetype（items.json 反查）+ 全词条组合，与识别请求并行发出
+// market API 按 archetype+rarity 自动匹配正确变体（同物品多变体不再取错 id）；词条集合一致才采用
 const PRIMARY_DISPLAY_NAMES = new Set ([
   'Weapon Damage', 'Magical Damage', 'Magic Weapon Damage', 'Move Speed',
   'Armor Rating', 'Magic Penetration', 'Headshot Damage Reduction',
@@ -254,20 +283,21 @@ const PRIMARY_DISPLAY_NAMES = new Set ([
 
 function buildPreLive (text) {
   try {
-    if (!_hooksRef?.lookupItemKey) return null;
+    if (!_hooksRef?.lookupItemArchetype) return null;
     const lines = String (text || '').split ('\n').map (l => l.trim ()).filter (Boolean);
     if (lines.length < 2) return null;
-    const id = _hooksRef.lookupItemKey (lines[0]);
-    if (!id) return null; // items.json 无此物品 → 无法预查，走原流程
+    const archetype = _hooksRef.lookupItemArchetype (lines[0]);
+    if (!archetype) return null; // items.json 无此物品 → 无法预查，走原流程
     const rareLine = lines[lines.length - 1].match (/^Rarity:\s*(.*)$/i);
     const attrs = [];
     const end = rareLine ? lines.length - 1 : lines.length;
     for (let i = 1; i < end; i++) {
-      const m = lines[i].match (/^[+-]?\d+(?:\.\d+)?\s+(.+)$/);
+      // 支持 +1.3% Action Speed 这类带 % 的 OCR 词条行
+      const m = lines[i].match (/^[+-]?\d+(?:\.\d+)?%?\s+(.+)$/);
       if (!m || PRIMARY_DISPLAY_NAMES.has (m[1])) continue;
       attrs.push ({ display: m[1], value: parseFloat (lines[i]) });
     }
-    return { id, rarity: rareLine ? rareLine[1] : '', attrs, price: null };
+    return { archetype, rarity: rareLine ? rareLine[1] : '', attrs, price: null };
   } catch (e) {
     return null;
   }
@@ -324,9 +354,10 @@ function attrToField (displayName) {
   return displayName.toLowerCase ().replace (/ /g, '_');
 }
 
-export async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers) {
+export async function fetchMarketPrice (itemId, rarity, attrs, byValue, headers, archetype = '') {
   const params = new URLSearchParams ();
-  params.set ('item_id', itemId);
+  if (archetype) params.set ('archetype', archetype);  // 物品族查询：按稀有度自动匹配变体（预查用）
+  else params.set ('item_id', itemId);
   if (rarity) params.set ('rarity', rarity.toLowerCase ());
   params.set ('has_sold', 'false');
   params.set ('has_expired', 'false');
@@ -439,8 +470,9 @@ async function queryMarketLive (data, scanId, send, preLive) {
       if (settings.general.api_key) headers['X-API-Key'] = settings.general.api_key;
       const byValue = (settings.general.live_price_mode || 'presence') === 'value';
 
-      // 预查采用：id 一致 + 词条集合完全一致 → 现价 = 预查结果（等价降级链第一层命中）
-      if (preLive && preLive.id === itemId && sameDisplaySet (preLive.attrs, secondary)) {
+      // 预查采用：词条集合完全一致（archetype+rarity 查询天然匹配变体，不再比 id）→ 现价 = 预查结果
+      // 空词条不采用（无法区分 OCR 物品名错误时的空集误匹配，走降级链更稳）
+      if (preLive && preLive.attrs.length > 0 && sameDisplaySet (preLive.attrs, secondary)) {
         if (preLive.price != null) {
           logger.info (`[MarketLive] 预查命中 price=${preLive.price} (${preLive.attrs.length} attrs)`);
           price = preLive.price;

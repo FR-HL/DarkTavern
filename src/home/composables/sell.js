@@ -31,6 +31,7 @@ export function useSell () {
       targets.forEach ((it, idx) => {
         const res = map.get (idx);
         it.price = res ? res.price : null;
+        it.market = res ? res.market : null;
         // 实际使用的词条组合（降级后），用于勾选态回填
         if (res && Array.isArray (res.usedAffixes) && res.usedAffixes.length) it.usedAffixes = res.usedAffixes;
       });

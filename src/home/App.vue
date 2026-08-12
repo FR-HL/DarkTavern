@@ -76,10 +76,10 @@ const livePriceMode = ref ('presence');
 const livePriceRelax = ref ('none');
 const scanCacheDays = ref (1);
 const historyDays = ref (3);
-const requeryDebounce = ref (600);
+const requeryDebounce = ref (1000);
 const showOverlaySell = ref (true);
 const REQUERY_OPTS = [
-  { key: 600, label: '防抖 600ms' },
+  { key: 1000, label: '防抖 1 秒' },
   { key: 0, label: '每次都查' },
 ];
 const LIVE_MODES = [
@@ -569,7 +569,7 @@ async function loadSettings () {
     livePriceRelax.value = d.live_price_relax || 'none';
     scanCacheDays.value = d.scan_cache_days ?? 1;
     historyDays.value = d.history_days ?? 3;
-    requeryDebounce.value = d.requery_debounce ?? 600;
+    requeryDebounce.value = d.requery_debounce ?? 1000;
     showOverlaySell.value = d.show_overlay_sell_buttons !== false;
     launchOnStartup.value = !!d.launch_on_startup;
     autoCheckUpdate.value = d.auto_check_update !== false;
@@ -602,6 +602,26 @@ async function saveApiKey () {
   }
 }
 function toggleApiKeyVisibility () { apiKeyVisible.value = !apiKeyVisible.value; }
+
+// 接口连通性测试：网络连通 + API Key 凭证，两项独立测试、分开显示
+const apiTestState = ref ('idle');   // idle | testing | done
+const apiTestNetwork = ref (null);   // { ok, message }
+const apiTestKey = ref (null);       // { tested, ok, message }
+async function testApi () {
+  if (apiTestState.value === 'testing') return;
+  apiTestState.value = 'testing';
+  apiTestNetwork.value = null;
+  apiTestKey.value = null;
+  try {
+    const r = await invoke ('dnd:api-test');
+    apiTestNetwork.value = r?.network || { ok: false, message: '未知错误' };
+    apiTestKey.value = r?.key || { tested: false, ok: null, message: '未知错误' };
+  } catch (e) {
+    apiTestNetwork.value = { ok: false, message: '测试失败：' + (e?.message || '未知错误') };
+    apiTestKey.value = { tested: false, ok: null, message: '' };
+  }
+  apiTestState.value = 'done';
+}
 async function saveLaunch () { const r = await invoke ('settings:save', { launch_on_startup: launchOnStartup.value }); if (r.success) showToast ('已保存'); }
 
 async function agreeDisclaimer () {
@@ -885,6 +905,10 @@ onBeforeUnmount (() => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
           查价记录
         </div>
+        <div class="nav-item" :class="{ active: pane === 'sell' }" @click="showPane('sell')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 1 1 16.1-3.8z"/><path d="M9 10.5h.01M15 10.5h.01"/></svg>
+          自动上架
+        </div>
         <div class="nav-cap">仓库整理</div>
         <div class="nav-item" :class="{ active: pane === 'stash' }" @click="showPane('stash')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
@@ -893,10 +917,6 @@ onBeforeUnmount (() => {
         <div class="nav-item" :class="{ active: pane === 'sort' }" @click="showPane('sort')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 9 6"/><polyline points="3 12 15 12"/><polyline points="3 18 21 18"/></svg>
           仓库配置
-        </div>
-        <div class="nav-item" :class="{ active: pane === 'sell' }" @click="showPane('sell')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 1 1 16.1-3.8z"/><path d="M9 10.5h.01M15 10.5h.01"/></svg>
-          自动上架
         </div>
         <div class="nav-cap">更多</div>
         <div class="nav-item" :class="{ active: pane === 'config' }" @click="showPane('config')">
@@ -1034,6 +1054,37 @@ onBeforeUnmount (() => {
                   <button class="eye-btn" type="button" @click="toggleApiKeyVisibility">{{ apiKeyVisible ? '隐藏' : '显示' }}</button>
                 </div>
                 <button class="btn primary" @click="saveApiKey">保存</button>
+                <button class="btn" :disabled="apiTestState === 'testing'" @click="testApi">
+                  {{ apiTestState === 'testing' ? '测试中…' : '测试' }}
+                </button>
+              </div>
+            </div>
+            <div v-if="apiTestState !== 'idle'" class="srow" style="padding-top: 0;">
+              <div class="srow-info">
+                <div class="srow-d test-line">
+                  <span class="test-item">网络连通性：</span>
+                  <template v-if="apiTestState === 'testing'">测试中…</template>
+                  <template v-else>
+                    <span :class="apiTestNetwork?.ok ? 'test-ok' : 'test-fail'">
+                      {{ apiTestNetwork?.ok ? '通过' : '失败' }}
+                    </span>
+                    <span class="test-detail">{{ apiTestNetwork?.message }}</span>
+                  </template>
+                </div>
+                <div class="srow-d test-line">
+                  <span class="test-item">API Key 凭证：</span>
+                  <template v-if="apiTestState === 'testing'">测试中…</template>
+                  <template v-else-if="apiTestKey?.ok === null">
+                    <span class="test-fail">未验证</span>
+                    <span class="test-detail">{{ apiTestKey?.message }}</span>
+                  </template>
+                  <template v-else>
+                    <span :class="apiTestKey?.ok ? 'test-ok' : 'test-fail'">
+                      {{ apiTestKey?.ok ? '有效' : '无效' }}
+                    </span>
+                    <span class="test-detail">{{ apiTestKey?.message }}</span>
+                  </template>
+                </div>
               </div>
             </div>
           </div>

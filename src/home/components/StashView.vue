@@ -12,7 +12,7 @@ const props = defineProps ({
   stackMode: { type: Boolean, default: false },
   includeInv: { type: Boolean, default: false },
   keepInPlace: { type: Boolean, default: true },
-  requeryDebounce: { type: Number, default: 600 },
+  requeryDebounce: { type: Number, default: 1000 },
 });
 const emit = defineEmits ([ 'update:charId', 'update:stashId', 'update:equipment', 'update:active' ]);
 
@@ -76,12 +76,15 @@ function isSellPicked (it) {
   return sellSelected.value.has (sellKey (props.stashId, it.slot_id));
 }
 
-// 上架价：本次查价结果优先；未查价的物品复用查价记录价（已查过 → 直接上架）
+// 上架价：本次查价结果优先；未查价的物品复用查价记录价（已查过 → 直接上架）；按设置取现价/均价/智能基准
 function sellPriceOf (it) {
   const sel = sellSelected.value.get (sellKey (props.stashId, it.slot_id));
-  if (sel?.price != null) return sel.price;
   const hist = histPrices.value.get (toCanonicalId (it.item_id));
-  return hist?.price ?? null;
+  const live = sel?.price != null ? sel.price : (hist?.price ?? null);
+  const market = sel?.market != null ? sel.market : (hist?.market ?? null);
+  if (sellCfg.value.basis === 'market') return market;
+  if (sellCfg.value.basis === 'smart') return smartBase (live, market);
+  return live;
 }
 
 // Shift 批量选择：记录上次点选的物品，Shift+单击时按格子顺序全选区间
@@ -376,7 +379,7 @@ function fmtSellG (it, v) {
 }
 
 // 上架自定义设置（自动上架页配置）
-const sellCfg = ref ({ factor: 1, minPrice: 0, minRarity: '' });
+const sellCfg = ref ({ factor: 1, minPrice: 0, minRarity: '', basis: 'smart' });
 const RARITY_RANK = { Poor: 0, Common: 1, Uncommon: 2, Rare: 3, Epic: 4, Legendary: 5, Unique: 6, Artifact: 7 };
 
 async function loadSellCfg () {
@@ -387,18 +390,30 @@ async function loadSellCfg () {
       factor: parseFloat (d.sell_price_factor) || 1,
       minPrice: isNaN (mp) ? 200 : mp,
       minRarity: d.sell_min_rarity || '',
+      basis: ['live', 'market', 'smart'].includes (d.sell_price_basis) ? d.sell_price_basis : 'smart',
     };
   } catch (e) {}
 }
 
-// 稀有度筛选（神器 Artifact 一律禁止上架）
-function sellFilterPass (it) {
-  if (it.rarity === 'Artifact') return false;
-  if (sellCfg.value.minRarity && (RARITY_RANK[it.rarity] ?? 0) < (RARITY_RANK[sellCfg.value.minRarity] ?? 0)) return false;
-  return true;
+// 智能基准：现价低于均价 80% 视为被异常低价单污染 → 改用均价；现价可信（或均价缺失）用现价
+function smartBase (live, market) {
+  if (market != null && live != null) return live >= market * 0.8 ? live : market;
+  return live ?? market ?? null;
 }
 
-// 上架价 = 市场价 × 系数（最低 1）
+// 上架基准价：本次查价结果优先，否则复用记录价；按设置取现价（live）/均价（market）/智能（smart）
+function basePriceOf (it) {
+  const key = toCanonicalId (it.item_id);
+  const sel = sellSelected.value.get (sellKey (props.stashId, it.slot_id));
+  const hist = histPrices.value.get (key);
+  const live = sel?.price != null ? sel.price : (hist?.price ?? null);
+  const market = sel?.market != null ? sel.market : (hist?.market ?? null);
+  if (sellCfg.value.basis === 'market') return market;
+  if (sellCfg.value.basis === 'smart') return smartBase (live, market);
+  return live;
+}
+
+// 上架价 = 基准价 × 系数（最低 1）
 function finalSellPrice (raw) {
   return Math.max (1, Math.round ((raw ?? 0) * (sellCfg.value.factor || 1)));
 }
@@ -413,13 +428,19 @@ async function doFetchSellPrices () {
     note.value = '当前列表没有符合条件的物品（检查稀有度设置）';
     return;
   }
-  // 已有查价记录的物品直接复用记录价，不重复请求
+  // 已有查价记录的物品直接复用记录价，不重复请求（按基准判断有价）
   const toQuery = [];
   let reused = 0;
   for (const t of targets) {
     const hist = histPrices.value.get (toCanonicalId (t.item_id));
-    if (hist?.price != null) {
-      t.price = hist.price;
+    const base = sellCfg.value.basis === 'market'
+      ? (hist?.market ?? null)
+      : sellCfg.value.basis === 'smart'
+        ? smartBase (hist?.price ?? null, hist?.market ?? null)
+        : (hist?.price ?? null);
+    if (base != null) {
+      t.price = base;
+      if (hist?.market != null) t.market = hist.market;
       reused++;
     } else {
       toQuery.push (t);
@@ -642,9 +663,10 @@ async function startBatchSell () {
   note.value = `跳过 ${artifactCount} 件神器，正在查询 ${targets.length} 件物品价格…`;
   await fetchPrices (targets);
   pricing.value = false;
-  const okTargets = targets.filter (i =>
-    i.price != null && (sellCfg.value.minPrice <= 0 || i.price >= sellCfg.value.minPrice)
-  );
+  const okTargets = targets.filter (i => {
+    const base = sellPriceOf (i);
+    return base != null && (sellCfg.value.minPrice <= 0 || base >= sellCfg.value.minPrice);
+  });
   if (!okTargets.length) {
     note.value = '没有符合条件（稀有度/最低价）且有价的物品';
     return;
@@ -656,7 +678,7 @@ async function startBatchSell () {
     y: i.y,
     w: i.width || 1,
     h: i.height || 1,
-    price: finalSellPrice (i.price),
+    price: finalSellPrice (sellPriceOf (i)),
   })));
 }
 

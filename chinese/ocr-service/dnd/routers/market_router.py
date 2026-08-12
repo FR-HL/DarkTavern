@@ -91,12 +91,21 @@ def calibration_status():
     except Exception:
         pass
 
+    # 布局默认坐标（未校准时生效；校准覆盖存在 ⇔ saved 存在，此时不展示默认）
+    defaults = {}
+    try:
+        mp = macros.get_market_positions()
+        defaults = {k: {"x": v.x, "y": v.y} for k, v in mp.items()}
+    except Exception:
+        pass
+
     anchors = []
     for key, label in ANCHOR_LABELS.items():
         anchors.append({
             "key": key,
             "label": label,
             "has_default": key in _LAYOUT_ANCHORS,
+            "default": defaults.get(key),
             "saved": saved.get(key),
             "pending": _calibration_buffer.get(key),
         })

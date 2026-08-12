@@ -135,7 +135,7 @@ function toggleAffix(display) {
 }
 
 // Hovering the tooltip grabs the mouse (clickable); leaving restores click-through to the game
-const TOOLTIP_HIDE_GRACE_MS = 600;
+const TOOLTIP_HIDE_GRACE_MS = 500;
 const hoveringTooltip = ref(false);
 let leaveHideTimer = null;
 let ignoringMouse = true;
@@ -144,13 +144,6 @@ function setIgnoreMouse(ignore) {
   if (ignoringMouse === ignore) return;
   ignoringMouse = ignore;
   electron.send("overlay:set-ignore-mouse", ignore);
-}
-
-function scheduleLeaveHide() {
-  clearTimeout(leaveHideTimer);
-  leaveHideTimer = setTimeout(() => {
-    if (!hoveringTooltip.value) isTooltipActive.value = false;
-  }, TOOLTIP_HIDE_GRACE_MS);
 }
 
 // Hit-test the pointer against the tooltip (and the sell buttons) on every
@@ -174,7 +167,8 @@ function updateTooltipHover(event) {
   } else if (hoveringTooltip.value) {
     hoveringTooltip.value = false;
     setIgnoreMouse(true);
-    scheduleLeaveHide();
+    // 移出悬浮窗立即消失（不再等 600ms 宽限）
+    isTooltipActive.value = false;
   }
 }
 

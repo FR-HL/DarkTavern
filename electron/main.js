@@ -160,7 +160,7 @@ function rebuildOverlay () {
   } catch (e) { logger.warn ('销毁旧悬浮窗失败', { error: e?.message }); }
   overlay = createOverlayWindow ();
   startTracking (overlay);
-  if (overlayWireCb) wire (overlay, overlayWireCb, { findScanCache, affixKey, lookupItemKey });
+  if (overlayWireCb) wire (overlay, overlayWireCb, { findScanCache, affixKey, lookupItemKey, lookupItemArchetype });
   lastHeartbeatPong = 0;
   heartbeatReloaded = false;
 }
@@ -319,7 +319,7 @@ app.on ('ready', async () => {
   };
 
   startTracking (overlay);
-  wire (overlay, overlayWireCb, { findScanCache, affixKey, lookupItemKey });
+  wire (overlay, overlayWireCb, { findScanCache, affixKey, lookupItemKey, lookupItemArchetype });
   startHeartbeat ();
 
   const registerShortcut = (key, fn) => {
@@ -471,6 +471,7 @@ app.on ('ready', async () => {
     ]);
     for (const it of items) {
       let price = null;
+      let market = null;
       let usedAttrs = [];
       try {
         const itemId = toCanonicalItemId (String (it?.item_id || ''));
@@ -507,6 +508,7 @@ app.on ('ready', async () => {
                   item = r.data.item;
                   pricing = r.data.pricing;
                   price = r.live.price;
+                  market = pricing?.market ?? null;
                   usedAttrs = r.live.attrs;
                   logger.info ('market:price analyze result', { itemId, id: item?.id || '', market: pricing?.market ?? null, live: price });
                 } else {
@@ -553,7 +555,7 @@ app.on ('ready', async () => {
       } catch (err) {
         logger.warn ('market:price item failed', { error: err?.message || String (err) });
       }
-      results.push ({ index: it?.index, price, usedAffixes: usedAttrs.map (x => x.display) });
+      results.push ({ index: it?.index, price, market, usedAffixes: usedAttrs.map (x => x.display) });
     }
     const withPrice = results.filter (r => r.price != null).length;
     logger.info ('market:price done', { total: results.length, withPrice });
@@ -788,7 +790,7 @@ app.on ('ready', async () => {
     live_price_relax: settings.general.live_price_relax || 'none',
     scan_cache_days: settings.general.scan_cache_days ?? 1,
     history_days: settings.general.history_days ?? 3,
-    requery_debounce: settings.general.requery_debounce ?? 600,
+    requery_debounce: settings.general.requery_debounce ?? 1000,
     launch_on_startup: !!settings.general.launch_on_startup,
     sort_hotkey: settings.dnd?.sort_hotkey || 'Ctrl+R',
     cancel_hotkey: settings.dnd?.cancel_hotkey || 'Ctrl+T',
@@ -1546,10 +1548,15 @@ function scanCacheTtl () {
 function rebuildHistoryKeyIndex () {
   historyKeyIndex = new Map ();
   for (const r of priceHistory) {
-    const dkey = r.affixKey || r.key;
-    if (!dkey) continue;
-    const cur = historyKeyIndex.get (dkey);
-    if (!cur || r.ts > cur.ts) historyKeyIndex.set (dkey, r);
+    // hashText 与词条组合两个 key 体系都要入索引：扫描缓存（findScanCache）按文本查、软件查价/requery 按组合查
+    if (r.key) {
+      const cur = historyKeyIndex.get (r.key);
+      if (!cur || r.ts > cur.ts) historyKeyIndex.set (r.key, r);
+    }
+    if (r.affixKey) {
+      const cur = historyKeyIndex.get (r.affixKey);
+      if (!cur || r.ts > cur.ts) historyKeyIndex.set (r.affixKey, r);
+    }
   }
 }
 
@@ -1601,7 +1608,7 @@ function historyIconPath (rec) {
   return itemIconIndex.byNameRarity[`${name}|${rarity}`] || itemIconIndex.byName[name] || null;
 }
 
-// 英文物品名 → 官方 id（items.json 反查，同名取第一个）——用于 OCR 悬浮窗现价并行预查
+// 英文物品名 → 官方 id / archetype（items.json 反查，同名取第一个）——用于 OCR 悬浮窗现价并行预查
 let itemKeyIndex = null;
 function itemKeyByName () {
   if (itemKeyIndex) return itemKeyIndex;
@@ -1611,7 +1618,7 @@ function itemKeyByName () {
     for (const [k, v] of Object.entries (d)) {
       const n = String (v?.name || '').toLowerCase ();
       if (!n || itemKeyIndex[n]) continue;
-      itemKeyIndex[n] = k;
+      itemKeyIndex[n] = { key: k, archetype: String (v?.archetype || '') };
     }
   } catch (e) { logger.error (`Failed to load items.json: ${e.message}`); }
   return itemKeyIndex;
@@ -1620,7 +1627,13 @@ function itemKeyByName () {
 function lookupItemKey (name) {
   const n = String (name || '').trim ().toLowerCase ();
   if (!n) return '';
-  return itemKeyByName ()[n] || '';
+  return itemKeyByName ()[n]?.key || '';
+}
+
+function lookupItemArchetype (name) {
+  const n = String (name || '').trim ().toLowerCase ();
+  if (!n) return '';
+  return itemKeyByName ()[n]?.archetype || '';
 }
 
 function historyPath () {
@@ -1665,10 +1678,13 @@ function pushHistoryRecord (rec) {
   } else {
     priceHistory.push (rec);
   }
-  if (rec.affixKey || rec.key) {
-    const dkey = rec.affixKey || rec.key;
-    const cur = historyKeyIndex ? historyKeyIndex.get (dkey) : null;
-    if (!cur || rec.ts > cur.ts) historyKeyIndex.set (dkey, rec);
+  if (rec.key) {
+    const cur = historyKeyIndex ? historyKeyIndex.get (rec.key) : null;
+    if (!cur || rec.ts > cur.ts) historyKeyIndex.set (rec.key, rec);
+  }
+  if (rec.affixKey) {
+    const cur = historyKeyIndex ? historyKeyIndex.get (rec.affixKey) : null;
+    if (!cur || rec.ts > cur.ts) historyKeyIndex.set (rec.affixKey, rec);
   }
   pruneHistory ();
   notifyHome ('history:updated', {});

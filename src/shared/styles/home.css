@@ -236,6 +236,13 @@ body::before {
 .srow-info { flex: 0 0 320px; min-width: 0; }
 .srow-t { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
 .srow-d { margin-top: 3px; font-size: 12.5px; color: var(--text-3); line-height: 1.5; }
+.srow-d.test-ok { color: var(--green); }
+.srow-d.test-fail { color: var(--red); }
+.srow-d.test-line { margin-top: 2px; }
+.srow-d.test-line .test-item { color: var(--text-3); }
+.srow-d.test-line .test-ok { color: var(--green); font-weight: 650; }
+.srow-d.test-line .test-fail { color: var(--red); font-weight: 650; }
+.srow-d.test-line .test-detail { margin-left: 6px; color: var(--text-3); }
 .srow-d b { color: var(--text-2); font-weight: 600; font-variant-numeric: tabular-nums; }
 .srow-ctl { flex: 1; display: flex; align-items: center; justify-content: flex-end; gap: 9px; min-width: 0; }
 

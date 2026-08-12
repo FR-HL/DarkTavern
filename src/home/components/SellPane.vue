@@ -5,16 +5,35 @@ const invoke = (channel, data) => window.electron.invoke (channel, data);
 
 // ── 市场上架坐标校准 ──
 
-const anchors = ref ([]);
+// 内置默认坐标（1920x1080 基准布局，与 macros.py BASE_LAYOUT 一致）——前端直接显示，不依赖后端服务
+const DEFAULT_ANCHORS = [
+  { key: 'topbar_trade', label: '顶部栏 · 交易行', default: { x: 1514, y: 189 } },
+  { key: 'market_btn', label: '交易行页 · 市场按钮', default: { x: 1507, y: 399 } },
+  { key: 'mylist_tab', label: '市场页 · 我的列表', default: { x: 1352, y: 273 } },
+  { key: 'price_input', label: '价格输入框', default: { x: 1277, y: 773 } },
+  { key: 'sell_list_btn', label: '上架物品按钮', default: { x: 1277, y: 1112 } },
+  { key: 'confirm_btn', label: '确认弹窗 · 确认按钮', default: { x: 1177, y: 769 } },
+];
+
+const anchors = ref (DEFAULT_ANCHORS.map (a => ({ ...a })));
 const calNote = ref ('');
 const calSaving = ref (false);
+const calMode = ref ('default');
 const armingKey = ref ('');
 const pendingCount = computed (() => anchors.value.filter (a => a.pending).length);
 
+// 拉取后端已校准/待保存状态（默认坐标本地已有，后端未就绪时列表照常显示）
 async function loadCalibration () {
+  const map = new Map (anchors.value.map (a => [a.key, a]));
   try {
     const r = await invoke ('market:calibration-status');
-    anchors.value = r?.anchors || [];
+    for (const a of (r?.anchors || [])) {
+      const cur = map.get (a.key);
+      if (cur) {
+        cur.saved = a.saved;
+        cur.pending = a.pending;
+      }
+    }
   } catch (e) {}
 }
 
@@ -51,10 +70,17 @@ async function resetCalibration () {
   if (r?.success) await loadCalibration ();
 }
 
+// 切到手动校准立即重新拉取锚点列表（避免首次加载失败时列表为空、只有保存/清除）
+function switchCalMode (m) {
+  calMode.value = m;
+  if (m === 'manual') loadCalibration ();
+}
+
 // ── 上架自定义设置 ──
 
 const sellSpeed = ref ('normal');
 const sellPriceFactor = ref (1.0);
+const sellPriceBasis = ref ('smart');
 const sellMinPrice = ref (200);
 const sellMinRarity = ref ('');
 
@@ -70,12 +96,18 @@ const SPEED_OPTS = [
   { key: 'normal', label: '中' },
   { key: 'slow', label: '慢' },
 ];
+const BASIS_OPTS = [
+  { key: 'live', label: '现价' },
+  { key: 'market', label: '均价' },
+  { key: 'smart', label: '智能' },
+];
 
 async function loadSellSettings () {
   try {
     const d = await invoke ('settings:get');
     sellSpeed.value = d.sell_speed || 'normal';
     sellPriceFactor.value = parseFloat (d.sell_price_factor) || 1.0;
+    sellPriceBasis.value = ['live', 'market', 'smart'].includes (d.sell_price_basis) ? d.sell_price_basis : 'smart';
     const mp = parseInt (d.sell_min_price);
     sellMinPrice.value = isNaN (mp) ? 200 : mp;
     sellMinRarity.value = d.sell_min_rarity || '';
@@ -85,6 +117,7 @@ async function loadSellSettings () {
 function saveSellSettings () {
   invoke ('settings:save', {
     sell_price_factor: sellPriceFactor.value,
+    sell_price_basis: sellPriceBasis.value,
     sell_min_price: sellMinPrice.value,
     sell_min_rarity: sellMinRarity.value,
   });
@@ -99,7 +132,7 @@ async function setSellSpeed (v) {
 }
 
 onMounted (async () => {
-  await loadCalibration ();
+  loadCalibration ();   // 刷新已校准/待保存状态（失败无碍，默认坐标已内置显示）
   await loadSellSettings ();
 });
 </script>
@@ -114,33 +147,38 @@ onMounted (async () => {
       <div class="card">
         <div class="srow">
           <div class="srow-info">
-            <div class="srow-t">校准说明</div>
-            <div class="srow-d">点「记录」后，把鼠标移到游戏内对应按钮上<b>点击一次</b>即完成采集；全部按钮已内置默认坐标，仅在默认坐标不准时校准。</div>
+            <div class="srow-t">校准方式</div>
+            <div class="srow-d">全部按钮已内置默认坐标（默认配置）；默认坐标不准时切到「手动校准」。</div>
           </div>
           <div class="srow-ctl">
+            <div class="seg">
+              <button class="seg-opt" :class="{ on: calMode === 'default' }" @click="switchCalMode('default')"><span class="seg-t">默认配置</span></button>
+              <button class="seg-opt" :class="{ on: calMode === 'manual' }" @click="switchCalMode('manual')"><span class="seg-t">手动校准</span></button>
+            </div>
+          </div>
+        </div>
+        <template v-if="calMode === 'manual'">
+          <div class="cal-grid">
+            <div class="cal-cell" v-for="a in anchors" :key="a.key">
+              <div class="cal-name">{{ a.label }}</div>
+              <div class="cal-state">
+                <template v-if="a.pending">待保存 ({{ a.pending.x }}, {{ a.pending.y }})</template>
+                <template v-else-if="a.saved">已校准 ({{ a.saved.x }}, {{ a.saved.y }})</template>
+                <template v-else>默认 ({{ a.default.x }}, {{ a.default.y }})</template>
+              </div>
+              <button class="btn sm" :disabled="armingKey !== ''" @click="recordAnchor(a.key)">
+                {{ armingKey === a.key ? '等待点击…' : '记录' }}
+              </button>
+            </div>
+          </div>
+          <div class="cal-actions">
             <button class="btn primary" :disabled="calSaving || pendingCount === 0" @click="saveCalibration">
               {{ calSaving ? '保存中…' : '保存校准' }}
             </button>
             <button class="btn subtle" @click="resetCalibration">清除校准</button>
             <span v-if="calNote" class="sel-note">{{ calNote }}</span>
           </div>
-        </div>
-        <div class="srow" v-for="a in anchors" :key="a.key">
-          <div class="srow-info">
-            <div class="srow-t">{{ a.label }}</div>
-            <div class="srow-d">
-              <template v-if="a.pending">待保存 ({{ a.pending.x }}, {{ a.pending.y }})</template>
-              <template v-else-if="a.saved">已校准 ({{ a.saved.x }}, {{ a.saved.y }})</template>
-              <template v-else-if="a.has_default">内置默认坐标</template>
-              <template v-else>未校准</template>
-            </div>
-          </div>
-          <div class="srow-ctl">
-            <button class="btn sm" :disabled="armingKey !== ''" @click="recordAnchor(a.key)">
-              {{ armingKey === a.key ? '等待点击…' : '记录' }}
-            </button>
-          </div>
-        </div>
+        </template>
       </div>
     </div>
 
@@ -162,8 +200,34 @@ onMounted (async () => {
         </div>
         <div class="srow">
           <div class="srow-info">
+            <div class="srow-t">价格基准</div>
+            <div class="srow-d">上架价以哪个价为基础（再乘价格系数）；现价=最低挂单，均价=成交均价；智能=现价可信时用现价，被异常低价单拉低时自动改用均价</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in BASIS_OPTS" :key="o.key" class="seg-opt" :class="{ on: sellPriceBasis === o.key }" @click="sellPriceBasis = o.key; saveSellSettings ();">
+                <span class="seg-t">{{ o.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
+            <div class="srow-t">稀有度筛选</div>
+            <div class="srow-d">只上架 ≥ 指定稀有度的物品</div>
+          </div>
+          <div class="srow-ctl">
+            <div class="seg">
+              <button v-for="o in RARITY_OPTS" :key="o.key" class="seg-opt" :class="{ on: sellMinRarity === o.key }" @click="sellMinRarity = o.key; saveSellSettings ();">
+                <span class="seg-t">{{ o.label }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-info">
             <div class="srow-t">价格系数</div>
-            <div class="srow-d">上架价 = 市场价 × 系数（0.1-3）；如 0.95 快速出手</div>
+            <div class="srow-d">上架价 = 基准价 × 系数（0.1-3）；如 0.95 快速出手</div>
           </div>
           <div class="srow-ctl">
             <div class="days-ctl">
@@ -183,23 +247,24 @@ onMounted (async () => {
             </div>
           </div>
         </div>
-        <div class="srow">
-          <div class="srow-info">
-            <div class="srow-t">稀有度筛选</div>
-            <div class="srow-d">只上架 ≥ 指定稀有度的物品</div>
-          </div>
-          <div class="srow-ctl">
-            <div class="seg">
-              <button v-for="o in RARITY_OPTS" :key="o.key" class="seg-opt" :class="{ on: sellMinRarity === o.key }" @click="sellMinRarity = o.key; saveSellSettings ();">
-                <span class="seg-t">{{ o.label }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.cal-toggle { cursor: pointer; user-select: none; }
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px 14px;
+  padding: 10px 18px 14px;
+  background: var(--card-2);
+  border-top: 1px solid var(--line-soft);
+}
+.cal-cell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cal-name { font-size: 12px; font-weight: 650; color: var(--text-2); }
+.cal-state { font-size: 11px; color: var(--text-3); }
+.cal-actions { display: flex; align-items: center; gap: 8px; padding: 8px 18px 12px; }
+.cal-actions .sel-note { font-size: 12.5px; color: var(--green); }
 </style>

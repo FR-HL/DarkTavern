@@ -28,7 +28,7 @@ const defaults = {
     live_price_relax: 'none',
     scan_cache_days: '1',
     history_days: '3',
-    requery_debounce: '600',
+    requery_debounce: '1000',
     ball_x: null,
     ball_y: null,
     ball_locked: false,
