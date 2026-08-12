@@ -245,16 +245,23 @@ app.on ('ready', async () => {
   });
   const bootStart = Date.now ();
 
+  // ── 启动步骤调试日志：定位管理员模式启动即崩溃的环节 ──
+  const bootStep = (name, extra = {}) => logger.info ('BOOT', { step: name, ...extra, t: Date.now () - bootStart });
+
   // 日志实时推送：主进程每条日志 → 前端日志面板（home 窗口在线时）
   onLog ((entry) => {
     if (homeWindow && !homeWindow.isDestroyed ()) {
       try { homeWindow.webContents.send ('logs:append', entry); } catch (e) {}
     }
   });
+  bootStep ('onLog 注册完成');
   safeHandle ('logs:list', () => getRing ());
   safeHandle ('logs:open-folder', () => { try { shell.openPath (logPath); } catch (e) { logger.warn ('打开日志文件夹失败', { error: e.message }); } return { success: true }; });
+  bootStep ('safeHandle 注册完成');
 
+  bootStep ('调用 backend.startService');
   backend.startService (settings.general.python_path);
+  bootStep ('backend.startService 已返回');
 
   // 查价服务进程中途退出/崩溃 → 立即刷新托盘与悬浮球状态
   // （旧版只记日志，托盘一直显示"已就绪"）

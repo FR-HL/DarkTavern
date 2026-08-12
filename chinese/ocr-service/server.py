@@ -154,7 +154,7 @@ async def lifespan(_app: FastAPI):
     except Exception:
         pass
 
-app = FastAPI(title="Adventurer's Squire OCR Service", version="1.2.0", lifespan=lifespan)
+app = FastAPI(title="Adventurer's Squire OCR Service", version="1.3.0", lifespan=lifespan)
 
 # --- DnD Tools routers (capture / stash / sort / packets) ---
 try:
@@ -260,7 +260,7 @@ def health():
     """Health check endpoint."""
     return {
         "status": "ok",
-        "version": "1.2.0",
+        "version": "1.3.0",
         "model_loaded": detector is not None,
         "ocr_loaded": ocr is not None,
         "mappings": len(translator.get_all_mappings()) if translator else 0,

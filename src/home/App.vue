@@ -1596,7 +1596,7 @@ onBeforeUnmount (() => {
             <div class="steps">
               <div class="step"><div class="step-n">1</div><div class="step-t">安装 <b>Npcap</b>：前往官网 <span class="kbd">npcap.com/#download</span> 下载（或从交流群文件获取），一路默认安装后<b>重启电脑</b></div></div>
               <div class="step"><div class="step-n">2</div><div class="step-t">游戏内设置为<b>窗口化或无边框窗口</b>——全屏模式无法识别查价</div></div>
-              <div class="step"><div class="step-n">3</div><div class="step-t">将解压包<b>解压到非中文路径</b>文件夹下；检查 <span class="kbd">AdventurersSquire-1.2.0-win\resources\wireshark</span> 中是否存在 <b>sharkd.exe</b> 等文件，文件缺失说明被拦截，<b>关闭杀毒软件</b>后重新解压</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t">将解压包<b>解压到非中文路径</b>文件夹下；检查 <span class="kbd">AdventurersSquire-1.3.0-win\resources\wireshark</span> 中是否存在 <b>sharkd.exe</b> 等文件，文件缺失说明被拦截，<b>关闭杀毒软件</b>后重新解压</div></div>
             </div>
             <div class="about-thanks">
               提示：Npcap 是抓包必需驱动，缺它「启动抓包 / 首次校准」会失败；「角色仓库」页有 Npcap 状态检测与一键下载入口。<b>自动模式存在问题，建议暂停使用</b>，查价请用「手动」模式。

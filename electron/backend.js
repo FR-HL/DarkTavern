@@ -70,6 +70,7 @@ function killLeftoverOcr () {
 
 export async function startService (pythonPath) {
   if (ocrProcess) return;
+  const t0 = Date.now ();
 
   // Grab a free port first (fast) so the frontend can be told the real port
   // ASAP, then clean up any leftover backend so it stops capturing/writing.
@@ -77,7 +78,7 @@ export async function startService (pythonPath) {
     servicePort = await findFreePort ();
     OCR_URL = `http://127.0.0.1:${servicePort}`;
     portResolved = true;
-    logger.info ('使用动态端口', { port: servicePort });
+    logger.info ('使用动态端口', { port: servicePort, t: Date.now () - t0 });
   } catch (e) {
     logger.warn ('端口准备失败，回退默认端口', { port: servicePort, error: e.message });
   }
