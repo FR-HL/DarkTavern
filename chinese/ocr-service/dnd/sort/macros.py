@@ -95,12 +95,12 @@ BASE_LAYOUT = {
     # Trade-hall / market page anchors. Base coordinates provided by the
     # owner (calibrated in-game); the market calibration session can
     # override each of them individually.
-    'topbar_trade': Point(1514, 189),
-    'market_btn': Point(1507, 399),
-    'mylist_tab': Point(1352, 273),
-    'price_input': Point(1277, 773),
-    'sell_list_btn': Point(1277, 1112),
-    'confirm_btn': Point(1177, 769),
+    'topbar_trade': Point(1514, 192),
+    'market_btn': Point(1506, 399),
+    'mylist_tab': Point(1351, 270),
+    'price_input': Point(1279, 772),
+    'sell_list_btn': Point(1275, 1113),
+    'confirm_btn': Point(1167, 771),
 }
 
 # Market anchors that have no layout default and can only be provided by a

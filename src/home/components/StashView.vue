@@ -395,6 +395,13 @@ async function loadSellCfg () {
   } catch (e) {}
 }
 
+// 稀有度筛选（神器 Artifact 一律禁止上架）
+function sellFilterPass (it) {
+  if (it.rarity === 'Artifact') return false;
+  if (sellCfg.value.minRarity && (RARITY_RANK[it.rarity] ?? 0) < (RARITY_RANK[sellCfg.value.minRarity] ?? 0)) return false;
+  return true;
+}
+
 // 智能基准：现价低于均价 80% 视为被异常低价单污染 → 改用均价；现价可信（或均价缺失）用现价
 function smartBase (live, market) {
   if (market != null && live != null) return live >= market * 0.8 ? live : market;

@@ -5,36 +5,24 @@ const invoke = (channel, data) => window.electron.invoke (channel, data);
 
 // ── 市场上架坐标校准 ──
 
-// 内置默认坐标（1920x1080 基准布局，与 macros.py BASE_LAYOUT 一致）——前端直接显示，不依赖后端服务
-const DEFAULT_ANCHORS = [
-  { key: 'topbar_trade', label: '顶部栏 · 交易行', default: { x: 1514, y: 189 } },
-  { key: 'market_btn', label: '交易行页 · 市场按钮', default: { x: 1507, y: 399 } },
-  { key: 'mylist_tab', label: '市场页 · 我的列表', default: { x: 1352, y: 273 } },
-  { key: 'price_input', label: '价格输入框', default: { x: 1277, y: 773 } },
-  { key: 'sell_list_btn', label: '上架物品按钮', default: { x: 1277, y: 1112 } },
-  { key: 'confirm_btn', label: '确认弹窗 · 确认按钮', default: { x: 1177, y: 769 } },
-];
-
-const anchors = ref (DEFAULT_ANCHORS.map (a => ({ ...a })));
+// 锚点数据（默认/已校准/待保存）统一来自后端 /market/calibration，前端不维护第二份坐标
+const anchors = ref ([]);
 const calNote = ref ('');
 const calSaving = ref (false);
 const calMode = ref ('default');
 const armingKey = ref ('');
 const pendingCount = computed (() => anchors.value.filter (a => a.pending).length);
 
-// 拉取后端已校准/待保存状态（默认坐标本地已有，后端未就绪时列表照常显示）
+// 拉取锚点列表；后端服务未就绪（启动中）时自动轮询重试，就绪后自动填充显示
 async function loadCalibration () {
-  const map = new Map (anchors.value.map (a => [a.key, a]));
-  try {
-    const r = await invoke ('market:calibration-status');
-    for (const a of (r?.anchors || [])) {
-      const cur = map.get (a.key);
-      if (cur) {
-        cur.saved = a.saved;
-        cur.pending = a.pending;
-      }
-    }
-  } catch (e) {}
+  for (let i = 0; i < 30; i++) {
+    try {
+      const r = await invoke ('market:calibration-status');
+      if (Array.isArray (r?.anchors)) { anchors.value = r.anchors; return true; }
+    } catch (e) {}
+    await new Promise (res => setTimeout (res, 500));
+  }
+  return false;
 }
 
 async function recordAnchor (key) {
@@ -164,7 +152,7 @@ onMounted (async () => {
               <div class="cal-state">
                 <template v-if="a.pending">待保存 ({{ a.pending.x }}, {{ a.pending.y }})</template>
                 <template v-else-if="a.saved">已校准 ({{ a.saved.x }}, {{ a.saved.y }})</template>
-                <template v-else>默认 ({{ a.default.x }}, {{ a.default.y }})</template>
+                <template v-else>默认 ({{ a.default?.x ?? '-' }}, {{ a.default?.y ?? '-' }})</template>
               </div>
               <button class="btn sm" :disabled="armingKey !== ''" @click="recordAnchor(a.key)">
                 {{ armingKey === a.key ? '等待点击…' : '记录' }}

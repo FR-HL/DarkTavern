@@ -288,9 +288,9 @@ function buildPreLive (text) {
     if (lines.length < 2) return null;
     const archetype = _hooksRef.lookupItemArchetype (lines[0]);
     if (!archetype) return null; // items.json 无此物品 → 无法预查，走原流程
-    const rareLine = lines[lines.length - 1].match (/^Rarity:\s*(.*)$/i);
+    const rareLine = lines.map (l => l.match (/^Rarity:\s*(.*)$/i)).find (m => m);
     const attrs = [];
-    const end = rareLine ? lines.length - 1 : lines.length;
+    const end = rareLine ? lines.indexOf (rareLine[0]) : lines.length;
     for (let i = 1; i < end; i++) {
       // 支持 +1.3% Action Speed 这类带 % 的 OCR 词条行
       const m = lines[i].match (/^[+-]?\d+(?:\.\d+)?%?\s+(.+)$/);
