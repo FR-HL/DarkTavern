@@ -494,59 +494,71 @@ async function doStartSell () {
 }
 
 // 游戏内悬浮窗物品：加入/移出上架列表 / 直接上架当前物品
+// 匹配 = item_id 精确 + 词条集合精确（悬浮窗带上 affixes，仓库里同 id 不同词条的多件不再搞混）
 async function overlayAddItem (data, autoSell) {
   if (!charData.value || !data?.itemId) return;
   const canonTarget = toCanonicalId (data.itemId);
+  const targetAffixes = Array.isArray (data.affixes) ? data.affixes : [];
+  const hits = [];
   for (const [sid, s] of Object.entries (charData.value.stashes || {})) {
     for (const it of (s?.items || [])) {
-      if (toCanonicalId (it.item_id) === canonTarget) {
-        if (autoSell) {
-          // 列表有有价物品 → 上架整个列表；否则直接上架当前物品
-          const listed = sellSelectedList.value.filter (i => i.price != null);
-          if (listed.length) {
-            doStartSell ();
-          } else {
-            if (it.rarity === 'Artifact') {
-              note.value = '神器禁止上架';
-              return;
-            }
-            await loadSellCfg ();
-            if (!sellFilterPass ({ ...it, stash_id: sid })) {
-              note.value = '该物品不满足稀有度设置，无法直接上架';
-              return;
-            }
-            const price = data.price ?? null;
-            if (price == null) {
-              note.value = '无市场价，无法直接上架';
-              return;
-            }
-            startSell ([{
-              stash_id: sid,
-              x: it.x,
-              y: it.y,
-              w: it.width || 1,
-              h: it.height || 1,
-              price: finalSellPrice (price),
-            }]);
-          }
-          return;
-        }
-        // 加入/移出切换
-        const key = sellKey (sid, it.slot_id);
-        const m = new Map (sellSelected.value);
-        if (m.has (key)) {
-          m.delete (key);
-          note.value = `已移出上架列表：${it.name}`;
-        } else {
-          m.set (key, { ...it, stash_id: sid, uid: key, price: data.price ?? null });
-          note.value = `已加入上架列表：${it.name}`;
-        }
-        sellSelected.value = m;
-        return;
+      if (toCanonicalId (it.item_id) !== canonTarget) continue;
+      if (targetAffixes.length) {
+        const en = (it.sp_en || []).map (e => e[0]);
+        if (targetAffixes.length !== en.length || !targetAffixes.every (d => en.includes (d))) continue;
       }
+      hits.push ({ it, sid });
     }
   }
-  note.value = '未在当前角色仓库中找到该物品';
+  // 词条过滤后仍多件（完全相同）→ 取第一件（价值相同，上架任意一件等价）
+  const hit = hits[0];
+  if (!hit) {
+    note.value = '未在当前角色仓库中找到该物品（词条不匹配）';
+    return;
+  }
+  const { it, sid } = hit;
+  if (autoSell) {
+    // 列表有有价物品 → 上架整个列表；否则直接上架当前物品
+    const listed = sellSelectedList.value.filter (i => i.price != null);
+    if (listed.length) {
+      doStartSell ();
+    } else {
+      if (it.rarity === 'Artifact') {
+        note.value = '神器禁止上架';
+        return;
+      }
+      await loadSellCfg ();
+      if (!sellFilterPass ({ ...it, stash_id: sid })) {
+        note.value = '该物品不满足稀有度设置，无法直接上架';
+        return;
+      }
+      const price = data.price ?? null;
+      if (price == null) {
+        note.value = '无市场价，无法直接上架';
+        return;
+      }
+      startSell ([{
+        stash_id: sid,
+        x: it.x,
+        y: it.y,
+        w: it.width || 1,
+        h: it.height || 1,
+        price: finalSellPrice (price),
+      }]);
+    }
+    return;
+  }
+  // 加入/移出切换
+  const key = sellKey (sid, it.slot_id);
+  const m = new Map (sellSelected.value);
+  if (m.has (key)) {
+    m.delete (key);
+    note.value = `已移出上架列表：${it.name}`;
+  } else {
+    m.set (key, { ...it, stash_id: sid, uid: key, price: data.price ?? null });
+    note.value = `已加入上架列表：${it.name}`;
+  }
+  sellSelected.value = m;
 }
 
 // 上架列表数量变化 → 通知游戏内悬浮窗更新按钮文案

@@ -110,6 +110,8 @@ function sendSellAction (channel) {
     itemId: currentItemId.value,
     rarity: itemRarity.value,
     price: item.value.prices.live ?? item.value.prices.market ?? null,
+    // 词条集合：仓库里同 item_id 多件（不同词条）时用于精确匹配目标物品
+    affixes: (item.value.attributes.secondary || []).map (a => a.display).filter (Boolean),
   });
 }
 const reverseAttributes = ref({});
