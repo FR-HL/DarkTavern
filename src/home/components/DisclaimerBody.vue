@@ -70,6 +70,12 @@
         </div>
       </div>
       <div class="card term-card">
+        <div class="term-head">自动上架</div>
+        <div class="term-body">
+          <p>自动上架通过模拟鼠标完成游戏内市场操作，可能因界面变动、坐标校准偏差等原因上错物品或价格。上架前请核对软件内物品与价格；因误上架（错物、价格偏低、重复上架）造成的金币与物品损失，由使用者自行承担。市场数据来自第三方公开接口（DarkerDB），存在延迟或错误可能。</p>
+        </div>
+      </div>
+      <div class="card term-card">
         <div class="term-head">网络抓包</div>
         <div class="term-body">
           <p>仓库可视化基于游戏网络数据解析，仅在本机展示与整理。请勿将捕获的数据用于任何非法用途；作者不对数据被滥用造成的后果负责。</p>

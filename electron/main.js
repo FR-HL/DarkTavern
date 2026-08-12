@@ -1248,7 +1248,7 @@ function openHomeWindow () {
   }
 
   homeWindow = new BrowserWindow ({
-    width: 1280, height: 840, minWidth: 1080, minHeight: 720,
+    width: 1280, height: 960, minWidth: 1080, minHeight: 720,
     show: false, title: '冒险者侍从', autoHideMenuBar: true,
     icon: join (ROOT, 'assets/images/icon.ico'),
     backgroundColor: settings.general.theme === 'dark' ? '#1c1c1f' : '#f4f4f6',

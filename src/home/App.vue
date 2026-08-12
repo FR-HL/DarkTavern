@@ -1588,7 +1588,7 @@ onBeforeUnmount (() => {
       <!-- ============ 使用教程 ============ -->
       <div class="pane" :class="{ active: pane === 'guide' }">
         <div class="page-title">使用教程</div>
-        <div class="page-sub">查价器与仓库整理的使用方法，按步骤操作即可上手。</div>
+        <div class="page-sub">查价器、仓库整理与自动上架的使用方法，按步骤操作即可上手。</div>
 
         <div class="sec">
           <div class="sec-label">〇、前置准备</div>
@@ -1695,7 +1695,45 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="sec">
-          <div class="sec-label">三、工作原理 · 技术透明</div>
+          <div class="sec-label">五、自动上架 · 环境准备</div>
+          <div class="card">
+            <div class="card-note">
+              <b>环境准备（一次性）：</b>
+            </div>
+            <div class="steps">
+              <div class="step"><div class="step-n">1</div><div class="step-t">自动上架复用自动整理的<b>抓包环境</b>（Wireshark / TShark + 首次校准获取仓库数据）——已配置过整理的玩家可直接跳过本步</div></div>
+              <div class="step"><div class="step-n">2</div><div class="step-t">进入「自动上架」页，开启<b>自动上架开关</b>（默认关闭；关闭时所有上架入口隐藏——仓库面板、网格点选、悬浮窗按钮全部不显示）</div></div>
+              <div class="step"><div class="step-n">3</div><div class="step-t"><b>坐标校准</b>：全部按钮已内置<b>默认坐标</b>，开箱即用；默认坐标不准时切到「手动校准」→ 点「记录」→ 把鼠标移到游戏内对应按钮上<b>点击一次</b> → 「保存校准」</div></div>
+              <div class="step"><div class="step-n">4</div><div class="step-t">按需调整上架设置：<b>价格基准</b>（现价 / 均价 / 智能）、智能阈值、价格系数、最低价阈值、稀有度筛选、上架速度（快 / 中 / 慢）</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">六、自动上架 · 操作流程</div>
+          <div class="card">
+            <div class="steps two-col">
+              <div class="step-col">
+                <div class="step-col-t">方式一 · 游戏内悬浮窗</div>
+                <div class="step"><div class="step-n">1</div><div class="step-t">悬停物品并查价——悬浮窗显示价格后才会出现上架按钮</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t">点「加入列表」收集多件（同 id 不同词条的物品会自动按<b>词条组合</b>精确匹配，不会上错目标）</div></div>
+                <div class="step"><div class="step-n">3</div><div class="step-t">点「开始上架」：软件自动进入市场 → 我的列表 → 按格子坐标逐个选中物品 → 输入价格 → 确认上架</div></div>
+              </div>
+              <div class="step-col">
+                <div class="step-col-t">方式二 · 软件内点选</div>
+                <div class="step"><div class="step-n">1</div><div class="step-t">角色仓库页网格<b>点选 / 框选 / Shift 连选</b>多件物品</div></div>
+                <div class="step"><div class="step-n">2</div><div class="step-t">点「查询价格」批量查价（已有查价记录的物品直接复用记录价，不重复请求）</div></div>
+                <div class="step"><div class="step-n">3</div><div class="step-t">点「开始上架」整批上架；「批量」标签可整仓上架（自动跳过神器与不符合稀有度筛选的物品）</div></div>
+              </div>
+            </div>
+            <div class="about-thanks">
+              提示：上架价 = <b>基准价 × 价格系数</b>。价格基准：<b>现价</b>=最低挂单、<b>均价</b>=成交均价、<b>智能</b>=现价可信时用现价，被异常低价单拉低时自动改用均价（判定阈值可在「智能阈值」调整，默认 50%）。上架过程中随时可按 <span class="kbd">{{ cancelHotkey }}</span> <b>全局暂停</b>（整理与上架都会停止）。「市场现价」的显示方式（智能 / 最低价）也可在查价器页切换。
+            </div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sec-label">七、工作原理 · 技术透明</div>
           <div class="terms-grid">
             <div class="card term-card">
               <div class="term-head">查价原理</div>
@@ -1720,6 +1758,18 @@ onBeforeUnmount (() => {
                   <li>排序算法在本地算出最佳摆放方案（纯数学计算）</li>
                   <li>通过 Windows 系统 API（SendInput）<b>模拟真实鼠标移动与拖拽</b>，和你亲手拖动物品的操作一模一样</li>
                   <li>内置安全监视器：检测到窗口失焦、位置漂移会自动暂停，防止误操作</li>
+                </ul>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">上架原理</div>
+              <div class="term-body">
+                <p>自动上架本质是<b>「读数据 + 点鼠标」</b>的自动化：</p>
+                <ul>
+                  <li>从抓包仓库数据读取物品的<b>格子坐标</b>（第几列第几行、占几格）</li>
+                  <li>按网格锚点 + 每格大小换算成<b>屏幕像素</b>，鼠标点击物品格中心选中</li>
+                  <li>按设置的价格基准算出上架价，自动进市场 → 点物品 → 输价 → 确认上架</li>
+                  <li>同 id 不同词条的物品按<b>词条组合</b>精确匹配，不会上错目标</li>
                 </ul>
               </div>
             </div>
@@ -1750,13 +1800,13 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="sec">
-          <div class="sec-label">四、快捷键速查</div>
+          <div class="sec-label">八、快捷键速查</div>
           <div class="card">
             <div class="term-body">
               <ul>
                 <li><span class="kbd">{{ scanKey }}</span> 扫描悬停物品价格</li>
                 <li><span class="kbd">F5</span> 设置（API Key、扫描键、扫描模式）　<span class="kbd">F6</span> 词条编辑器　<span class="kbd">F7</span> 调试模式　<span class="kbd">F8</span> 清除悬浮窗</li>
-                <li><span class="kbd">{{ sortHotkey }}</span> 开始整理　<span class="kbd">{{ cancelHotkey }}</span> 取消整理　<span class="kbd">Ctrl+E</span> 切换仓库</li>
+                <li><span class="kbd">{{ sortHotkey }}</span> 开始整理　<span class="kbd">{{ cancelHotkey }}</span> 全局暂停（取消整理 / 停止上架）　<span class="kbd">Ctrl+E</span> 切换仓库</li>
                 <li><span class="kbd">Ctrl+Alt+B</span> 锁定 / 解锁桌面悬浮球</li>
               </ul>
             </div>
@@ -1764,7 +1814,7 @@ onBeforeUnmount (() => {
         </div>
 
         <div class="sec">
-          <div class="sec-label">五、常见问题</div>
+          <div class="sec-label">九、常见问题</div>
           <div class="terms-grid">
             <div class="card term-card">
               <div class="term-head">OCR 状态一直「正在唤醒」</div>
@@ -1782,6 +1832,24 @@ onBeforeUnmount (() => {
               <div class="term-head">查价没有价格数据</div>
               <div class="term-body">
                 <p>未填 DarkerDB API Key。F5 → 查价器页填入 Key 并保存（darkerdb.com 免费注册获取）。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">上架的物品不对</div>
+              <div class="term-body">
+                <p>同 id 不同词条的多件物品会按<b>词条组合</b>精确匹配；确认抓包数据与游戏内一致（物品移动后重新「首次校准」）。若点击位置偏移，在「自动上架」页切到「手动校准」重新校准坐标。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">上架价很低 / 显示的价格不对劲</div>
+              <div class="term-body">
+                <p>最低挂单可能被异常低价单污染（比均价低一半以上）。价格基准选「智能」（默认）会自动改用均价；阈值可在「智能阈值」调整。查价器页「现价显示」也可切换智能 / 最低价。</p>
+              </div>
+            </div>
+            <div class="card term-card">
+              <div class="term-head">找不到自动上架的按钮 / 入口</div>
+              <div class="term-body">
+                <p>自动上架开关<b>默认关闭</b>。进入「自动上架」页开启开关后，仓库面板、网格点选与悬浮窗上架按钮才会显示。</p>
               </div>
             </div>
             <div class="card term-card">
