@@ -60,7 +60,7 @@ const defaults = {
     sort_include_inv: false,
     follow_mode: 'click',
     cross_config: '',
-    sell_speed: 'normal',
+    sell_speed: 'fast',
     sell_price_factor: 1.0,
     sell_min_price: 200,
     sell_min_rarity: '',

@@ -805,7 +805,7 @@ app.on ('ready', async () => {
     app_version: app.getVersion (),
     disclaimer_agreed_version: settings.general.disclaimer_agreed_version || '',
     auto_check_update: settings.general.auto_check_update !== false,
-    sell_speed: settings.dnd?.sell_speed || 'normal',
+    sell_speed: settings.dnd?.sell_speed || 'fast',
     sell_price_factor: parseFloat (settings.dnd?.sell_price_factor) || 1.0,
     sell_min_price: (() => { const n = parseInt (settings.dnd?.sell_min_price); return isNaN (n) ? 200 : n; })(),
     sell_min_rarity: settings.dnd?.sell_min_rarity || '',
@@ -1194,8 +1194,11 @@ function registerSortHotkeys () {
 
   try {
     globalShortcut.register (cancelKey, async () => {
-      await backend.sortCancel ();
+      // 全局暂停：同时取消仓库整理与自动上架
+      try { await backend.sortCancel (); } catch (e) { logger.debug ('cancel sort failed', { error: e.message }); }
+      try { await backend.marketCancel (); } catch (e) { logger.debug ('cancel market failed', { error: e.message }); }
       notifyHome ('dnd:sort-cancelled', {});
+      logger.info ('全局暂停键触发', { key: cancelKey });
     });
     logger.info (`Sort cancel hotkey: ${cancelKey}`);
   } catch (e) {
