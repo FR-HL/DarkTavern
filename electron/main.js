@@ -814,7 +814,7 @@ app.on ('ready', async () => {
     sell_price_factor: parseFloat (settings.dnd?.sell_price_factor) || 1.0,
     sell_min_price: (() => { const n = parseInt (settings.dnd?.sell_min_price); return isNaN (n) ? 200 : n; })(),
     sell_min_rarity: settings.dnd?.sell_min_rarity || '',
-    sell_enabled: settings.dnd?.sell_enabled !== false,
+    sell_enabled: settings.dnd?.sell_enabled === true,
   }));
 
   safeHandle ('settings:save', (e, data) => {

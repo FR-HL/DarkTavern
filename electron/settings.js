@@ -66,7 +66,7 @@ const defaults = {
     sell_price_factor: 1.0,
     sell_min_price: 200,
     sell_min_rarity: '',
-    sell_enabled: true,
+    sell_enabled: false,
   },
 };
 

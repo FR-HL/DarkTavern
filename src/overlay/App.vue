@@ -78,7 +78,7 @@ onMounted(() => {
       :alignment="settings.general.alignment"
       :components="settings.general.components"
       :debug="isDebugging"
-      :show-sell-buttons="settings.general.show_overlay_sell_buttons !== false && settings.dnd?.sell_enabled !== false"
+      :show-sell-buttons="settings.general.show_overlay_sell_buttons !== false && settings.dnd?.sell_enabled === true"
       :live-display-basis="settings.general.live_display_basis || 'smart'"
       :smart-threshold="settings.general.smart_price_threshold || 50"
     />

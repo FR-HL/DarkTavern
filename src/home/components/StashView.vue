@@ -14,7 +14,7 @@ const props = defineProps ({
   includeInv: { type: Boolean, default: false },
   keepInPlace: { type: Boolean, default: true },
   requeryDebounce: { type: Number, default: 1000 },
-  sellEnabled: { type: Boolean, default: true },
+  sellEnabled: { type: Boolean, default: false },
 });
 const emit = defineEmits ([ 'update:charId', 'update:stashId', 'update:equipment', 'update:active' ]);
 
@@ -405,7 +405,7 @@ function fmtSellG (it, v) {
 }
 
 // 上架自定义设置（自动上架页配置）
-const sellCfg = ref ({ factor: 1, minPrice: 0, minRarity: '', basis: 'smart', enabled: true, smartThreshold: 50, liveDisplayBasis: 'smart' });
+const sellCfg = ref ({ factor: 1, minPrice: 0, minRarity: '', basis: 'smart', enabled: false, smartThreshold: 50, liveDisplayBasis: 'smart' });
 const RARITY_RANK = { Poor: 0, Common: 1, Uncommon: 2, Rare: 3, Epic: 4, Legendary: 5, Unique: 6, Artifact: 7 };
 
 async function loadSellCfg () {
@@ -418,7 +418,7 @@ async function loadSellCfg () {
       minPrice: isNaN (mp) ? 200 : mp,
       minRarity: d.sell_min_rarity || '',
       basis: ['live', 'market', 'smart'].includes (d.sell_price_basis) ? d.sell_price_basis : 'smart',
-      enabled: d.sell_enabled !== false,
+      enabled: d.sell_enabled === true,
       smartThreshold: isNaN (st) ? 50 : st,
       liveDisplayBasis: ['smart', 'live'].includes (d.live_display_basis) ? d.live_display_basis : 'smart',
     };

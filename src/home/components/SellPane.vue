@@ -66,7 +66,7 @@ function switchCalMode (m) {
 
 // ── 上架自定义设置 ──
 
-const sellEnabled = ref (true);
+const sellEnabled = ref (false);
 const sellSpeed = ref ('fast');
 const sellPriceFactor = ref (1.0);
 const sellPriceBasis = ref ('smart');
@@ -95,7 +95,7 @@ const BASIS_OPTS = [
 async function loadSellSettings () {
   try {
     const d = await invoke ('settings:get');
-    sellEnabled.value = d.sell_enabled !== false;
+    sellEnabled.value = d.sell_enabled === true;
     sellSpeed.value = d.sell_speed || 'fast';
     sellPriceFactor.value = parseFloat (d.sell_price_factor) || 1.0;
     sellPriceBasis.value = ['live', 'market', 'smart'].includes (d.sell_price_basis) ? d.sell_price_basis : 'smart';

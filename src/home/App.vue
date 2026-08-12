@@ -99,7 +99,7 @@ const LIVE_DISPLAY_OPTS = [
 ];
 const liveDisplayBasis = ref ('smart');
 const smartThreshold = ref (50);
-const sellEnabled = ref (true);
+const sellEnabled = ref (false);
 
 const settingsStatus = reactive ({ type: '', text: '' });
 const mappingStatus = reactive ({ type: '', text: '' });
@@ -578,7 +578,7 @@ async function loadSettings () {
     liveDisplayBasis.value = ['smart', 'live'].includes (d.live_display_basis) ? d.live_display_basis : 'smart';
     const st = parseInt (d.smart_price_threshold);
     smartThreshold.value = isNaN (st) ? 50 : st;
-    sellEnabled.value = d.sell_enabled !== false;
+    sellEnabled.value = d.sell_enabled === true;
     scanCacheDays.value = d.scan_cache_days ?? 1;
     historyDays.value = d.history_days ?? 3;
     requeryDebounce.value = d.requery_debounce ?? 1000;
