@@ -11,6 +11,7 @@ import { logger as rootLogger, logPath, setLogLevel, dumpCrash, onLog, getRing }
 const logger = rootLogger.child ({ module: 'main' });
 import { ROOT, SOURCE, dataDir } from './config.js';
 import { settings, saveSettings, toComponents, toDays, toDebounce } from './settings.js';
+import * as gamecfg from './gamecfg.js';
 import { startTracking, stopTracking, getCanScan, setOnStateChange } from './overlay.js';
 import { wire, toCanonicalItemId, fetchMarketPrice, queryItemPrice, requeryLivePrice } from './scan.js';
 import * as backend from './backend.js';
@@ -931,6 +932,14 @@ app.on ('ready', async () => {
     return { success: true };
   });
 
+  safeHandle ('gamecfg:list', () => gamecfg.listPresets ());
+  safeHandle ('gamecfg:apply', (e, id) => gamecfg.applyPreset (String (id || '')));
+  safeHandle ('gamecfg:save', (e, data = {}) => gamecfg.saveCustom (
+    String (data.id || ''), String (data.name || ''), data.normal || [], data.engine || []
+  ));
+  safeHandle ('gamecfg:current', () => gamecfg.current ());
+  safeHandle ('gamecfg:open-dir', () => gamecfg.openDir ());
+
   safeHandle ('app:quit', () => {
     app.quit ();
     return { success: true };
@@ -1267,7 +1276,7 @@ function openHomeWindow () {
     show: false, title: '冒险者侍从', autoHideMenuBar: true,
     icon: join (ROOT, 'assets/images/icon.ico'),
     backgroundColor: settings.general.theme === 'dark' ? '#1c1c1f' : '#f4f4f6',
-    webPreferences: { sandbox: false, preload: join (SOURCE, 'preload.cjs') },
+    webPreferences: { sandbox: false, preload: join (SOURCE, 'preload.cjs'), backgroundThrottling: false },
   });
 
   homeWindow.webContents.on ('did-finish-load', () => {

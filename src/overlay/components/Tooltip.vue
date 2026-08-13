@@ -115,9 +115,15 @@ electron.on("sell:list-count", (data) => {
   sellListCount.value = data?.count ?? 0;
 });
 
+let lastSellActionAt = 0;
 function sendSellAction (channel) {
   logger.info("sell action clicked", { channel, id: currentItemId.value });
   if (!currentItemId.value) return;
+  // 防连点：同一物品 800ms 内重复点击忽略（主界面处理有延迟，狂点会导致事件堆积全量触发上架）
+  const now = Date.now ();
+  if (now - lastSellActionAt < 800 && currentItemId.value === lastSellActionId) return;
+  lastSellActionAt = now;
+  lastSellActionId = currentItemId.value;
   electron.send (channel, {
     itemId: currentItemId.value,
     rarity: itemRarity.value,
@@ -127,6 +133,7 @@ function sendSellAction (channel) {
   });
   logger.info("sell action sent", { channel, id: currentItemId.value });
 }
+let lastSellActionId = '';
 const reverseAttributes = ref({});
 const reverseKeywords = ref({});
 

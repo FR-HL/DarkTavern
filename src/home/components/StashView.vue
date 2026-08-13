@@ -584,7 +584,22 @@ async function locateInStash (canonTarget, targetAffixes, itemId) {
 
 // 游戏内悬浮窗物品：加入/移出上架列表 / 直接上架当前物品
 // 匹配 = item_id 精确 + 词条集合精确（悬浮窗带上 affixes，仓库里同 id 不同词条的多件不再搞混）
+let overlaySellBusy = false;
 async function overlayAddItem (data, autoSell) {
+  // 处理锁：上一个悬浮窗动作未完成（匹配/刷新/上架）时忽略后续事件，防止点击堆积全量触发上架
+  if (overlaySellBusy) {
+    logger.info ('overlayAddItem 处理中，忽略', { itemId: data?.itemId, autoSell });
+    return;
+  }
+  overlaySellBusy = true;
+  try {
+    await overlayAddItemInner (data, autoSell);
+  } finally {
+    overlaySellBusy = false;
+  }
+}
+
+async function overlayAddItemInner (data, autoSell) {
   if (!charData.value || !data?.itemId) {
     logger.warn ('overlayAddItem 早退：无角色数据或 itemId', { hasChar: !!charData.value, itemId: data?.itemId });
     return;
@@ -1393,9 +1408,25 @@ onMounted (async () => {
     const first = batchStashOptions.value[0];
     if (first) batchStashIds.value = [first.id];
   }
-  // 游戏内悬浮窗「加入列表 / 开始上架」
-  window.electron.on ('sell:add-item', (data) => overlayAddItem (data, false));
-  window.electron.on ('sell:start-item', (data) => overlayAddItem (data, true));
+  // 游戏内悬浮窗「加入列表 / 开始上架」——入口时间戳与处理时间戳对比，
+  // 区分「事件派发延迟」（渲染进程节流/阻塞）与「回调内处理慢」（invoke 慢）
+  const onSellEvent = (data, autoSell) => {
+    logger.info ('sell event arrived', { channel: autoSell ? 'sell:start-item' : 'sell:add-item', itemId: data?.itemId, t: Date.now () });
+    overlayAddItem (data, autoSell);
+  };
+  window.electron.on ('sell:add-item', (data) => onSellEvent (data, false));
+  window.electron.on ('sell:start-item', (data) => onSellEvent (data, true));
+  // 长任务诊断：主线程被重渲染/同步 JS 卡住时记录耗时与时间点
+  if (typeof PerformanceObserver !== 'undefined') {
+    try {
+      const longTaskObserver = new PerformanceObserver ((list) => {
+        for (const entry of list.getEntries ()) {
+          logger.warn ('渲染进程长任务', { ms: Math.round (entry.duration), at: new Date (entry.startTime).toISOString ().slice (11, 23) });
+        }
+      });
+      longTaskObserver.observe ({ entryTypes: ['longtask'] });
+    } catch (e) {}
+  }
   // 初始列表数量同步给悬浮窗
   window.electron.send ('sell:list-count', { count: sellSelected.value.size });
   connectEvents ();
