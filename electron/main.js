@@ -445,6 +445,13 @@ app.on ('ready', async () => {
     pushBallStatus ();
     return r;
   });
+  // 悬浮窗上架/加入列表前刷新角色快照（游戏内切页重抓，解决快照过期找不到物品）
+  safeHandle ('stash:refresh', async () => {
+    const t0 = Date.now ();
+    const r = await backend.post ('/stash/refresh', undefined, 20000);
+    logger.info ('角色快照刷新', { ok: r?.ok, note: r?.note, ms: Date.now () - t0 });
+    return r;
+  });
   safeHandle ('stash:follow-calibrate-status', () => backend.followCalibrateStatus ());
   safeHandle ('stash:follow-calibrate-record', (e, index) => backend.followCalibrateRecord (Number (index)));
   safeHandle ('stash:follow-calibrate-auto', () => backend.followCalibrateAuto ());
@@ -587,6 +594,7 @@ app.on ('ready', async () => {
   registerCrossHotkeys ();
 
   // ── 查价记录 IPC ──
+  logger.info ('BOOT', { step: '注册 sell IPC（add/start/list-count）' });
 
   // 游戏内悬浮窗「加入列表 / 开始上架」→ 转发给主界面仓库页处理
   ipcMain.on ('sell:add-item', (e, data) => {

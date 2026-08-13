@@ -125,6 +125,7 @@ function sendSellAction (channel) {
     // 词条集合：仓库里同 item_id 多件（不同词条）时用于精确匹配目标物品
     affixes: (item.value.attributes.secondary || []).map (a => a.display).filter (Boolean),
   });
+  logger.info("sell action sent", { channel, id: currentItemId.value });
 }
 const reverseAttributes = ref({});
 const reverseKeywords = ref({});

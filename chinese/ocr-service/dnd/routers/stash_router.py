@@ -91,14 +91,22 @@ def _stash_label(stash_id):
 _item_zh_cache = None
 
 
+def _mapping_dir():
+    """Mapping directory: packaged builds set SQUIRE_MAPPING_DIR (see
+    electron/backend.js); dev falls back to the repo chinese/mapping."""
+    return (
+        os.environ.get("SQUIRE_MAPPING_DIR")
+        or os.environ.get("DARKTAVERN_MAPPING_DIR")
+        or os.path.join(os.path.dirname(__file__), "..", "..", "..", "mapping")
+    )
+
+
 def _item_zh_mapping():
     global _item_zh_cache
     if _item_zh_cache is None:
         mapping = {}
         try:
-            mapping_path = os.path.join(
-                os.path.dirname(__file__), "..", "..", "..", "mapping", "items.json"
-            )
+            mapping_path = os.path.join(_mapping_dir(), "items.json")
             with open(mapping_path, "r", encoding="utf-8") as f:
                 raw = json.load(f)
             mapping = {v: k for k, v in raw.items()}
@@ -121,9 +129,7 @@ def _affix_display_mapping():
     if _affix_display_cache is None:
         mapping = {}
         try:
-            mapping_path = os.path.join(
-                os.path.dirname(__file__), "..", "..", "..", "mapping", "item_affixes.json"
-            )
+            mapping_path = os.path.join(_mapping_dir(), "item_affixes.json")
             with open(mapping_path, "r", encoding="utf-8") as f:
                 mapping = json.load(f)
         except Exception as exc:
@@ -141,9 +147,7 @@ def _attr_zh_mapping():
     if _attr_zh_cache is None:
         mapping = {}
         try:
-            mapping_path = os.path.join(
-                os.path.dirname(__file__), "..", "..", "..", "mapping", "attributes.json"
-            )
+            mapping_path = os.path.join(_mapping_dir(), "attributes.json")
             with open(mapping_path, "r", encoding="utf-8") as f:
                 raw = json.load(f)
             # 同英文多中文同义词时保留首个（原版同步顺序，规范名在前），
@@ -376,6 +380,43 @@ def tab_scan():
         "labels": [macros.STASH_TYPE_NAMES.get(t, str(t)) for t in mapping],
         "brights": brights,
     }
+
+
+@router.post("/refresh")
+def refresh_snapshot():
+    """Refresh the in-game character snapshot (toggle the top-bar page once).
+
+    Used by the in-game overlay sell flow: the overlay item has to be found
+    in the stash snapshot, which goes stale once the player buys/picks up
+    new items. Toggling the lobby page makes the game re-send the full
+    character snapshot; the capture saves it and updates the cache.
+    """
+    import time as _time
+    from dnd import service
+    from dnd.settings import detect_wireshark_installation
+    from dnd.capture.npcap import check_npcap
+
+    capture = service.get_packet_capture()
+    if not capture.is_active():
+        tshark_path = getattr(capture, "tshark_path", None) or detect_wireshark_installation()
+        if not tshark_path:
+            return {"ok": False, "note": "no_tshark", "error": "未找到 TShark，请先安装 Wireshark。"}
+        npcap = check_npcap(tshark_path)
+        if not npcap.get("ok"):
+            return {"ok": False, "note": "no_npcap", "error": npcap.get("detail") or "抓包驱动（Npcap）不可用。"}
+        capture.start_capture_switch()
+        deadline = _time.monotonic() + 8.0
+        while _time.monotonic() < deadline:
+            if getattr(capture, "_current_capture", None) is not None:
+                break
+            _time.sleep(0.2)
+        _time.sleep(0.3)
+    if not capture.is_active():
+        return {"ok": False, "note": "capture", "error": "抓包启动失败，请先在「角色仓库」页查看链路诊断。"}
+
+    mgr = service.get_stash_manager()
+    ok, note, received = mgr.refresh_character_data(toggles=1, timeout=10.0)
+    return {"ok": ok, "note": note, "character_id": received}
 
 
 @router.post("/first-calibrate")

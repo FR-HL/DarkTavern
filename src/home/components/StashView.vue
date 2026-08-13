@@ -529,33 +529,77 @@ async function doStartSell () {
   if (ok !== false) clearSellPick ();
 }
 
-// 游戏内悬浮窗物品：加入/移出上架列表 / 直接上架当前物品
-// 匹配 = item_id 精确 + 词条集合精确（悬浮窗带上 affixes，仓库里同 id 不同词条的多件不再搞混）
-async function overlayAddItem (data, autoSell) {
-  if (!charData.value || !data?.itemId) return;
-  if (!sellCfg.value.enabled) {
-    note.value = '自动上架已关闭，请在「自动上架」页开启';
-    return;
-  }
-  const canonTarget = toCanonicalId (data.itemId);
-  const targetAffixes = Array.isArray (data.affixes) ? data.affixes : [];
-  const hits = [];
-  for (const [sid, s] of Object.entries (charData.value.stashes || {})) {
-    for (const it of (s?.items || [])) {
-      if (toCanonicalId (it.item_id) !== canonTarget) continue;
-      if (targetAffixes.length) {
-        const en = (it.sp_en || []).map (e => e[0]);
-        if (targetAffixes.length !== en.length || !targetAffixes.every (d => en.includes (d))) continue;
+// 在角色仓库中按 item_id + 词条集合精确匹配悬浮窗物品；
+// 匹配失败时先强制重拉角色数据再试一次（启动竞态：前端加载时后端快照可能还没抓到）
+async function locateInStash (canonTarget, targetAffixes, itemId) {
+  const scan = () => {
+    const hits = [];
+    for (const [sid, s] of Object.entries (charData.value?.stashes || {})) {
+      for (const it of (s?.items || [])) {
+        if (toCanonicalId (it.item_id) !== canonTarget) continue;
+        if (targetAffixes.length) {
+          const en = (it.sp_en || []).map (e => e[0]);
+          if (targetAffixes.length !== en.length || !targetAffixes.every (d => en.includes (d))) continue;
+        }
+        hits.push ({ it, sid });
       }
-      hits.push ({ it, sid });
+    }
+    return hits;
+  };
+  let hits = scan ();
+  if (!hits.length) {
+    const ok = await loadCharData (props.charId, true, true);
+    logger.info ('overlayAddItem 未匹配，强制重拉角色数据', { ok, itemId });
+    if (ok) hits = scan ();
+  }
+  if (!hits.length) {
+    // 快照可能过期（游戏里新买/新捡的物品不在快照）→ 后端游戏内切页刷新快照后再试
+    logger.info ('overlayAddItem 仍未匹配，请求游戏内刷新快照', { itemId });
+    let refreshed = false;
+    try {
+      const r = await invoke ('stash:refresh');
+      refreshed = !!(r && r.ok);
+      logger.info ('overlayAddItem 快照刷新结果', { ok: refreshed, note: r?.note });
+    } catch (e) {
+      logger.warn ('overlayAddItem 快照刷新失败', { error: e?.message || String (e) });
+    }
+    if (refreshed) {
+      await loadCharData (props.charId, true, true);
+      hits = scan ();
     }
   }
   // 词条过滤后仍多件（完全相同）→ 取第一件（价值相同，上架任意一件等价）
   const hit = hits[0];
   if (!hit) {
-    note.value = '未在当前角色仓库中找到该物品（词条不匹配）';
+    const stashes = charData.value?.stashes || {};
+    const hasItems = Object.values (stashes).some (s => (s?.items || []).length);
+    logger.warn ('overlayAddItem 未找到', { itemId, target: canonTarget, hasItems, stashCount: Object.keys (stashes).length });
+    note.value = hasItems
+      ? '未在当前角色仓库中找到该物品（词条不匹配）'
+      : '角色仓库暂无数据，请先在游戏内打开仓库页后重试';
+    return null;
+  }
+  return hit;
+}
+
+// 游戏内悬浮窗物品：加入/移出上架列表 / 直接上架当前物品
+// 匹配 = item_id 精确 + 词条集合精确（悬浮窗带上 affixes，仓库里同 id 不同词条的多件不再搞混）
+async function overlayAddItem (data, autoSell) {
+  if (!charData.value || !data?.itemId) {
+    logger.warn ('overlayAddItem 早退：无角色数据或 itemId', { hasChar: !!charData.value, itemId: data?.itemId });
     return;
   }
+  await loadSellCfg ();   // 每次处理前重载设置，确保 sellCfg.enabled 是最新值
+  if (!sellCfg.value.enabled) {
+    logger.warn ('overlayAddItem 早退：自动上架未开启');
+    note.value = '自动上架已关闭，请在「自动上架」页开启';
+    return;
+  }
+  logger.info ('overlayAddItem 开始处理', { itemId: data.itemId, autoSell, enabled: true });
+  const canonTarget = toCanonicalId (data.itemId);
+  const targetAffixes = Array.isArray (data.affixes) ? data.affixes : [];
+  const hit = await locateInStash (canonTarget, targetAffixes, data.itemId);
+  if (!hit) return;
   const { it, sid } = hit;
   if (autoSell) {
     // 列表有有价物品 → 上架整个列表；否则直接上架当前物品
