@@ -95,16 +95,16 @@ BASE_LAYOUT = {
     # Trade-hall / market page anchors. Base coordinates provided by the
     # owner (calibrated in-game); the market calibration session can
     # override each of them individually. Stored as window-relative
-    # 1920x1080 layout coordinates (the raw screen picks were captured with
-    # the game window at (312,125) 1936x1119, then converted back through
-    # the narrow-aspect scale + window offset so _windowed_screen_positions
-    # reproduces them exactly).
-    'topbar_trade': Point(1192, 52),
-    'market_btn': Point(1184, 257),
-    'mylist_tab': Point(1030, 129),
-    'price_input': Point(959, 627),
-    'sell_list_btn': Point(955, 965),
-    'confirm_btn': Point(848, 626),
+    # coordinates at 1920x1080 (the raw screen picks were captured with the
+    # game client area at (320,156) 1920x1080; converted back by subtracting
+    # the client-area origin so _windowed_screen_positions reproduces them
+    # exactly — window rect is 1936x1119 at (312,125) including borders).
+    'topbar_trade': Point(1194, 36),
+    'market_btn': Point(1186, 243),
+    'mylist_tab': Point(1031, 114),
+    'price_input': Point(959, 616),
+    'sell_list_btn': Point(955, 957),
+    'confirm_btn': Point(847, 615),
 }
 
 # Market anchors that have no layout default and can only be provided by a
