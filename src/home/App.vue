@@ -365,6 +365,68 @@ function donorInitial (name) {
 function showPane (name) {
   pane.value = name;
   if (name === 'history') loadHistory ();
+  if (name === 'gameopt') refreshGameOpt ();
+}
+
+// ── 游戏优化 ──
+const goPresets = ref ([]);
+const goRenderScale = ref (null);
+const goApi = ref ('');
+const goReadonly = ref (false);
+const goEngineCount = ref (0);
+const goApplying = ref ('');
+const goRefreshing = ref (false);
+
+function presetTone (p) {
+  if (p.id === 'perf' && !p.custom) return 'perf';
+  if (p.id === 'balanced' && !p.custom) return 'balanced';
+  if (p.id === 'default' && !p.custom) return 'default';
+  return 'custom';
+}
+
+function presetIcon (p) {
+  if (p.id === 'perf' && !p.custom) return '⚡';
+  if (p.id === 'balanced' && !p.custom) return '⚖';
+  if (p.id === 'default' && !p.custom) return '♻';
+  return '★';
+}
+
+async function refreshGameOpt () {
+  if (goRefreshing.value) return;
+  goRefreshing.value = true;
+  try {
+    const l = await invoke ('gamecfg:list');
+    goPresets.value = l?.presets || [];
+    const c = await invoke ('gamecfg:current');
+    if (c?.success) {
+      goRenderScale.value = c.renderScale;
+      goApi.value = c.api;
+      goReadonly.value = !!c.readonly;
+      goEngineCount.value = c.engineCount || 0;
+    }
+  } catch (e) { /* ignore */ }
+  goRefreshing.value = false;
+}
+
+async function applyGoPreset (p) {
+  if (goApplying.value) return;
+  goApplying.value = p.id;
+  try {
+    const r = await invoke ('gamecfg:apply', p.id);
+    if (r?.success) {
+      showToast (r.backup ? `已应用「${p.name}」· 重启生效${r.backup}` : `已应用「${p.name}」· 重启生效`);
+      refreshGameOpt ();
+    } else {
+      showToast (r?.error || '应用失败');
+    }
+  } catch (e) {
+    showToast ('应用失败：' + (e?.message || '未知错误'));
+  }
+  goApplying.value = '';
+}
+
+async function openGameCfgDir () {
+  await invoke ('gamecfg:open-dir');
 }
 
 // ── 查价记录 ──
@@ -936,6 +998,10 @@ onBeforeUnmount (() => {
         <div class="nav-item" :class="{ active: pane === 'sort' }" @click="showPane('sort')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 9 6"/><polyline points="3 12 15 12"/><polyline points="3 18 21 18"/></svg>
           仓库配置
+        </div>
+        <div class="nav-item" :class="{ active: pane === 'gameopt' }" @click="showPane('gameopt')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          游戏优化
         </div>
         <div class="nav-cap">更多</div>
         <div class="nav-item" :class="{ active: pane === 'config' }" @click="showPane('config')">
@@ -1583,6 +1649,82 @@ onBeforeUnmount (() => {
       <!-- ============ 自动上架 ============ -->
       <div class="pane" :class="{ active: pane === 'sell' }" v-show="pane === 'sell'">
         <SellPane />
+      </div>
+
+      <!-- ============ 游戏优化 ============ -->
+      <div class="pane" :class="{ active: pane === 'gameopt' }" v-show="pane === 'gameopt'">
+        <div class="page-title">游戏优化</div>
+        <div class="page-sub">一键切换 Dark and Darker 画质与性能配置，应用后重启游戏生效。</div>
+
+        <!-- 当前配置面板 -->
+        <div class="sec">
+          <div class="sec-label">当前配置</div>
+          <div class="card go-overview">
+            <div class="go-stat">
+              <div class="go-stat-k">渲染缩放</div>
+              <div class="go-stat-v">{{ goRenderScale != null ? goRenderScale + ' %' : '—' }}</div>
+              <div class="go-stat-d">分辨率渲染比例</div>
+            </div>
+            <div class="go-stat">
+              <div class="go-stat-k">渲染 API</div>
+              <div class="go-stat-v mono">{{ goApi }}</div>
+              <div class="go-stat-d">DirectX 渲染后端</div>
+            </div>
+            <div class="go-stat">
+              <div class="go-stat-k">引擎优化项</div>
+              <div class="go-stat-v">{{ goEngineCount }} 项</div>
+              <div class="go-stat-d">Engine.ini 附加参数</div>
+            </div>
+            <div class="go-stat">
+              <div class="go-stat-k">配置保护</div>
+              <div class="go-stat-v" :class="goReadonly ? 'ok' : 'bad'">{{ goReadonly ? '已开启' : '未开启' }}</div>
+              <div class="go-stat-d">只读防止游戏覆盖</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 预设方案 -->
+        <div class="sec">
+          <div class="sec-label">预设方案</div>
+          <div class="go-presets">
+            <div v-for="p in goPresets" :key="p.id" class="go-preset" :class="'tone-' + presetTone(p)">
+              <div class="go-preset-stripe"></div>
+              <div class="go-preset-icon">{{ presetIcon(p) }}</div>
+              <div class="go-preset-body">
+                <div class="go-preset-head">
+                  <span class="go-preset-name">{{ p.name }}</span>
+                  <span v-if="p.tag" class="go-preset-tag">{{ p.tag }}</span>
+                  <span v-if="p.custom" class="go-preset-tag custom">自定义</span>
+                </div>
+                <div class="go-preset-desc">{{ p.desc }}</div>
+              </div>
+              <div class="go-preset-act">
+                <button class="btn primary" :disabled="goApplying === p.id" @click="applyGoPreset(p)">
+                  {{ goApplying === p.id ? '应用中…' : '应用' }}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="go-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.5" r="0.5" fill="currentColor" stroke="none"/></svg>
+            切换前自动备份当前配置到数据目录，随时可还原；游戏运行中切换会被拦截。
+          </div>
+        </div>
+
+        <!-- 操作 -->
+        <div class="sec">
+          <div class="sec-label">操作</div>
+          <div class="card">
+            <div class="go-foot">
+              <div class="go-foot-info">
+                <div class="go-foot-t">配置文件目录</div>
+                <div class="go-foot-d">DungeonCrawler\Saved\Config\Windows — 备份与手工调整</div>
+              </div>
+              <button class="btn subtle" @click="openGameCfgDir">打开目录</button>
+              <button class="btn" :disabled="goRefreshing" @click="refreshGameOpt">{{ goRefreshing ? '刷新中…' : '刷新状态' }}</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ============ 使用教程 ============ -->

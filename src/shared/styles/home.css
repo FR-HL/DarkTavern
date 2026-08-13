@@ -1189,6 +1189,165 @@ html[data-theme="dark"] {
   --red-soft: rgba(248,113,113,0.14);
 }
 
+/* ===== 游戏优化页 ===== */
+.go-overview {
+  display: flex;
+  padding: 6px 0;
+}
+.go-stat {
+  flex: 1;
+  min-width: 0;
+  padding: 14px 18px;
+}
+.go-stat + .go-stat {
+  border-left: 1px solid var(--line-soft);
+}
+.go-stat-k {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+}
+.go-stat-v {
+  margin-top: 6px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.go-stat-v.ok { color: var(--green); }
+.go-stat-v.bad { color: var(--red); }
+.go-stat-v.mono { font-family: var(--mono); font-size: 17px; }
+.go-stat-d {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.go-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.go-preset {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 14px;
+  background: var(--card);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+  padding: 16px 18px 16px 20px;
+  overflow: hidden;
+  transition: border-color .18s var(--ease), box-shadow .18s var(--ease), transform .18s var(--ease);
+}
+.go-preset:hover {
+  border-color: var(--line);
+  box-shadow: var(--shadow-pop);
+  transform: translateY(-1px);
+}
+.go-preset-stripe {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+}
+.go-preset.tone-perf .go-preset-stripe { background: var(--red); }
+.go-preset.tone-balanced .go-preset-stripe { background: var(--accent); }
+.go-preset.tone-default .go-preset-stripe { background: var(--green); }
+.go-preset.tone-custom .go-preset-stripe { background: var(--amber); }
+.go-preset-icon {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  align-self: center;
+}
+.go-preset.tone-perf .go-preset-icon { background: var(--red-soft); }
+.go-preset.tone-balanced .go-preset-icon { background: var(--accent-soft); }
+.go-preset.tone-default .go-preset-icon { background: var(--green-soft); }
+.go-preset.tone-custom .go-preset-icon { background: var(--amber-soft); }
+.go-preset-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2px 0;
+}
+.go-preset-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.go-preset-name {
+  font-size: 14.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.go-preset-tag {
+  font-size: 10.5px;
+  font-weight: 650;
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.go-preset-tag.custom { background: var(--amber-soft); color: var(--amber); }
+.go-preset-desc {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--text-3);
+  line-height: 1.5;
+}
+.go-preset-act {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding-left: 14px;
+  border-left: 1px solid var(--line-soft);
+}
+.go-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 12px 2px 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-3);
+  background: var(--field-soft);
+  border: 1px dashed var(--line-soft);
+  border-radius: var(--r-ctl);
+  line-height: 1.5;
+}
+.go-note svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: var(--amber);
+}
+.go-foot {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 18px;
+}
+.go-foot-info { flex: 1; min-width: 0; }
+.go-foot-t { font-size: 14px; font-weight: 600; color: var(--text); }
+.go-foot-d {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: var(--mono);
+}
+
 /* 黑夜模式硬编码覆盖 */
 html[data-theme="dark"] .nav-item:hover { background: rgba(255,255,255,0.06); }
 html[data-theme="dark"] .nav-item:hover svg { color: var(--text-2); }
