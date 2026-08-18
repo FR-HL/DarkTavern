@@ -607,7 +607,9 @@ def shift_right_click_at(x, y):
 def get_game_resolution():
     config_path = os.path.expandvars(r'%LOCALAPPDATA%/DungeonCrawler/Saved/Config/Windows/GameUserSettings.ini')
     try:
-        with open(config_path, 'r') as f:
+        # 游戏配置可能是 GBK 或 UTF-8(+BOM)——默认 GBK 打开 UTF-8 BOM 文件会解码失败
+        # 导致窗口模式判断失效（无偏移→坐标全错）；errors=ignore 兼容任意编码
+        with open(config_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
             x_match = re.search(r'ResolutionSizeX=(\d+)', content)
             y_match = re.search(r'ResolutionSizeY=(\d+)', content)
@@ -621,7 +623,7 @@ def get_game_resolution():
 def get_game_window_mode():
     config_path = os.path.expandvars(r'%LOCALAPPDATA%/DungeonCrawler/Saved/Config/Windows/GameUserSettings.ini')
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
             match = re.search(r'FullscreenMode=(\d+)', content)
             if match:
@@ -653,9 +655,9 @@ def get_current_resolution():
 
 
 def get_window_area_pos(window_title="Dark and Darker  "):
-    hwnd = win32gui.FindWindow(None, window_title)
+    hwnd = _find_game_window(window_title)
     if hwnd == 0:
-        logger.warning("No window found with title: '%s'", window_title)
+        logger.warning("No game window found (title candidates + EnumWindows fallback)")
         return None
 
     # Get client area (content) coordinates relative to the screen
@@ -667,6 +669,41 @@ def get_window_area_pos(window_title="Dark and Darker  "):
     height = rect[3] - rect[1]
 
     return (left, top, width, height)
+
+
+def _find_game_window(preferred_title):
+    """Locate the game window by title candidates first, then fall back to an
+    EnumWindows scan matching the 'Dark and Darker' substring.
+
+    The exact title shifts with game state (lobby vs in-game etc.), so the
+    old single-title FindWindow could return 0 and silently drop the window
+    offset — all clicks then miss by the window offset. EnumWindows uses the
+    pywin32 wrapper (not koffi), which has none of the admin-mode heap
+    corruption the Electron overlay hit, and is fully try/except guarded so
+    any failure just falls back to the fullscreen path.
+    """
+    try:
+        for title in ("Dark and Darker  ", "Dark and Darker"):
+            hwnd = win32gui.FindWindow(None, title)
+            if hwnd:
+                return hwnd
+    except Exception:
+        pass
+    try:
+        found = []
+        def _cb(hwnd, _lparam):
+            try:
+                if "Dark and Darker" in win32gui.GetWindowText(hwnd) and win32gui.IsWindowVisible(hwnd):
+                    found.append(hwnd)
+            except Exception:
+                pass
+            return True
+        win32gui.EnumWindows(_cb, None)
+        if found:
+            return found[0]
+    except Exception:
+        pass
+    return 0
 
 
 def _apply_calibration_override(positions, res):
