@@ -2,6 +2,7 @@
 dist/
 release/
 build/
+Squire_*.exe
 
 # Dependencies
 node_modules/
