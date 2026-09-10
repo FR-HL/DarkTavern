@@ -1,0 +1,50 @@
+name: Publish Release Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish
+        required: true
+        type: string
+      asset_ref:
+        description: Temporary branch containing the release assets
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out staged assets
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.asset_ref }}
+          lfs: true
+          fetch-depth: 1
+
+      - name: Verify staged assets
+        env:
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          version="${TAG#v}"
+          test -s "release-assets/$version/Squire_${version}_x64-setup.exe"
+          test -s "release-assets/$version/Squire_${version}_x64-portable.zip"
+
+      - name: Upload and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          version="${TAG#v}"
+          gh release upload "$TAG" \
+            "release-assets/$version/Squire_${version}_x64-setup.exe" \
+            "release-assets/$version/Squire_${version}_x64-portable.zip" \
+            --repo "$REPO" --clobber
+          gh release edit "$TAG" --repo "$REPO" --draft=false
